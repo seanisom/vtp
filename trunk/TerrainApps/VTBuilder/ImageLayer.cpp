@@ -322,6 +322,186 @@ bool vtImageLayer::GetFilteredColor(double x, double y, RGBi &rgb)
 	return true;
 }
 
+bool vtImageLayer::ImportFromFile(const wxString2 &strFileName, bool progress_callback(int am))
+{
+	VTLOG("ImportFromFile '%s'\n", strFileName.mb_str());
+
+	wxString strExt = strFileName.AfterLast('.');
+
+	bool success;
+	if (!strExt.CmpNoCase(_T("ppm")))
+	{
+		m_pBitmap = new vtBitmap;
+		success = ReadPPM(strFileName.mb_str());
+		if (!success)
+		{
+			delete m_pBitmap;
+			m_pBitmap = NULL;
+		}
+	}
+	else
+	{
+		SetLayerFilename(strFileName);
+		success = OnLoad();
+	}
+	return success;
+}
+
+bool vtImageLayer::ReadPPM(const char *fname, bool progress_callback(int))
+{
+	// open input file
+	FILE *fp = fopen(fname, "rb");
+	if (!fp)		// Could not open input file
+		return false;
+
+	char sbuf[512],			// buffer for file input
+		 dummy[2];			// used for \n and \0
+	if (fread(sbuf, sizeof(char), 2, fp) != 2)
+	{
+		// "Could not read file"
+		return false;
+	}
+
+	bool bBinary = false;	// PGM binary format flag: assume PGM ascii
+	if (!strncmp(sbuf,"P6",2))
+		bBinary = 1;		// PGM binary format
+
+	if (!strncmp(sbuf, "P5", 2) || !strncmp(sbuf, "P2", 2))
+	{
+		/* not the flavor of PNM we're expecting */
+		fclose(fp);
+		return false;
+	}
+
+	// read PGM ASCII or binary file
+	bool have_header = false;
+	int coord_sys = 0;
+	int coord_zone = 0;
+	int coord_datum = 0;
+	DRECT ext;
+	double x, y;
+	while ((fscanf(fp, "%s", sbuf) != EOF) && sbuf[0] == '#')
+	{
+		// comment
+		fscanf(fp,"%[^\n]", sbuf);  // read comment beyond '#'
+		fscanf(fp,"%[\n]", dummy);  // read newline
+		char *buf = sbuf+1;	// skip leading space after '#'
+		if (!strncmp(buf, "DEM", 3))
+		{
+			have_header= true;
+		}
+		else if (!strncmp(buf, "description", 11))
+		{
+			// do nothing
+		}
+		else if (!strncmp(buf, "coordinate system", 17))
+		{
+			if (!strcmp(buf+18, "LL")) coord_sys=0;
+			else if (!strcmp(buf+18,"UTM")) coord_sys=1;
+		}
+		else if (!strncmp(buf, "coordinate zone", 15))
+		{
+			coord_zone = atoi(buf+16);
+		}
+		else if (!strncmp(buf, "coordinate datum", 16))
+		{
+			coord_datum = atoi(buf+17);
+		}
+		else if (!strncmp(buf, "SW corner", 9))
+		{
+			sscanf(buf+10, "%lf/%lf", &x, &y);
+			ext.left = x;
+			ext.bottom = y;
+		}
+		else if (!strncmp(buf, "NE corner", 9))
+		{
+			sscanf(buf+10, "%lf/%lf", &x, &y);
+			ext.right = x;
+			ext.top = y;
+		}
+		else if (!strncmp(buf, "missing value", 13))
+		{
+			// do nothing
+		}
+	}
+
+	m_iXSize = atoi(sbuf);		// store xsize of array
+	fscanf(fp,"%s",sbuf);		// read ysize of array
+	m_iYSize = atoi(sbuf);
+	fscanf(fp,"%s\n",sbuf);		// read maxval of array
+	int maxval = atoi(sbuf);
+
+	// set the corresponding vtElevationGrid info
+	if (have_header)
+	{
+		int datum = EPSG_DATUM_WGS84;
+		switch (coord_datum)
+		{
+		case 1: datum = EPSG_DATUM_NAD27; break;
+		case 2: datum = EPSG_DATUM_WGS72; break;
+		case 3: datum = EPSG_DATUM_WGS84; break;
+		case 4: datum = EPSG_DATUM_NAD83; break;
+
+		case 5: /*Sphere (with radius 6370997 meters)*/ break;
+		case 6: /*Clarke1880 (Clarke spheroid of 1880)*/ break;
+		case 7: /*International1909 (Geodetic Reference System of 1909)*/ break;
+		case 8: /*International1967 (Geodetic Reference System of 1967)*/; break;
+
+		case 9: /*WGS60*/ break;
+		case 10: /*WGS66*/; break;
+		case 11: /*Bessel1841*/ break;
+		case 12: /*Krassovsky*/ break;
+		}
+		if (coord_sys == 0)	// LL
+		{
+			m_proj.SetProjectionSimple(false, 0, datum);
+			ext.left /= 3600;	// arc-seconds to degrees
+			ext.right /= 3600;
+			ext.top /= 3600;
+			ext.bottom /= 3600;
+		}
+		else if (coord_sys == 1)	// UTM
+			m_proj.SetProjectionSimple(true, coord_zone, datum);
+	}
+	else
+	{
+		// Set the projection (actually we don't know it)
+		m_proj.SetProjectionSimple(true, 1, EPSG_DATUM_WGS84);
+
+		ext.left = 0;
+		ext.top = m_iYSize-1;
+		ext.right = m_iXSize-1;
+		ext.bottom = 0;
+	}
+	m_Extents = ext;
+	m_pBitmap->Allocate(m_iXSize, m_iYSize, 24);
+
+	// read PPM binary
+	int offset_start = ftell(fp);
+	fseek(fp, 0, SEEK_END);
+	int offset_end = ftell(fp);
+	fseek(fp, offset_start, SEEK_SET);	// go back again
+
+	int data_length = offset_end - offset_start;
+	int data_size = data_length / (m_iXSize*m_iYSize);
+
+	int line_length = 3 * m_iXSize;
+	unsigned char *line = new unsigned char[line_length];
+
+	for (int j = 0; j < m_iYSize; j++)
+	{
+		if (progress_callback != NULL) progress_callback(j * 100 / m_iYSize);
+
+		fread(line, line_length, 1, fp);
+
+		for (int i = 0; i < m_iXSize; i++)
+			m_pBitmap->SetPixel24(i, j, line[i*3+0], line[i*3+1], line[i*3+2]);
+	}
+	delete line;
+	fclose(fp);
+	return true;
+}
+
 bool vtImageLayer::SaveToFile(const char *fname) const
 {
 	if (!m_pBitmap)
