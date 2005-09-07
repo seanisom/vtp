@@ -1242,11 +1242,13 @@ bool vtElevationGrid::LoadFromPGM(const char *szFileName, bool progress_callback
 		}
 	}
 
-	int xsize = atoi(sbuf);		// store xsize of array
-	fscanf(fp,"%s",sbuf);		// read ysize of array
-	int ysize = atoi(sbuf);
-	fscanf(fp,"%s\n",sbuf);		// read maxval of array
-	int maxval = atoi(sbuf);
+	int xsize, ysize, maxval;
+	xsize = atoi(sbuf);		// store xsize of array
+	fscanf(fp,"%d\n",&ysize);		// read ysize of array
+	fscanf(fp,"%d",&maxval);		// read maxval of array
+	// Be careful here with the last LF!
+	// Simply calling fscanf(fp,"\n") sometimes eats 2 characters.
+	int cr = fgetc(fp);
 
 	// set the corresponding vtElevationGrid info
 	m_bFloatMode = false;
@@ -1299,12 +1301,9 @@ bool vtElevationGrid::LoadFromPGM(const char *szFileName, bool progress_callback
 
 	_AllocateArray();
 
-	unsigned char oneb;		// one byte from file
-	short twob;				// two bytes from file
-	double a;
-	char *junk;					// unconverted part of a number
 	if (bBinary)
 	{
+		// read PGM binary
 		int offset_start = ftell(fp);
 		fseek(fp, 0, SEEK_END);
 		int offset_end = ftell(fp);
@@ -1313,7 +1312,8 @@ bool vtElevationGrid::LoadFromPGM(const char *szFileName, bool progress_callback
 		int data_length = offset_end - offset_start;
 		int data_size = data_length / (xsize*ysize);
 
-		// read PGM binary
+		unsigned char oneb;		// one byte from file
+		short twob;				// two bytes from file
 		for (int j = 0; j < ysize; j++)
 		{
 			if (progress_callback != NULL) progress_callback(j * 100 / ysize);
@@ -1338,6 +1338,8 @@ bool vtElevationGrid::LoadFromPGM(const char *szFileName, bool progress_callback
 	else
 	{
 		// read PGM ASCII
+		double a;
+		char *junk;			// unconverted part of a number
 		for (int j = 0; j < ysize; j++)
 		{
 			if (progress_callback != NULL) progress_callback(j * 100 / ysize);
