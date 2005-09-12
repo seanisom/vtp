@@ -1112,7 +1112,7 @@ bool vtElevLayer::AskForSaveFilename()
 	if (!bResult)
 		return false;
 
-	vtString fname = saveFile.GetPath().mb_str();
+	vtString fname = (const char *) saveFile.GetPath().mb_str();
 	VTLOG("Got filename: '%s'\n", (const char *) fname);
 
 	if (m_pGrid)
@@ -1143,4 +1143,78 @@ FPoint3 LightDirection(float angle, float direction)
 	light_dir.z = (-cos(theta)*cos(phi));
 	light_dir.y = -sin(phi);
 	return light_dir;
+}
+
+#include "vtdata/ByteOrder.h"
+
+void vtElevLayer::WriteGridOfPGMPyramids()
+{
+	// grid size
+	int cols = 9, rows = 10;
+	int base_tilesize = 512;
+
+	int gridcols, gridrows;
+	m_pGrid->GetDimensions(gridcols, gridrows);
+
+	DRECT area = m_pGrid->GetEarthExtents();
+	DPoint2 tile_dim(area.Width()/cols, area.Height()/rows);
+	DPoint2 cell_size = tile_dim / base_tilesize;
+
+	int i, j, lod;
+	for (j = 0; j < rows; j++)
+	{
+		for (i = 0; i < cols; i++)
+		{
+			DRECT tile_area;
+			tile_area.left = area.left + tile_dim.x * i;
+			tile_area.right = area.left + tile_dim.x * (i+1);
+			tile_area.bottom = area.bottom + tile_dim.y * j;
+			tile_area.top = area.bottom + tile_dim.y * (j+1);
+
+			int col = i;
+			int row = rows-1-j;
+
+			for (lod = 0; lod < 4; lod++)
+			{
+				int tilesize = base_tilesize >> lod;
+
+				vtString fname;
+				if (lod == 0)
+					fname.Format("C:/temp/HawaiiTiles/tile.%d-%d.pgm", col, row);
+				else
+					fname.Format("C:/temp/HawaiiTiles/tile.%d-%d.pgm%d", col, row, lod);
+
+				FILE *fp = fopen(fname, "wb");
+				fprintf(fp, "P5\n");
+				fprintf(fp, "# DEM\n");
+				fprintf(fp, "# description=resampled with VTBuilder\n");
+				fprintf(fp, "# coordinate system=UTM\n");
+				fprintf(fp, "# coordinate zone=5\n");
+				fprintf(fp, "# coordinate datum=0\n");
+				fprintf(fp, "# SW corner=%lf/%lf meters\n", tile_area.left, tile_area.bottom);
+				fprintf(fp, "# NW corner=%lf/%lf meters\n", tile_area.left, tile_area.top);
+				fprintf(fp, "# NE corner=%lf/%lf meters\n", tile_area.right, tile_area.top);
+				fprintf(fp, "# SE corner=%lf/%lf meters\n", tile_area.right, tile_area.bottom);
+				fprintf(fp, "# cell size=%lf/%lf meters\n", cell_size.x*(1<<lod), cell_size.y*(1<<lod));
+				fprintf(fp, "# vertical scaling=1 meters\n");
+				fprintf(fp, "# missing value=%d\n", INVALID_ELEVATION);
+				fprintf(fp, "%d %d\n", tilesize+1, tilesize+1);
+				fprintf(fp, "32767\n");
+
+				int x, y;
+				for (y = 0; y <= base_tilesize; y += (1<<lod))
+				{
+					for (x = 0; x <= base_tilesize; x += (1<<lod))
+					{
+						int samplex = (i*base_tilesize)+x;
+						int sampley = (j*base_tilesize)+(base_tilesize-y);
+						short value = m_pGrid->GetValue(samplex, sampley);
+						value = SwapShort(value);
+						fwrite(&value, 2, 1, fp);
+					}
+				}
+				fclose(fp);
+			}
+		}
+	}
 }

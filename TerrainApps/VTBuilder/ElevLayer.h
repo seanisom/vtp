@@ -110,6 +110,7 @@ public:
 	void Resample(int iNewWidth, int iNewHeight);
 	bool FillGaps();
 	void DetermineMeterSpacing();
+	void WriteGridOfPGMPyramids();
 
 	// TIN operations
 	void SetTin(vtTin2d *pTin);
