@@ -247,8 +247,8 @@ void ProfileDlg::DrawChart(wxDC& dc)
 	pen1.SetWidth(2);
 	wxPen pen2(*wxLIGHT_GREY_PEN);
 	pen2.SetStyle(wxDOT);
-	wxPen pen3(wxColour(0,128,0));	// dark green
-	wxPen pen4(wxColour(128,0,0));	// dark red
+	wxPen pen3(wxColour(0,128,0), 1, wxSOLID);	// dark green
+	wxPen pen4(wxColour(128,0,0), 1, wxSOLID);	// dark red
 
 	wxFont font(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL);
 	dc.SetFont(font);
@@ -362,7 +362,7 @@ void ProfileDlg::DrawChart(wxDC& dc)
 
 	if (m_bValidLine)
 	{
-		wxPen orange(wxColour(255,128,0));
+		wxPen orange(wxColour(255,128,0), 1, wxSOLID);
 		dc.SetPen(orange);
 		MakePoint(p1, 0, m_values[0] + m_fHeight1);
 		MakePoint(p2, m_xrange - 1, m_values[m_xrange - 1] + m_fHeight2);
