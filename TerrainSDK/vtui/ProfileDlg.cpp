@@ -376,7 +376,7 @@ void ProfileDlg::DrawChart(wxDC& dc)
 		wxPen lightgrey(*wxLIGHT_GREY_PEN);
 		dc.SetPen(lightgrey);
 
-		wxBrush yellow(wxColour(255,255,0));
+		wxBrush yellow(wxColour(255,255,0), wxSOLID);
 		dc.SetBrush(yellow);
 		MakePoint(p1, 0, m_fHeightAtStart);
 		dc.DrawCircle(p1, 5);
@@ -387,19 +387,19 @@ void ProfileDlg::DrawChart(wxDC& dc)
 	nopen.SetStyle(wxTRANSPARENT);
 	dc.SetPen(nopen);
 
-	wxBrush brush1(wxColour(0,0,255));	// blue: minimum
+	wxBrush brush1(wxColour(0,0,255), wxSOLID);	// blue: minimum
 	dc.SetBrush(brush1);
 	MakePoint(p1, m_iMin, m_fMin);
 	dc.DrawCircle(p1, 5);
 
-	wxBrush brush2(wxColour(255,0,0));	// red: maximum
+	wxBrush brush2(wxColour(255,0,0), wxSOLID);	// red: maximum
 	dc.SetBrush(brush2);
 	MakePoint(p1, m_iMax, m_fMax);
 	dc.DrawCircle(p1, 5);
 
 	if (m_bMouseOnLine)
 	{
-		wxBrush brush3(wxColour(0,255,0));	// green: mouse
+		wxBrush brush3(wxColour(0,255,0), wxSOLID);	// green: mouse
 		dc.SetBrush(brush3);
 		MakePoint(p1, m_iMouse, m_fMouse);
 		dc.DrawCircle(p1, 5);
@@ -407,7 +407,7 @@ void ProfileDlg::DrawChart(wxDC& dc)
 
 	if (m_bIntersectsGround)
 	{
-		wxBrush brush3(wxColour(255,128,0));	// orange: intersection
+		wxBrush brush3(wxColour(255,128,0), wxSOLID);	// orange: intersection
 		dc.SetBrush(brush3);
 		MakePoint(p1, m_iIntersectIndex, m_values[m_iIntersectIndex]);
 		dc.DrawCircle(p1, 5);
