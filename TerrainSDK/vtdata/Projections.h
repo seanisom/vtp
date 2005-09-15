@@ -49,7 +49,7 @@ enum LinearUnits
 /**  The vtProjection class represents an earth coordinate reference system
  * (CRS), which is generally a projected coordinate system (PCS).  It is
  * based on the class
- * <a href="http://gdal.velocet.ca/projects/opengis/ogrhtml/class_ogrspatialreference.html">OGRSpatialReference</a>
+ * <a href="http://www.gdal.org/ogr/classOGRSpatialReference.html">OGRSpatialReference</a>
  * which represents a full OpenGIS Spatial Reference System.  The vtProjection
  * class extends OGRSpatialReference with several useful methods.
  */
