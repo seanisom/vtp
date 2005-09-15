@@ -73,6 +73,7 @@ vtTerrain::vtTerrain()
 	m_pDynGeom = NULL;
 	m_pDynGeomScale = NULL;
 	m_pTin = NULL;
+	m_pTiledGeom = NULL;
 
 	// structures
 	m_iStructSet = 0;
@@ -158,6 +159,12 @@ vtTerrain::~vtTerrain()
 	}
 
 	delete m_pTin;
+
+	if (m_pTiledGeom)
+	{
+		//m_pDynGeomScale->RemoveChild(m_pTiledGeom);
+		m_pTiledGeom->Release();
+	}
 
 	if (m_pTerrainGroup != (vtGroup*) NULL)
 		m_pTerrainGroup->Release();
@@ -1949,30 +1956,10 @@ bool vtTerrain::CreateStep1()
 	}
 
 	VTLOG("\tFound: %s\n", (const char *) fullpath);
-	if (m_Params.GetValueBool(STR_TIN))
+	int surface_type = m_Params.GetValueInt(STR_SURFACE_TYPE);
+	if (surface_type == 0)
 	{
-		if (!m_pTin)
-		{
-			// if they did not provide us with a TIN, try to load it
-			m_pTin = new vtTin3d;
-			bool status = m_pTin->Read(fullpath);
-
-			if (status == false)
-			{
-				_SetErrorMessage("TIN load failed.");
-				return false;
-			}
-			VTLOG("\tTIN load succeeded.\n");
-
-			m_proj = m_pTin->m_proj;
-			g_Conv = m_pTin->m_Conversion;
-
-			m_pHeightField = m_pTin;
-		}
-	}
-	else
-	{
-		// Loading elevation grid...
+		// Elevation input is a single grid; load it
 		m_pElevGrid = new vtElevationGrid();
 		bool status = m_pElevGrid->LoadFromBT(fullpath);
 		if (status == false)
@@ -2011,6 +1998,43 @@ bool vtTerrain::CreateStep1()
 			m_pElevGrid->ReplaceValue(0, fOceanDepth);
 		}
 	}
+	else if (surface_type == 1)
+	{
+		// Elevation input is a single TIN
+		if (!m_pTin)
+		{
+			// if they did not provide us with a TIN, try to load it
+			m_pTin = new vtTin3d;
+			bool status = m_pTin->Read(fullpath);
+
+			if (status == false)
+			{
+				_SetErrorMessage("TIN load failed.");
+				return false;
+			}
+			VTLOG("\tTIN load succeeded.\n");
+
+			m_proj = m_pTin->m_proj;
+			g_Conv = m_pTin->m_Conversion;
+
+			m_pHeightField = m_pTin;
+		}
+	}
+	else if (surface_type == 2)
+	{
+		// Elevation input is a set of tiles, which will be loaded later as needed
+		m_pTiledGeom = new vtTiledGeom;
+		m_pTiledGeom->SetName2("Tiled Geometry Container");
+		bool status = m_pTiledGeom->ReadTileList(fullpath);
+		if (status == false)
+		{
+			_SetErrorMessage("Tile list load failed.");
+			return false;
+		}
+		m_pHeightField = m_pTiledGeom;
+		g_Conv = m_pHeightField->m_Conversion;
+		m_proj = m_pTiledGeom->m_proj;
+	}
 	char type[10], value[2048];
 	m_proj.GetTextDescription(type, value);
 	VTLOG(" Projection of the terrain: %s, '%s'\n", type, value);
@@ -2027,7 +2051,7 @@ bool vtTerrain::CreateStep2(vtTransform *pSunLight)
 	if (m_Params.GetValueBool(STR_SUPPRESS))
 		return true;
 
-	if (!m_Params.GetValueBool(STR_TIN))
+	if (m_Params.GetValueInt(STR_SURFACE_TYPE) == 0)	// single grid
 		_CreateTextures(pSunLight->GetDirection());
 	return true;
 }
@@ -2041,10 +2065,13 @@ bool vtTerrain::CreateStep3()
 	if (m_Params.GetValueBool(STR_SUPPRESS))
 		return true;
 
-	if (m_Params.GetValueBool(STR_TIN))
-		return CreateFromTIN();
-	else
+	if (m_Params.GetValueInt(STR_SURFACE_TYPE) == 0)	// single grid
 		return CreateFromGrid();
+	else if (m_Params.GetValueInt(STR_SURFACE_TYPE) == 1)	// TIN
+		return CreateFromTIN();
+	else if (m_Params.GetValueInt(STR_SURFACE_TYPE) == 2)	// tiles
+		return CreateFromTiles();
+	return true;
 }
 
 bool vtTerrain::CreateFromTIN()
@@ -2082,6 +2109,13 @@ bool vtTerrain::CreateFromGrid()
 		delete m_pElevGrid;
 		m_pElevGrid = NULL;
 	}
+	return true;
+}
+
+bool vtTerrain::CreateFromTiles()
+{
+	// m_pTiledGeom already exists (although probably should be unbundled)
+	m_pTerrainGroup->AddChild(m_pTiledGeom);
 	return true;
 }
 
@@ -2639,11 +2673,10 @@ float vtTerrain::AddSurfaceLineToMesh(vtMeshFactory *pMF, const DLine2 &line,
 				fTotalLength += (v - last_v).Length();
 			last_v = v;
 		}
-
-		spline.Cleanup();
 	}
 	else
 	{
+		// not curved: straight line in earth coordinates
 		for (i = 0; i < points; i++)
 		{
 			if (bInterp)
