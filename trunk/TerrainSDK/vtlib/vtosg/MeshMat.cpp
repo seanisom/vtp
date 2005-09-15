@@ -169,8 +169,10 @@ void vtMaterial::SetTransparent(bool bOn, bool bAdd)
 		m_pStateSet->setAttributeAndModes(m_pAlphaFunc.get(), SA_ON );
 		m_pStateSet->setRenderingHint(StateSet::TRANSPARENT_BIN);
 #ifdef ENVIRON
-		// RJ says he needed this to make multiple transparent surfaces
-		//  work properly, but the transparent bin should take care of that?
+		// RJ says he needed this to make multiple transparent surfaces work
+		//  properly.  In general, the transparent bin takes care of that,
+		//  but there are cases where polygons (sorted by center) can end up
+		//  in the wrong order.
 		ref_ptr<Depth> pDepth  = new Depth;
 		pDepth->setWriteMask(false);
 		m_pStateSet->setAttribute(pDepth.get());
