@@ -118,11 +118,19 @@ bool vtScene::Init(bool bStereo, int iStereoMode)
 	displaySettings->readEnvironmentalVariables();
 
 	m_pOsgSceneView = new osgUtil::SceneView(displaySettings);
-	m_pOsgSceneView->setDefaults();
+
+	// From the OSG mailing list: You must specify the lighting mode in
+	// setDefaults() and override the default options. If you call
+	// setDefaults() with the default options, a headlight is added to the
+	// global state set of the SceneView.  With the default options applied,
+	// I have tried subsequently calling setLightingMode(NO_SCENE_LIGHT)
+	// and setLight(NULL), but I still get  a headlight.
+	m_pOsgSceneView->setDefaults(osgUtil::SceneView::NO_SCENEVIEW_LIGHT);
 
 	// OSG 0.9.0 and newer
 	m_pOsgSceneView->setComputeNearFarMode(osgUtil::CullVisitor::DO_NOT_COMPUTE_NEAR_FAR);
 
+	// we are emphatic about this: no sceneview light!
 	m_pOsgSceneView->setLightingMode(osgUtil::SceneView::NO_SCENEVIEW_LIGHT);
 
 	// OSG 0.9.2 and newer: turn off "small feature culling"
