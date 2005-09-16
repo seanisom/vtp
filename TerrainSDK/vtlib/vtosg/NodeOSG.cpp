@@ -986,6 +986,13 @@ vtLight::vtLight()
 	// A lightsource creates a light, which we can get with getLight().
 	m_pLightSource = new osg::LightSource;
 	SetOsgNode(m_pLightSource);
+
+	// However, because lighting is also a 'state', we need to inform
+	// the whole scene graph that we have another light.
+	osgUtil::SceneView *sv = vtGetScene()->getSceneView();
+	osg::StateSet *ss = sv->getGlobalStateSet();
+	osg::Light *light = m_pLightSource->getLight();
+	ss->setAssociatedModes(light, osg::StateAttribute::ON);
 }
 
 vtNodeBase *vtLight::Clone()
