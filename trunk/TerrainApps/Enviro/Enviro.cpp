@@ -1841,8 +1841,8 @@ void Enviro::CreateElevationLegend()
 		FPoint3 p1(cbar_left,  in_base.y + i, 0);
 		FPoint3 p2(cbar_right, in_base.y +  i, 0);
 		idx = mesh1->AddLine(p1, p2);
-		mesh1->SetVtxColor(idx, table[i]);
-		mesh1->SetVtxColor(idx+1, table[i]);
+		mesh1->SetVtxColor(idx, (RGBf) table[i]);
+		mesh1->SetVtxColor(idx+1, (RGBf) table[i]);
 	}
 	mesh1->AddStrip2((in_size.y + 1)*2, 0);
 	m_pLegendGeom->AddMesh(mesh1, 0);
