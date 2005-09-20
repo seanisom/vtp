@@ -1274,6 +1274,7 @@ void Enviro::OnMouseSelectCursorPick(vtMouseEvent &event)
 		if (structures_picked != structures)
 		{
 			// active structure set (layer) has changed due to picking
+			structures->VisualDeselectAll();
 			ShowLayerView();
 			RefreshLayerView();
 		}
