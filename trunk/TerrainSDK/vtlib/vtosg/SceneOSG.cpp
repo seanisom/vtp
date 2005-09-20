@@ -263,6 +263,24 @@ void vtScene::SetRoot(vtGroup *pRoot)
 	m_pRoot = pRoot;
 }
 
+bool vtScene::IsStereo() const
+{
+	const osg::DisplaySettings* displaySettings = m_pOsgSceneView->getDisplaySettings();
+	return displaySettings->getStereo();
+}
+
+void vtScene::SetStereoSeparation(float fSep)
+{
+	osg::DisplaySettings* displaySettings = m_pOsgSceneView->getDisplaySettings();
+	displaySettings->setEyeSeparation(fSep);
+}
+
+float vtScene::GetStereoSeparation() const
+{
+	const osg::DisplaySettings* displaySettings = m_pOsgSceneView->getDisplaySettings();
+	return displaySettings->getEyeSeparation();
+}
+
 /**
  * Convert window coordinates (in pixels) to a ray from the camera
  * in world coordinates.  Pixel coordinates are measured from the
