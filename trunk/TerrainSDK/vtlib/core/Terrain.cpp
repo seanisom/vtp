@@ -1601,7 +1601,13 @@ void vtTerrain::CreateFeatureGeometry(const vtFeatureSet &feat, const vtTagArray
 			const DPolygon2 &dpoly = pSetPoly->GetPolygon(i);
 			for (unsigned int k = 0; k < dpoly.size(); k++)
 			{
-				const DLine2 &dline = dpoly[k];
+				// This would be the efficient way
+//				const DLine2 &dline = dpoly[k];
+
+				// but we must copy each polyline in order to close it
+				DLine2 dline = dpoly[k];
+				dline.Append(dline[0]);
+
 				AddSurfaceLineToMesh(&mf, dline, fHeight, bTessellate, bCurve);
 			}
 		}
