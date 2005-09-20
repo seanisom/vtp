@@ -24,7 +24,7 @@
 #include "xmlhelper/easyxml.hpp"
 
 #include "EnviroApp.h"
-#include "frame.h"
+#include "EnviroFrame.h"
 #include "StartupDlg.h"
 #include "TParamsDlg.h"
 
@@ -32,7 +32,7 @@
 #ifdef FRAME_NAME
   #include FRAME_INCLUDE
 #else
-  #define FRAME_NAME vtFrame
+  #define FRAME_NAME EnviroFrame
   #define LoadAppCatalog(locale)
 #endif
 
@@ -303,7 +303,7 @@ bool EnviroApp::OnInit()
 	VTLOG("Creating the frame window.\n");
 	wxPoint pos(g_Options.m_WinPos.x, g_Options.m_WinPos.y);
 	wxSize size(g_Options.m_WinSize.x, g_Options.m_WinSize.y);
-	vtFrame *frame = new FRAME_NAME(NULL, title, pos, size);
+	EnviroFrame *frame = new FRAME_NAME(NULL, title, pos, size);
 
 	// process some idle messages... let frame open a bit
 	bool go = true;
