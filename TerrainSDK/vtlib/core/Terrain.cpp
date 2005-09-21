@@ -2894,6 +2894,15 @@ bool StructureSet::FindStructureFromNode(vtNode* pNode, int &iSet, int &iOffset)
 	int iNumArrays = GetSize();
 	bool bFound = false;
 
+	// We might have a low-level native scenegraph node; we want the higher-level
+	vtNativeNode *native = dynamic_cast<vtNativeNode *>(pNode);
+	if (native)
+	{
+		pNode = native->FindParentVTNode();
+		if (!pNode)
+			return false;
+	}
+
 	for (int i = 0; (i < iNumArrays) && !bFound; i++)
 	{
 		vtStructureArray3d *pStructureArray = GetAt(i);
@@ -2901,7 +2910,10 @@ bool StructureSet::FindStructureFromNode(vtNode* pNode, int &iSet, int &iOffset)
 		for (int j = 0; (j < iNumStructures) && !bFound; j++)
 		{
 			vtStructure3d *pStructure3d = pStructureArray->GetStructure3d(j);
-			if ((pNode == pStructure3d->GetContainer()) || (pNode == pStructure3d->GetContained()) || (pNode == pStructure3d->GetGeom()))
+			if ((pNode == pStructure3d->GetContainer()) ||
+				(pNode == pStructure3d->GetContained()) ||
+				(pNode->GetParent() == pStructure3d->GetContained()) ||
+				(pNode == pStructure3d->GetGeom()))
 			{
 				iSet = i;
 				iOffset = j;
