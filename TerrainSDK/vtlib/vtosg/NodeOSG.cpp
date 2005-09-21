@@ -676,6 +676,23 @@ void vtNode::DecorateNativeGraph()
 	DecorateVisit(m_pNode.get());
 }
 
+vtNode *vtNativeNode::FindParentVTNode()
+{
+	osg::Node *node = GetOsgNode();
+	while (node)
+	{
+		node = node->getParent(0);
+		osg::Referenced *ref = node->getUserData();
+		if (ref)
+		{
+			vtNode *vnode = dynamic_cast<vtNode *>(ref);
+			if (vnode)
+				return vnode;
+		}
+	}
+	return NULL;
+}
+
 ///////////////////////////////////////////////////////////////////////
 // vtGroup
 //
