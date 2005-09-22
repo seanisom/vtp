@@ -2567,12 +2567,13 @@ void MainFrame::ExportBitmap(RenderDlg &dlg)
 
 	if (dlg.m_bToFile)
 	{
+		UpdateProgressDialog(1, _("Writing file"));
 		wxString2 fname = dlg.m_strToFile;
 		bool success;
 		if (dlg.m_bJPEG)
-			success = dib.WriteJPEG(fname.mb_str(), 99);
+			success = dib.WriteJPEG(fname.mb_str(), 99, progress_callback);
 		else
-			success = dib.WriteTIF(fname.mb_str(), &area, &proj);
+			success = dib.WriteTIF(fname.mb_str(), &area, &proj, progress_callback);
 		if (success)
 			DisplayAndLog("Successfully wrote to file '%s'", fname.mb_str());
 		else
@@ -2583,16 +2584,6 @@ void MainFrame::ExportBitmap(RenderDlg &dlg)
 		AddLayerWithCheck(pOutput);
 	}
 #if 0
-	int percent, last = -1;
-	percent = i * 100 / w;
-	if (percent != last)
-	{
-		wxString str;
-		str.Printf(_T("%d%%"), percent);
-		UpdateProgressDialog(percent, str);
-		last = percent;
-	}
-
 	// TEST - try coloring from water polygons
 	int layers = m_Layers.GetSize();
 	for (int l = 0; l < layers; l++)
@@ -2601,9 +2592,6 @@ void MainFrame::ExportBitmap(RenderDlg &dlg)
 		if (lp->GetType() == LT_WATER)
 			((vtWaterLayer*)lp)->PaintDibWithWater(&dib);
 	}
-
-	UpdateProgressDialog(100, _("Writing bitmap to file."));
-	bool success = dib.WriteBMP(fname.mb_str());
 #endif
 }
 
