@@ -1020,10 +1020,11 @@ ProfileDlg *MainFrame::ShowProfileDlg()
 	{
 		// Create new Feature Info Dialog
 		m_pProfileDlg = new ProfileDlg(this, wxID_ANY, _("Elevation Profile"),
-				wxPoint(120, 80), wxSize(600, 400), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER);
+				wxPoint(120, 80), wxSize(730, 500), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER);
 		BuildingProfileCallback *callback = new BuildingProfileCallback;
 		callback->m_frame = this;
 		m_pProfileDlg->SetCallback(callback);
+		m_pProfileDlg->SetProjection(m_proj);
 	}
 	m_pProfileDlg->Show(true);
 	return m_pProfileDlg;
@@ -1204,11 +1205,17 @@ void MainFrame::SetProjection(const vtProjection &p)
 	VTLOG("Setting main projection to: %s, %s\n", type, value);
 
 	m_proj = p;
+
+	// inform the world map view
 	GetView()->SetWMProj(p);
+
+	// inform the dialogs that care, if they're open
 	if (m_pDistanceDlg)
 		m_pDistanceDlg->SetProjection(m_proj);
 	if (m_pInstanceDlg)
 		m_pInstanceDlg->SetProjection(m_proj);
+	if (m_pProfileDlg)
+		m_pProfileDlg->SetProjection(m_proj);
 }
 
 void MainFrame::OnSelectionChanged()
@@ -1526,7 +1533,8 @@ void MainFrame::ExportElevation()
 		OpenProgressDialog(_T("Writing file"), true);
 		wxString2 fname = dlg.m_strToFile;
 		bool gzip = (fname.Right(3).CmpNoCase(_T(".gz")) == 0);
-		bool success = pOutput->m_pGrid->SaveToBT(fname.mb_str(), NULL, gzip);
+		bool success = pOutput->m_pGrid->SaveToBT(fname.mb_str(),
+			progress_callback, gzip);
 		delete pOutput;
 		CloseProgressDialog();
 		if (success)
