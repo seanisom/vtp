@@ -536,6 +536,9 @@ bool vtImageLayer::SaveToFile(const char *fname) const
 	pDataset->SetProjection(pszSRS_WKT);
 	CPLFree( pszSRS_WKT );
 
+	if (m_iXSize * m_iYSize > 512*512)
+		OpenProgressDialog(_("Writing file"), false);
+
 	// TODO: ask Frank if there is a way to gave GDAL write the file without
 	// having to make another entire copy in memory, as it does now:
 	RGBi rgb;
@@ -547,6 +550,8 @@ bool vtImageLayer::SaveToFile(const char *fname) const
 
 		for (x = 0; x < m_iXSize; x++)
 		{
+			progress_callback((i-1)*33 + (x * 33 / m_iXSize));
+
 			for (y = 0; y < m_iYSize; y++)
 			{
 				m_pBitmap->GetPixel24(x, y, rgb);
@@ -560,6 +565,8 @@ bool vtImageLayer::SaveToFile(const char *fname) const
 	}
 	delete raster;
 	GDALClose(pDataset);
+
+	CloseProgressDialog();
 
 	return true;
 }
@@ -637,6 +644,9 @@ bool vtImageLayer::LoadFromGDAL()
 			if (!GetMainFrame()->ConfirmValidCRS(&m_proj))
 				throw "Import Cancelled.";
 		}
+
+		if (m_iXSize * m_iYSize > 512*512)
+			OpenProgressDialog(_("Reading file"), false);
 
 		if (pDataset->GetGeoTransform(affineTransform) == CE_None)
 		{
@@ -911,6 +921,9 @@ bool vtImageLayer::LoadFromGDAL()
 			VTLOG("Reading the image data (%d x %d pixels)\n", m_iXSize, m_iYSize);
 			for (int iy = 0; iy < m_iYSize; iy++ )
 			{
+				if (progress_callback != NULL)
+					progress_callback(iy * 100 / m_iYSize);
+
 				ReadScanline(iy, 0);
 				if (UpdateProgressDialog(iy * 99 / m_iYSize))
 				{
@@ -937,6 +950,8 @@ bool vtImageLayer::LoadFromGDAL()
 			DisplayAndLog((str2+str).mb_str());
 		}
 	}
+
+	CloseProgressDialog();
 
 	// Don't close the GDAL Dataset; leave it open just in case we need it.
 //	GDALClose(pDataset);
@@ -1295,3 +1310,94 @@ bool vtImageLayer::ReadFeaturesFromTerraserver(const DRECT &area, int iTheme,
 #endif
 }
 
+void vtImageLayer::WriteGridOfPGMPyramids()
+{
+	// grid size
+	int cols = 9, rows = 10;
+	int base_tilesize = 512;
+
+	int gridcols = m_iXSize;
+	int gridrows = m_iYSize;
+
+	DRECT area = m_Extents;
+	DPoint2 tile_dim(area.Width()/cols, area.Height()/rows);
+	DPoint2 cell_size = tile_dim / base_tilesize;
+
+	int i, j, lod;
+	for (i = 0; i < cols; i++)
+	{
+		for (j = 0; j < rows; j++)
+		{
+			DRECT tile_area;
+			tile_area.left = area.left + tile_dim.x * i;
+			tile_area.right = area.left + tile_dim.x * (i+1);
+			tile_area.bottom = area.bottom + tile_dim.y * j;
+			tile_area.top = area.bottom + tile_dim.y * (j+1);
+
+			int col = i;
+			int row = rows-1-j;
+
+			for (lod = 0; lod < 4; lod++)
+			{
+				int tilesize = base_tilesize >> lod;
+
+				vtString fname;
+				if (lod == 0)
+					fname.Format("C:/temp/HawaiiTextureTiles/tile.%d-%d.ppm", col, row);
+				else
+					fname.Format("C:/temp/HawaiiTextureTiles/tile.%d-%d.ppm%d", col, row, lod);
+
+				FILE *fp = fopen(fname, "wb");
+				fprintf(fp, "P6\n");
+				fprintf(fp, "# DEM\n");
+				fprintf(fp, "# description=resampled with VTBuilder\n");
+				fprintf(fp, "# coordinate system=UTM\n");
+				fprintf(fp, "# coordinate zone=5\n");
+				fprintf(fp, "# coordinate datum=0\n");
+				fprintf(fp, "# SW corner=%lf/%lf meters\n", tile_area.left, tile_area.bottom);
+				fprintf(fp, "# NW corner=%lf/%lf meters\n", tile_area.left, tile_area.top);
+				fprintf(fp, "# NE corner=%lf/%lf meters\n", tile_area.right, tile_area.top);
+				fprintf(fp, "# SE corner=%lf/%lf meters\n", tile_area.right, tile_area.bottom);
+				fprintf(fp, "# cell size=%lf/%lf meters\n", cell_size.x*(1<<lod), cell_size.y*(1<<lod));
+				fprintf(fp, "# vertical scaling=1 meters\n");
+				fprintf(fp, "# missing value=-9999\n");
+				fprintf(fp, "%d %d\n", tilesize, tilesize);
+				fprintf(fp, "255\n");
+
+				int x, y;
+				RGBi rgb;
+				unsigned char r, g, b;
+				for (y = 0; y < base_tilesize; y += (1<<lod))
+				{
+					for (x = 0; x < base_tilesize; x += (1<<lod))
+					{
+						// NOTE: this is lousy nearest-neighbor sampling, for testing
+						int samplex = (i*base_tilesize)+x;
+						int sampley = (j*base_tilesize)+base_tilesize-1-y;
+						m_pBitmap->GetPixel24(samplex, m_iYSize-1-sampley, rgb);
+
+						// For testing, add stripes to indicate LOD
+						if (lod == 3 && x == y) rgb.Set(255,0,0);
+
+						if (lod == 2 && (
+							x == base_tilesize-y ||
+							x == y+base_tilesize/2 ||
+							x == y-base_tilesize/2)) rgb.Set(0,255,0);
+
+						if (lod == 1 && (x%16)==0) rgb.Set(0,0,90);
+
+						if (lod == 0 && (y%8)==0) rgb.Set(90,0,90);
+
+						r = rgb.r;
+						g = rgb.g;
+						b = rgb.b;
+						fwrite(&r, 1, 1, fp);
+						fwrite(&g, 1, 1, fp);
+						fwrite(&b, 1, 1, fp);
+					}
+				}
+				fclose(fp);
+			}
+		}
+	}
+}
