@@ -79,6 +79,7 @@ ProfileDlg::ProfileDlg( wxWindow *parent, wxWindowID id,
 	SetBackgroundColour(wxColour(255,255,255));
 
 	GetCurvature()->SetSelection(m_iCurvature);
+	UpdateEnabling();
 }
 
 void ProfileDlg::SetProjection(const vtProjection &proj)
@@ -95,7 +96,24 @@ void ProfileDlg::SetPoints(const DPoint2 &p1, const DPoint2 &p2)
 	m_bHaveLOS = false;
 	m_bHaveFresnel = false;
 	m_bHaveGeoidSurface = false;
+
+	m_geo1 = m_p1;
+	m_geo2 = m_p2;
+	if (!m_proj.IsGeographic())
+	{
+		// convert points to geographic CS
+		vtProjection geo;
+		CreateSimilarGeographicProjection(m_proj, geo);
+		OCT *trans = CreateCoordTransform(&m_proj, &geo);
+		trans->Transform(1, &m_geo1.x, &m_geo1.y);
+		trans->Transform(1, &m_geo2.x, &m_geo2.y);
+		m_fGeodesicDistance=vtProjection::GeodesicDistance(m_p1,m_p2);
+		delete trans;
+	}
+	m_fGeodesicDistance=vtProjection::GeodesicDistance(m_geo1,m_geo2);
+
 	Refresh();
+	UpdateEnabling();
 }
 
 void ProfileDlg::SetCallback(ProfileCallback *callback)
@@ -117,7 +135,6 @@ void ProfileDlg::GetValues()
 	if (m_yrange < 2) m_yrange = 2;
 
 	// fill array with elevation values, collect extents
-	m_fTotalDist = (m_p2 - m_p1).Length();
 	m_fMin = 1E9;
 	m_fMax = -1E9;
 	m_values.resize(m_xrange);
@@ -143,13 +160,13 @@ void ProfileDlg::GetValues()
 			{
 				m_fMin = f;
 				m_iMin = i;
-				m_fMinDist = ratio * m_fTotalDist;
+				m_fMinDist = ratio * m_fGeodesicDistance;
 			}
 			if (f > m_fMax)
 			{
 				m_fMax = f;
 				m_iMax = i;
-				m_fMaxDist = ratio * m_fTotalDist;
+				m_fMaxDist = ratio * m_fGeodesicDistance;
 			}
 		}
 	}
@@ -177,7 +194,7 @@ void ProfileDlg::Analyze()
 		m_bValidStart = true;
 	}
 
-	if (m_bValidStart)
+	if (m_bHavePoints)
 		ComputeGeoidSurface();
 
 	if (m_bLineOfSight)
@@ -186,14 +203,10 @@ void ProfileDlg::Analyze()
 	if (m_bVisibility && m_bValidStart)
 		ComputeVisibility();
 
-	if (m_proj.IsGeographic()) {
-	   m_fGeodesicDistance=m_proj.GeodesicDistance(m_p1,m_p2);
-	   ComputeFirstFresnel(); // depends on ComputeLineOfSight()
-	   }
-	else {
-	   m_fGeodesicDistance=0;
-	   m_bHaveFresnel=false;
-	   }
+	if (m_bValidLine && m_bLineOfSight && m_bUseFresnel && m_fGeodesicDistance>0)
+		ComputeFirstFresnel(); // depends on ComputeLineOfSight()
+	else
+		m_bHaveFresnel=false;
 }
 
 void ProfileDlg::ComputeLineOfSight()
@@ -217,17 +230,25 @@ void ProfileDlg::ComputeLineOfSight()
 
 	// Cast line from beginning to end
 	float diff = m_fHeightAtEnd - m_fHeightAtStart;
-	char apply_geoid = (m_bHaveGeoidSurface ? m_iCurvature : 0);
 	for (int i = 0; i < m_xrange; i++)
 	{
 		float fLineHeight = m_fHeightAtStart + diff * i / m_xrange;
+
+		if (m_bHaveGeoidSurface && m_iCurvature == 2)
+			fLineHeight -= m_GeoidSurface[i];
+
+		float fGroundHeight = m_values[i];
+
+		if (m_bHaveGeoidSurface && m_iCurvature == 1)
+			fGroundHeight += m_GeoidSurface[i];
+
 		m_LineOfSight[i]=fLineHeight;
-		if (!m_bIntersectsGround && fLineHeight < (m_values[i]+(apply_geoid>0 ? m_GeoidSurface[i] : 0)))
+		if (!m_bIntersectsGround && fLineHeight < fGroundHeight)
 		{
 			// line of sight intersects the ground
 			m_bIntersectsGround = true;
-			m_fIntersectHeight = m_values[i];
-			m_fIntersectDistance = (float)i / (m_xrange-1) * m_fTotalDist;
+			m_fIntersectHeight = fGroundHeight;
+			m_fIntersectDistance = (float)i / (m_xrange-1) * m_fGeodesicDistance;
 			m_iIntersectIndex = i;
 		}
 	}
@@ -239,7 +260,7 @@ void ProfileDlg::ComputeVisibility()
 	// prepare visibility array
 	int i, j;
 	float diff;
-	char apply_geoid = (m_bHaveGeoidSurface ? m_iCurvature : 0);
+	int apply_geoid = (m_bHaveGeoidSurface ? m_iCurvature : 0);
 	m_visible.resize(m_xrange);
 	m_rvisible.resize(m_xrange);
 
@@ -282,40 +303,36 @@ void ProfileDlg::ComputeVisibility()
 // zone = fresnel zone number (0 = object free zone)
 float ProfileDlg::ComputeFresnelRadius(float dist, float freq, int zone)
 {
-   float radius;
-   if (zone==1 || zone==0) {
-	float total_dist=m_fGeodesicDistance/1000;
-	dist/=1000;       // need this in Km
-	freq/=1000;       // need this in GHz
-	radius=17.3 * sqrt( (dist * (total_dist-dist)) / (freq * m_fGeodesicDistance) );
-	if (zone==0) radius *= 0.60;
+	float radius;
+	if (zone==1 || zone==0)
+	{
+		float total_dist=m_fGeodesicDistance/1000;
+		dist/=1000;		// need this in Km
+		freq/=1000;		// need this in GHz
+		radius=17.3 * sqrt( (dist * (total_dist-dist)) / (freq * m_fGeodesicDistance) );
+		if (zone==0) radius *= 0.60f;
 	}
-   else if (zone>1) {
-	float wavelength=299792458.0/(freq*1000000);
-	radius=sqrt(( zone * wavelength * dist * (m_fGeodesicDistance - dist))/m_fGeodesicDistance);
+	else if (zone>1)
+	{
+		float wavelength=299792458.0/(freq*1000000);
+		radius=sqrt(( zone * wavelength * dist * (m_fGeodesicDistance - dist))/m_fGeodesicDistance);
 	}
-   else radius=0;
-   return radius;
+	else radius=0;
+	return radius;
 }
 
 void ProfileDlg::ComputeFirstFresnel()
 {
-   if (!m_bValidLine || m_fGeodesicDistance<=0) {
-	m_bHaveFresnel=false;
-	return;
-	}
+	float total_dist=m_fGeodesicDistance/1000; // Km
+	float freq=m_fRadioFrequency/1000; // in GHz
+	m_FirstFresnel.resize(m_xrange);
 
-   int i;
-   float total_dist=m_fGeodesicDistance/1000; // Km
-   float range;
-   float freq=m_fRadioFrequency/1000; // in GHz
-   m_FirstFresnel.resize(m_xrange);
-
-   for (i=0; i<m_xrange; i++) {
-	range=total_dist * i/m_xrange;
-	m_FirstFresnel[i]=17.3 * sqrt( (range * (total_dist-range)) / (freq * total_dist) );
+	for (int i=0; i<m_xrange; i++)
+	{
+		float range=total_dist * i/m_xrange;
+		m_FirstFresnel[i]=17.3 * sqrt( (range * (total_dist-range)) / (freq * total_dist) );
 	}
-   m_bHaveFresnel=true;
+	m_bHaveFresnel=true;
 }
 
 
@@ -366,66 +383,68 @@ void ProfileDlg::ComputeGeoidSurface()
   The code optimises by calculating some values that do not change once only.
 */
 
-  bool use_effective_radius=true;
+#define ER_EQUATORIAL  6378.137		// Equatorial Radius
+#define ER_POLAR       6356.752		// Polar Radius
+#define ER             6366.000		// accepted average
 
-#define ER_EQUATORIAL  6378.137          // Equatorial Radius
-#define ER_POLAR       6356.752          // Polar Radius
-#define ER             6366.000          // accepted average
-
-#define EER (ER * 4.0/3.0)    // Effective earth radius (radio signals bend)
+#define EER (ER * 4.0/3.0)		// Effective earth radius (radio signals bend)
 #define PI  3.141592654
 
-// TODO: Obtain R from the projection, if possible
+	// TODO: Obtain R from the projection, if possible
 
-  float S, dist, h, P1angle, RsinP1angle, PIminusP1angle;
-  float R=(m_bUseEffectiveRadius ? EER : ER) * 1000; // everything in metres.
-  m_GeoidSurface.resize(m_xrange);
+	float S, dist, h, P1angle, RsinP1angle, PIminusP1angle;
+	float R = (m_bUseEffectiveRadius ? EER : ER) * 1000; // everything in metres.
+	m_GeoidSurface.resize(m_xrange);
 
-  S=m_fGeodesicDistance;
+	S = m_fGeodesicDistance;
 
-  P1angle        = (PI-(S/R))/2;
-  RsinP1angle    = R*sin( P1angle );
-  PIminusP1angle = PI - P1angle;
+	P1angle			= (PI-(S/R))/2;
+	RsinP1angle		= R*sin( P1angle );
+	PIminusP1angle	= PI - P1angle;
 
-  if (S<10 || S >= (PI*R)) {
-     // more than half way around the world, this will break, so don't bother...
-     // less than 10m or so, and it breaks due to rounding error.
-     m_bHaveGeoidSurface=false;
-     return;
-     }
+	if (S<10 || S >= (PI*R))
+	{
+		// more than half way around the world, this will break, so don't bother...
+		// less than 10m or so, and it breaks due to rounding error.
+		m_bHaveGeoidSurface=false;
+		return;
+	}
 
-  for (int i=0; i<m_xrange; i++) {
-      dist = m_fGeodesicDistance * i/m_xrange;
-      h=(dist<10 ? 0 : R-(RsinP1angle/sin(PIminusP1angle - (dist/R))) );
-      m_GeoidSurface[i]=h;
-      }
+	for (int i = 0; i < m_xrange; i++)
+	{
+		dist = m_fGeodesicDistance * i/m_xrange;
+		h = (dist<10 ? 0 : R-(RsinP1angle/sin(PIminusP1angle - (dist/R))) );
+		m_GeoidSurface[i]=h;
+	}
 
-  // maximum - We assume it's in the middle, like all good chords should be.
-  m_fGeoidCurvature=m_GeoidSurface[m_xrange/2];
-  m_bHaveGeoidSurface=true;
+	// maximum - We assume it's in the middle, like all good chords should be.
+	m_fGeoidCurvature = m_GeoidSurface[m_xrange/2];
+	m_bHaveGeoidSurface = true;
 }
 
 
 float ProfileDlg::ApplyGeoid(float h, int i, char t)
 {
-  if (m_bHaveGeoidSurface && m_iCurvature == t) {
-     switch (t) {
-	case 0: break;			// don't apply
-	case 1: h+=m_GeoidSurface[i];	// apply to heights relative to surface
-	case 2: h-=m_GeoidSurface[i];	// apply to heights relative to line of sight
+	if (m_bHaveGeoidSurface && m_iCurvature == t)
+	{
+		switch (t)
+		{
+		case 0: break;			// don't apply
+		case 1: h+=m_GeoidSurface[i];	// apply to heights relative to surface
+		case 2: h-=m_GeoidSurface[i];	// apply to heights relative to line of sight
+		}
 	}
-     }
-  return h;
+	return h;
 }
 
 
 // Free space loss only (we aren't that fancy yet)
 void ProfileDlg::ComputeSignalLoss(float dist, float freq)
 {
-// #define log10(x) (log(x)/log(10))
-  dist *= 0.621;      // need it in miles
-  freq /= 1000000.0;  // and in MHz
-  float free_space_loss = 36.56 + (20*log10(freq)) + (20*log10(dist));
+	// #define log10(x) (log(x)/log(10))
+	dist *= 0.621f;		// need it in miles
+	freq /= 1000000.0;	// and in MHz
+	float free_space_loss = 36.56 + (20*log10(freq)) + (20*log10(dist));
 }
 
 
@@ -512,14 +531,17 @@ void ProfileDlg::DrawChart(wxDC& dc)
 		dc.SetPen(pen1);
 		dc.DrawLine(x, m_base.y - 5, x, m_base.y + 5);
 
-		str.Printf(_T("%5.1f"), m_fTotalDist / (numticks-1) * i);
+		if (m_fGeodesicDistance >= 50000)
+			str.Printf(_T("%5.0fkm"), m_fGeodesicDistance / (numticks-1) * i / 1000);
+		else
+			str.Printf(_T("%5.1f"), m_fGeodesicDistance / (numticks-1) * i);
 		dc.GetTextExtent(str, &w, &h);
 		dc.DrawRotatedText(str, x-(h/2), m_base.y + w + 8, 90);
 	}
 
 	// Draw surface line
 	wxPoint p1, p2;
-	char apply_geoid=(m_bHaveGeoidSurface ? m_iCurvature : 0);
+	int apply_geoid = (m_bHaveGeoidSurface ? m_iCurvature : 0);
 
 	if (m_bVisibility && m_bValidStart)
 	{
@@ -542,7 +564,7 @@ void ProfileDlg::DrawChart(wxDC& dc)
 				continue;
 
 			if (apply_geoid==1)
-				v1+=m_GeoidSurface[i];
+				v1 += m_GeoidSurface[i];
 
 			MakePoint(p1, i, v1);
 			p2 = p1;
@@ -562,10 +584,11 @@ void ProfileDlg::DrawChart(wxDC& dc)
 				float v2 = m_values[i+1];
 				if (v1 == INVALID_ELEVATION || v2 == INVALID_ELEVATION)
 					continue;
-				if (apply_geoid==1) {
+				if (apply_geoid == 1)
+				{
 					v1+=m_GeoidSurface[i];
 					v2+=m_GeoidSurface[i+1];
-					}
+				}
 				MakePoint(p1, i, v1);
 				MakePoint(p2, i+1, v2);
 				dc.DrawLine(p1, p2);
@@ -577,7 +600,7 @@ void ProfileDlg::DrawChart(wxDC& dc)
 			wxPoint *pts = new wxPoint[m_xrange];
 			for (i = 0; i < m_xrange; i++)
 			{
-				MakePoint(pts[i], i, m_values[i]+(apply_geoid==1 ? m_GeoidSurface[i] : 0));
+				MakePoint(pts[i], i, m_values[i] + (apply_geoid==1 ? m_GeoidSurface[i] : 0));
 			}
 			dc.DrawLines(m_xrange, pts);
 			delete [] pts;
@@ -585,20 +608,21 @@ void ProfileDlg::DrawChart(wxDC& dc)
 	}
 
 	// Draw the fresnel zones
-	if (m_bUseFresnel && m_bHaveFresnel && m_bHaveLOS) {
-
+	if (m_bUseFresnel && m_bHaveFresnel && m_bHaveLOS)
+	{
 		wxPoint *pts0 = new wxPoint[m_xrange];
 		wxPoint *pts1 = new wxPoint[m_xrange];
 		wxPoint *pts2 = new wxPoint[m_xrange];
 
-		for (i=0; i<m_xrange; i++) {
+		for (i=0; i<m_xrange; i++)
+		{
 			float base=(apply_geoid==2 ? m_GeoidSurface[i] : 0);
 			MakePoint(pts1[i], i, m_LineOfSight[i] - m_FirstFresnel[i] - base);
 			MakePoint(pts0[i], i, m_LineOfSight[i] - (m_FirstFresnel[i] * 0.60) - base);
 
 			float r=ComputeFresnelRadius(m_fGeodesicDistance * i/m_xrange,m_fRadioFrequency,2);
 			MakePoint(pts2[i], i, m_LineOfSight[i] - r - base);
-			}
+		}
 
 		// object free zone (60% of first zone)
 		wxPen fresnelColourOF(wxColour(255,200,180));
@@ -614,24 +638,30 @@ void ProfileDlg::DrawChart(wxDC& dc)
 		wxPen fresnelColour2(wxColour(255,220,200));
 		dc.SetPen(fresnelColour2);
 		dc.DrawLines(m_xrange, pts2);
-		}
 
+		delete [] pts0;
+		delete [] pts1;
+		delete [] pts2;
+	}
 
 	// Draw Line of Sight
 	if (m_bValidLine)
 	{
 		wxPen orange(wxColour(255,128,0), 1, wxSOLID);
 		dc.SetPen(orange);
-		if (apply_geoid == 2) {
-		   wxPoint *pts = new wxPoint[m_xrange];
-		   for (i=0; i<m_xrange; i++)
-			MakePoint(pts[i], i, m_LineOfSight[i] - m_GeoidSurface[i]);
-		   dc.DrawLines(m_xrange, pts);
-		   }
-		else {
-		   MakePoint(p1, 0, m_values[0] + m_fHeight1);
-		   MakePoint(p2, m_xrange - 1, m_values[m_xrange - 1] + m_fHeight2);
-		   dc.DrawLine(p1, p2);
+		if (apply_geoid == 2)
+		{
+			wxPoint *pts = new wxPoint[m_xrange];
+			for (i=0; i<m_xrange; i++)
+				MakePoint(pts[i], i, m_LineOfSight[i]);
+			dc.DrawLines(m_xrange, pts);
+			delete [] pts;
+		}
+		else
+		{
+			MakePoint(p1, 0, m_fHeightAtStart);
+			MakePoint(p2, m_xrange - 1, m_fHeightAtEnd);
+			dc.DrawLine(p1, p2);
 		}
 	}
 
@@ -673,9 +703,9 @@ void ProfileDlg::DrawChart(wxDC& dc)
 
 	if (m_bIntersectsGround)
 	{
-		wxBrush brush3(wxColour(255,128,0), wxSOLID);   // orange: intersection
+		wxBrush brush3(wxColour(255,128,0), wxSOLID);	// orange: intersection
 		dc.SetBrush(brush3);
-		MakePoint(p1, m_iIntersectIndex, m_values[m_iIntersectIndex] + (apply_geoid==2 ? m_GeoidSurface[m_iIntersectIndex] : 0));
+		MakePoint(p1, m_iIntersectIndex, m_fIntersectHeight);
 		dc.DrawCircle(p1, 5);
 	}
 
@@ -687,16 +717,18 @@ void ProfileDlg::UpdateMessageText()
 {
 	wxString str, str2;
 
-	str2.Printf(_("Minimum: %.2f m at distance %.1f"), ApplyGeoid(m_fMin,m_iMin,1), m_fMinDist);
+	str2.Printf(_("Minimum: %.2f m at distance %.1f\n"),
+		ApplyGeoid(m_fMin,m_iMin,1), m_fMinDist);
 	str += str2;
-	str += _T(",  ");
-	str2.Printf(_("Maximum: %.2f m at distance %.1f"), ApplyGeoid(m_fMax,m_iMax,1), m_fMaxDist);
+	str2.Printf(_("Maximum: %.2f m at distance %.1f"),
+		ApplyGeoid(m_fMax,m_iMax,1), m_fMaxDist);
 	str += str2;
 
 	if (m_bMouseOnLine)
 	{
 		str += _T("\n");
-		str2.Printf(_("Mouse: %.2f m at distance %.1f"), ApplyGeoid(m_fMouse,m_iMouse,1), m_fMouseDist);
+		str2.Printf(_("Mouse: %.2f m at distance %.1f"),
+			ApplyGeoid(m_fMouse,m_iMouse,1), m_fMouseDist);
 		str += str2;
 		if (m_bHaveSlope)
 		{
@@ -706,34 +738,53 @@ void ProfileDlg::UpdateMessageText()
 			str += str2;
 		}
 
-		if (m_bHaveFresnel && m_bHaveLOS) {
-		   str += _T(", ");
-		   str2.Printf(_("Fresnel Zone 1: Radius: %.1f, Clearance %.1f"),
-			m_fMouseFresnel,
-			(ApplyGeoid(m_fMouseLOS,m_iMouse,2)-m_fMouseFresnel) - ApplyGeoid(m_fMouse,m_iMouse,1));
-		   str+=str2;
-		   str2.Printf(_("  OF Zone: Radius: %.1f, Clearance %.1f"),
-			m_fMouseFresnel*0.6,
-			(ApplyGeoid(m_fMouseLOS,m_iMouse,2)-(m_fMouseFresnel*0.6)) - ApplyGeoid(m_fMouse,m_iMouse,1));
-		   str+=str2;
-		   }
-	}
-	else if (m_bHaveFresnel) {
-		str += _T("\n");
-		str2.Printf(_("Fresnel zone radius at midpoint %.2fm (Object free zone %.2fm) Geodesic Dist %.1fm, Geoid Height %.1fm"),
-			m_FirstFresnel[m_xrange/2], m_FirstFresnel[m_xrange/2]*0.60,
-			m_fGeodesicDistance, m_fGeoidCurvature);
-		str += str2;
+		if (m_bHaveFresnel && m_bHaveLOS)
+		{
+			str += _T(", ");
+			str2.Printf(_("Fresnel Zone 1: Radius: %.1f, Clearance %.1f"),
+				m_fMouseFresnel,
+				(ApplyGeoid(m_fMouseLOS,m_iMouse,2)-m_fMouseFresnel) -
+				 ApplyGeoid(m_fMouse,m_iMouse,1));
+			str+=str2;
+			str2.Printf(_("  OF Zone: Radius: %.1f, Clearance %.1f"),
+				m_fMouseFresnel*0.6,
+				(ApplyGeoid(m_fMouseLOS,m_iMouse,2)-(m_fMouseFresnel*0.6)) -
+				 ApplyGeoid(m_fMouse,m_iMouse,1));
+			str+=str2;
 		}
+	}
+	else if (m_bHaveFresnel)
+	{
+		str += _T("\n");
+		str2.Printf(_("Fresnel zone radius at midpoint %.2fm (Object free zone %.2fm) Geoid Height %.1fm"),
+			m_FirstFresnel[m_xrange/2], m_FirstFresnel[m_xrange/2]*0.60,
+			m_fGeoidCurvature);
+		str += str2;
+	}
 
 	if (m_bValidLine && m_bIntersectsGround)
 	{
 		str += _T("\n");
 		str2.Printf(_("Intersects ground at height %.2f, distance %.1f"),
-			ApplyGeoid(m_fIntersectHeight,m_iIntersectIndex,1), m_fIntersectDistance);
+			m_fIntersectHeight, m_fIntersectDistance);
 		str += str2;
 	}
 	GetText()->SetValue(str);
+}
+
+void ProfileDlg::UpdateEnabling()
+{
+	GetLineOfSight()->Enable(m_bHavePoints);
+	GetVisibility()->Enable(m_bHavePoints);
+
+	GetHeight1()->Enable(m_bLineOfSight || m_bVisibility);
+	GetHeight2()->Enable(m_bLineOfSight);
+
+	GetFresnel()->Enable(m_bLineOfSight);
+
+	GetRF()->Enable(m_bUseFresnel);
+//	GetCurvature()->Enable(m_bUseFresnel);
+//	GetEffective()->Enable(m_iCurvature != 0);
 }
 
 // WDR: handler implementations for ProfileDlg
@@ -743,6 +794,7 @@ void ProfileDlg::OnCurvature( wxCommandEvent &event )
 	TransferDataFromWindow();
 	Analyze();
 	Refresh();
+	UpdateEnabling();
 }
 
 void ProfileDlg::OnRF( wxCommandEvent &event )
@@ -764,6 +816,7 @@ void ProfileDlg::OnFresnel( wxCommandEvent &event )
 	m_bUseFresnel = event.IsChecked();
 	Analyze();
 	Refresh();
+	UpdateEnabling();
 }
 
 void ProfileDlg::OnHeight2( wxCommandEvent &event )
@@ -808,8 +861,13 @@ void ProfileDlg::OnSize(wxSizeEvent& event)
 
 void ProfileDlg::OnLeftDown(wxMouseEvent& event)
 {
-	m_bLeftButton = true;
-	OnMouseMove(event);
+	wxPoint point = event.GetPosition();
+	if (point.x > m_base.x && point.x < m_base.x + m_xrange - 1 &&
+		point.y < m_base.y && point.y > m_base.x - m_yrange)
+	{
+		m_bLeftButton = true;
+		OnMouseMove(event);
+	}
 }
 void ProfileDlg::OnLeftUp(wxMouseEvent& event)
 {
@@ -836,7 +894,7 @@ void ProfileDlg::OnMouseMove(wxMouseEvent& event)
 
 		if (m_fMouse != INVALID_ELEVATION)
 		{
-			m_fMouseDist = (float)offset / m_xrange * m_fTotalDist;
+			m_fMouseDist = (float)offset / m_xrange * m_fGeodesicDistance;
 			m_iMouse = offset;
 			m_bMouseOnLine = true;
 			Refresh();
@@ -846,7 +904,7 @@ void ProfileDlg::OnMouseMove(wxMouseEvent& event)
 			if (v2 != INVALID_ELEVATION)
 			{
 				m_bHaveSlope = true;
-				m_fSlope = (v2 - m_fMouse) / (m_fTotalDist / m_xrange);
+				m_fSlope = (v2 - m_fMouse) / (m_fGeodesicDistance / m_xrange);
 			}
 		}
 	}
@@ -864,8 +922,7 @@ void ProfileDlg::OnLineOfSight( wxCommandEvent &event )
 	m_bLineOfSight = event.IsChecked();
 	Analyze();
 	Refresh();
-	GetHeight1()->Enable(m_bLineOfSight || m_bVisibility);
-	GetHeight2()->Enable(m_bLineOfSight);
+	UpdateEnabling();
 }
 
 void ProfileDlg::OnVisibility( wxCommandEvent &event )
@@ -873,8 +930,6 @@ void ProfileDlg::OnVisibility( wxCommandEvent &event )
 	m_bVisibility = event.IsChecked();
 	Analyze();
 	Refresh();
-	GetHeight1()->Enable(m_bLineOfSight || m_bVisibility);
-	GetHeight2()->Enable(m_bLineOfSight);
+	UpdateEnabling();
 }
-
 
