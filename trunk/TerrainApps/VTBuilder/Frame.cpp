@@ -1580,6 +1580,7 @@ void MainFrame::ExportImage()
 
 	wxString filter = _("All Files|*.*");
 	AddType(filter, FSTRING_TIF);
+	AddType(filter, FSTRING_JPEG);
 
 	// ask the user for a filename
 	wxFileDialog saveFile(NULL, _("Export Image"), _T(""), _T(""), filter, wxSAVE);
