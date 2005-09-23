@@ -41,13 +41,19 @@ public:
 		long style = wxDEFAULT_DIALOG_STYLE );
 
 	// WDR: method declarations for ProfileDlg
+	wxTextCtrl* GetRF()  { return (wxTextCtrl*) FindWindow( ID_RF ); }
 	wxChoice* GetCurvature()  { return (wxChoice*) FindWindow( ID_CURVATURE ); }
+	wxCheckBox* GetFresnel()  { return (wxCheckBox*) FindWindow( ID_FRESNEL ); }
+	wxCheckBox* GetEffective()  { return (wxCheckBox*) FindWindow( ID_USE_EFFECTIVE ); }
 	wxTextCtrl* GetHeight2()  { return (wxTextCtrl*) FindWindow( ID_HEIGHT2 ); }
 	wxTextCtrl* GetHeight1()  { return (wxTextCtrl*) FindWindow( ID_HEIGHT1 ); }
 	wxTextCtrl* GetText()  { return (wxTextCtrl*) FindWindow( ID_STATUS_TEXT ); }
+	wxCheckBox* GetLineOfSight()  { return (wxCheckBox*) FindWindow( ID_LINE_OF_SIGHT ); }
+	wxCheckBox* GetVisibility()  { return (wxCheckBox*) FindWindow( ID_VISIBILITY ); }
 	void MakePoint(wxPoint &p, int i, float value);
 	void DrawChart(wxDC& dc);
 	void UpdateMessageText();
+	void UpdateEnabling();
 	void SetProjection(const vtProjection &proj);
 	void SetPoints(const DPoint2 &p1, const DPoint2 &p2);
 	void SetCallback(ProfileCallback *callback);
@@ -68,6 +74,7 @@ private:
 	std::vector<bool> m_visible;
 	vtProjection    m_proj;
 	DPoint2 m_p1, m_p2;
+	DPoint2 m_geo1, m_geo2;		// same points in geographic CS
 	wxSize m_clientsize;
 	int m_xrange, m_yrange;
 	float m_fMin, m_fMax, m_fRange, m_fDrawRange;
@@ -103,7 +110,7 @@ private:
 	// these values are exposed directly in the GUI
 	float m_fHeight1, m_fHeight2;
 	float m_fRadioFrequency;
-	int m_iCurvature;
+	int m_iCurvature;	// 0=none, 1=terrain, 2=line of sight
 
 	// these values are retreived as needed from the GUI
 	bool m_bLineOfSight, m_bVisibility;
