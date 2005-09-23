@@ -510,7 +510,7 @@ bool vtImageLayer::SaveToFile(const char *fname) const
 	vtString sExt = GetExtension(fname, false); //get extension type
 	if (sExt.CompareNoCase(".jpg") == 0)
 	{
-		return m_pBitmap->WriteJPEG(fname, 75);
+		return m_pBitmap->WriteJPEG(fname, 90);
 	}
 
 	// Save with GDAL
