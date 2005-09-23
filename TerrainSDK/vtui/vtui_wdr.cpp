@@ -779,7 +779,7 @@ wxSizer *ProfileDialogFunc( wxWindow *parent, bool call_fit, bool set_sizer )
     wxStaticText *item15 = new wxStaticText( parent, ID_TEXT, _("MHz"), wxDefaultPosition, wxDefaultSize, 0 );
     item13->Add( item15, 0, wxALIGN_CENTER|wxRIGHT|wxTOP|wxBOTTOM, 5 );
 
-    item7->Add( item13, 0, wxALIGN_CENTER, 5 );
+    item7->Add( item13, 0, wxALIGN_CENTER_VERTICAL, 5 );
 
     wxStaticText *item16 = new wxStaticText( parent, ID_TEXT, _("Apply curvature to:"), wxDefaultPosition, wxDefaultSize, 0 );
     item7->Add( item16, 0, wxALIGN_CENTER|wxALL, 5 );
@@ -798,7 +798,7 @@ wxSizer *ProfileDialogFunc( wxWindow *parent, bool call_fit, bool set_sizer )
     wxStaticLine *item18 = new wxStaticLine( parent, ID_LINE2, wxDefaultPosition, wxSize(-1,20), wxLI_VERTICAL );
     item1->Add( item18, 0, wxGROW|wxALIGN_CENTER_HORIZONTAL|wxALL, 5 );
 
-    wxTextCtrl *item19 = new wxTextCtrl( parent, ID_STATUS_TEXT, wxT(""), wxDefaultPosition, wxSize(80,40), wxTE_MULTILINE );
+    wxTextCtrl *item19 = new wxTextCtrl( parent, ID_STATUS_TEXT, wxT(""), wxDefaultPosition, wxSize(210,-1), wxTE_MULTILINE );
     item1->Add( item19, 1, wxGROW|wxALIGN_CENTER_VERTICAL, 5 );
 
     item0->Add( item1, 0, wxGROW|wxALIGN_CENTER_VERTICAL|wxALL, 5 );
