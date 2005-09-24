@@ -719,7 +719,7 @@ FPoint3 vtMesh::GetVtxNormal(int i) const
  *	\param i		Index of the vertex.
  *	\param color	The color.
  */
-void vtMesh::SetVtxColor(int i, const RGBf &color)
+void vtMesh::SetVtxColor(int i, const RGBAf &color)
 {
 	if (m_iVtxType & VT_Colors)
 	{
@@ -736,11 +736,11 @@ void vtMesh::SetVtxColor(int i, const RGBf &color)
 /**
  * Get the color of a vertex.
  */
-RGBf vtMesh::GetVtxColor(int i) const
+RGBAf vtMesh::GetVtxColor(int i) const
 {
 	if (m_iVtxType & VT_Colors)
 	{
-		RGBf p;
+		RGBAf p;
 		s2v( (Vec4)m_Color->at(i), p);
 		return p;
 	}
