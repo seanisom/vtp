@@ -1761,7 +1761,10 @@ bool vtElevationGrid::ParseNTF5(OGRDataSource *pDatasource, vtString &msg,
 	m_iColumns = iColCount;
 	m_iRows = iRowCount;
 	m_proj.SetSpatialReference(pSpatialRef);
-	m_bFloatMode = true;
+
+	// One online reference says of NTF elevation:
+	// "Height values are rounded to the nearest metre", hence integers.
+	m_bFloatMode = false;
 	m_EarthExtents.left = Extent.MinX;
 	m_EarthExtents.top = Extent.MaxY;
 	m_EarthExtents.right = Extent.MaxX;
@@ -1790,7 +1793,7 @@ bool vtElevationGrid::ParseNTF5(OGRDataSource *pDatasource, vtString &msg,
 			msg = "Couldn't flatten point feature";
 			return false;
 		}
-		SetFValue(i / iRowCount, i % iRowCount, (float)pPoint->getZ());
+		SetValue(i / iRowCount, i % iRowCount, (short)pPoint->getZ());
 		delete pFeature;
 		pFeature = NULL;
 		if (progress_callback != NULL)
