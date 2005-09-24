@@ -291,8 +291,11 @@ void MainFrame::ImportDataFromArchive(LayerType ltype, const wxString2 &fname_in
 vtLayer *MainFrame::ImportDataFromFile(LayerType ltype, const wxString2 &strFileName,
 								   bool bRefresh, bool bWarn)
 {
-	VTLOG("ImportDataFromFile '%s', type '%s'\n", strFileName.mb_str(),
-		GetLayerTypeName(ltype).mb_str());
+	VTLOG1("ImportDataFromFile '");
+	VTLOG1(strFileName);
+	VTLOG1("', type '");
+	VTLOG1(GetLayerTypeName(ltype));
+	VTLOG1("'\n");
 
 	// check to see if the file is readable
 	FILE *fp = fopen(strFileName.mb_str(), "rb");
