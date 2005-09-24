@@ -98,6 +98,8 @@ public:
 	void SetStereoSeparation(float fSep);
 	float GetStereoSeparation() const;
 
+	void ComputeViewMatrix(FMatrix4 &mat);
+
 	// OSG access
 	osgUtil::SceneView *getSceneView() { return m_pOsgSceneView.get(); }
 

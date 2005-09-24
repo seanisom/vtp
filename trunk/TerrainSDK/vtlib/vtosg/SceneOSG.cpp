@@ -245,6 +245,31 @@ void vtScene::UpdateWindow(vtWindow *pWindow)
 	m_pOsgSceneView->draw();
 }
 
+/**
+ * Compute the full current view transform as a matrix, which includes
+ * the projection of the camera and the transform to window coordinates.
+ *
+ * This transform is the one used to convert XYZ points in world coodinates
+ * into XY window coordinates.
+ *
+ * By inverting this matrix, you can "un-project" window coordinates back
+ * into the world.
+ *
+ * \param mat This matrix will receive the current view transform.
+ */
+void vtScene::ComputeViewMatrix(FMatrix4 &mat)
+{
+	osg::Matrix _viewMatrix = m_pOsgSceneView->getViewMatrix();
+	osg::Matrix _projectionMatrix = m_pOsgSceneView->getProjectionMatrix();
+	osg::Matrix matrix( _viewMatrix * _projectionMatrix);
+        
+	osg::Viewport *_viewport = m_pOsgSceneView->getViewport();
+    if (_viewport != NULL)
+        matrix.postMult(_viewport->computeWindowMatrix());
+
+	ConvertMatrix4(&matrix, &mat);
+}
+
 void vtScene::DoUpdate()
 {
 	UpdateBegin();
@@ -295,7 +320,7 @@ bool vtScene::CameraRay(const IPoint2 &win, FPoint3 &pos, FPoint3 &dir, vtWindow
 
 	// call the handy OSG function
 	IPoint2 winsize = pWindow->GetSize();
-	m_pOsgSceneView->projectWindowXYIntoObject(win.x, winsize.y-win.y, near_point, far_point);
+	m_pOsgSceneView->projectWindowXYIntoObject(win.x, winsize.y-1-win.y, near_point, far_point);
 
 	diff = far_point - near_point;
 	diff.normalize();
