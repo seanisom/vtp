@@ -124,6 +124,10 @@ vtElevLayer::vtElevLayer(const DRECT &area, int iColumns, int iRows,
 	bool bFloats, float fScale, const vtProjection &proj) : vtLayer(LT_ELEVATION)
 {
 	SetupDefaults();
+
+	VTLOG(" Constructing vtElevLayer of size %d x %d, floats %d\n",
+		iColumns, iRows, bFloats);
+
 	m_pGrid = new vtElevationGrid(area, iColumns, iRows, bFloats, proj);
 	m_pGrid->SetScale(fScale);
 	m_pGrid->GetDimensions(m_iColumns, m_iRows);
