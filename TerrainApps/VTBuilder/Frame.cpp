@@ -1067,6 +1067,7 @@ float MainFrame::ElevLayerArrayValue(std::vector<vtElevLayer*> &elevs,
 //
 bool MainFrame::SampleCurrentTerrains(vtElevLayer *pTarget)
 {
+	VTLOG1(" SampleCurrentTerrains\n");
 	// measure time
 	clock_t tm1 = clock();
 
@@ -1113,7 +1114,7 @@ bool MainFrame::SampleCurrentTerrains(vtElevLayer *pTarget)
 
 	clock_t tm2 = clock();
 	float time = ((float)tm2 - tm1)/CLOCKS_PER_SEC;
-	VTLOG("SampleCurrentTerrains: %.3f seconds.\n", time);
+	VTLOG(" SampleCurrentTerrains: %.3f seconds.\n", time);
 
 	return true;
 }
@@ -1473,27 +1474,37 @@ bool DnDFile::OnDropFiles(wxCoord, wxCoord, const wxArrayString& filenames)
 
 void MainFrame::ExportElevation()
 {
+	VTLOG1("ExportElevation\n");
+
 	// If any of the input terrain are floats, then recommend to the user
 	// that the output should be float as well.
 	bool floatmode = false;
 
 	// sample spacing in meters/heixel or degrees/heixel
 	DPoint2 spacing(0, 0);
+	int count = 0, floating = 0;
 	for (unsigned int i = 0; i < m_Layers.GetSize(); i++)
 	{
 		vtLayer *l = m_Layers.GetAt(i);
 		if (l->GetType() == LT_ELEVATION)
 		{
+			count++;
 			vtElevLayer *el = (vtElevLayer *)l;
 			if (el->IsGrid())
 			{
 				vtElevationGrid *grid = el->m_pGrid;
 				if (grid->IsFloatMode() || grid->GetScale() != 1.0f)
+				{
 					floatmode = true;
+					floating++;
+				}
 				spacing = grid->GetSpacing();
 			}
 		}
 	}
+	VTLOG(" Layers: %d, Elevation layers: %d, %d are floating point\n",
+		NumLayers(), count, floating);
+
 	if (spacing == DPoint2(0, 0))
 	{
 		DisplayAndLog("Sorry, you must have some elevation grid layers\n"
