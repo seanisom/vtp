@@ -532,16 +532,64 @@ void vtTiledGeom::SetupMiniLoad()
 #endif
 	const float farp = 400000;	// 400 km
 
-	// set preloader
+	// Set (pre)loader parameters
+
+	//pfarp: controls the radius of the preloading area
+	//	- should be greater than the distance to the far plane farp
 	float pfarp = 1.25f*farp;
-	float prange = farp/10.0f;
-	int psafety = 1;
-	int plazyness = 0;
-	int pupdate = 1000;
-	int pexpire = 100000;
+
+	//prange: controls the enabling distance of the first texture LOD
+	//	- a value of zero disables the use of the texture pyramid
+	//	- the range can be calculated easily from a given screen space
+	//		error threshold using the miniload::calcrange method
+//	float prange = farp/10.0f;
+	//int texdim = 512, winheight = 600, fovy = m_fFOVY;
+	//float prange = m_pMiniLoad->calcrange(texdim,winheight,fovy);
+	float prange = 20000;
+
+	//pbasesize: controls the maximum texture size that is paged in
+	//	- should be set to the size of the largest texture tile
+	//	- should not exceed the maximum size supported by the hardware
 	int pbasesize = 512;
-	m_pMiniLoad->setloader(request_callback, NULL, NULL/*preload_callback*/, deliver_callback,
-		pfarp, prange, pbasesize, psafety, plazyness, pupdate, pexpire);
+
+	//psafety: controls the safety of paging
+	//	- a value of s=0 disables the use of the pyramids
+	//	- a value of s>0 means that the next larger level is loaded
+	//		after a measured safety of less than s levels is reached
+	//		and the next larger level is preloaded after a difference
+	//		of less than s+1 levels
+	//	- the safety for texture paging is limited to one level
+	//	recommended: 1
+	int psafety = 1;
+
+	//plazyness: controls the lazyness of paging
+	//	- a value of l>=0 means that the next smaller level is loaded
+	//	  after a measured difference of more than s+l levels is reached
+	//	  and the next smaller level is preloaded after a difference
+	//	  of more than s+l-1 levels
+	//	- for maximum memory utilization set l to 0
+	//	- for minimum data traffic set l to the maximum available LOD
+	//	  recommended: 2
+	int plazyness = 0;
+
+	//pupdate: the number of frames per update
+	//	- the value determines the number of frames after a complete
+	//		update of the preloaded area and the LOD pyramid is finished
+	//	- should be greater than the frame rate
+	int pupdate = 1000;
+
+	//expire: the number of frames for expiration
+	//	- the value controls the number of frames after invisible tiles
+	//		are removed from the tile cache
+	//	- should be much larger than the frame rate
+	int pexpire = 100000;
+
+	m_pMiniLoad->setloader(request_callback,
+		NULL,	// data
+		NULL/*preload_callback*/,
+		deliver_callback,
+		pfarp, prange, pbasesize,
+		psafety, plazyness, pupdate, pexpire);
 
 	// define resolution reduction of invisible tiles
 	m_pMiniTile->setreduction(2.0f,3.0f);
