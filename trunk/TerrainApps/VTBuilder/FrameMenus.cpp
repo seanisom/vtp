@@ -148,6 +148,7 @@ EVT_MENU(ID_ELEV_SETUNKNOWN,		MainFrame::OnElevSetUnknown)
 EVT_MENU(ID_ELEV_FILLIN,			MainFrame::OnFillIn)
 EVT_MENU(ID_ELEV_SCALE,				MainFrame::OnScaleElevation)
 EVT_MENU(ID_ELEV_EXPORT,			MainFrame::OnElevExport)
+EVT_MENU(ID_ELEV_EXPORT_TILES,		MainFrame::OnElevExportTiles)
 EVT_MENU(ID_ELEV_BITMAP,			MainFrame::OnElevExportBitmap)
 EVT_MENU(ID_ELEV_MERGETIN,			MainFrame::OnElevMergeTin)
 
@@ -371,6 +372,7 @@ void MainFrame::CreateMenus()
 	elevMenu->Append(ID_ELEV_SETUNKNOWN, _("&Set Unknown Areas"));
 	elevMenu->AppendSeparator();
 	elevMenu->Append(ID_ELEV_EXPORT, _("E&xport To..."));
+	elevMenu->Append(ID_ELEV_EXPORT_TILES, _("Export to Tiles..."));
 	elevMenu->Append(ID_ELEV_BITMAP, _("Re&nder to Bitmap..."));
 	elevMenu->AppendSeparator();
 	elevMenu->Append(ID_ELEV_MERGETIN, _("&Merge shared TIN vertices"));
@@ -2485,6 +2487,11 @@ void MainFrame::ExportPNG16()
 		DisplayAndLog("Successfully wrote file '%s'", (const char *) fname);
 	else
 		DisplayAndLog("Error writing file.");
+}
+
+void MainFrame::OnElevExportTiles(wxCommandEvent& event)
+{
+	// TODO
 }
 
 void MainFrame::OnElevExportBitmap(wxCommandEvent& event)
