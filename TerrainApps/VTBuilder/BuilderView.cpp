@@ -1630,11 +1630,6 @@ void BuilderView::OnChar(wxKeyEvent& event)
 			set.SaveToSHP("C:/Temp/waimea_quads.shp");
 		}
 #endif
-		{
-			vtElevLayer *pE = (vtElevLayer *)GetMainFrame()->FindLayerOfType(LT_ELEVATION);
-			if (pE)
-				pE->WriteGridOfPGMPyramids();
-		}
 	}
 	else if (code == WXK_F11)
 	{
