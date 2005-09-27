@@ -1526,7 +1526,7 @@ void MainFrame::ExportElevation()
 	vtElevLayer *pOutput = new vtElevLayer(dlg.m_area, dlg.m_iSizeX,
 			dlg.m_iSizeY, dlg.m_bFloats, dlg.m_fVUnits, m_proj);
 
-	// fill in the value for pBig by merging samples from all other terrain
+	// fill in the value for pOutput by merging samples from all other terrain
 	if (!SampleCurrentTerrains(pOutput))
 	{
 		delete pOutput;
@@ -1539,7 +1539,9 @@ void MainFrame::ExportElevation()
 		return;
 	}
 
-	if (dlg.m_bToFile)
+	if (dlg.m_bNewLayer)
+		AddLayerWithCheck(pOutput);
+	else if (dlg.m_bToFile)
 	{
 		OpenProgressDialog(_T("Writing file"), true);
 		wxString2 fname = dlg.m_strToFile;
@@ -1553,8 +1555,17 @@ void MainFrame::ExportElevation()
 		else
 			DisplayAndLog("Did not successfully write file '%s'", fname.mb_str());
 	}
-	else
-		AddLayerWithCheck(pOutput);
+	else if (dlg.m_bToTiles)
+	{
+		OpenProgressDialog(_T("Writing tiles"), true);
+		bool success = pOutput->WriteGridOfPGMPyramids(dlg.m_tileopts);
+		delete pOutput;
+		CloseProgressDialog();
+		if (success)
+			DisplayAndLog("Successfully wrote to '%s'", (const char *) dlg.m_tileopts.dir);
+		else
+			DisplayAndLog("Could not successfully write to '%s'", (const char *) dlg.m_tileopts.dir);
+	}
 }
 
 
