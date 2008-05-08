@@ -1,0 +1,386 @@
+#
+# GNU Makefile Global Variable Defs
+#
+
+-include $(HOME)/.vtp-user.defs
+
+#----------------------------------------------------------------------------
+# Here you can turn various build options on and off
+#----------------------------------------------------------------------------
+SWITCHES = -DUNIX -DSUPPORT_QUIKGRID=0 -DSUPPORT_NETCDF=0 -DSUPPORT_HTTP=0 -DSUPPORT_BZIP2=0 -DSUPPORT_SQUISH=0
+
+#----------------------------------------------------------------------------
+# define the OS to dynamically figure out the configuration
+#----------------------------------------------------------------------------
+OS := $(shell uname)
+
+## We don't care about architectural distinguishers in the OS
+## such as IRIX64, IRIX32, etc. so we truncate IRIX?? to IRIX
+ifeq ($(findstring IRIX,$(OS)),IRIX)
+OS := IRIX
+endif
+
+## Make CYGWIN_XXXX CYGWIN so it's "Windows cross platform" :)
+ifeq ($(findstring CYGWIN,$(OS)),CYGWIN)
+OS := CYGWIN
+#OS := MINGW
+endif
+
+## Make MINGW_XXXX MINGW so it's "Windows cross platform" :)
+ifeq ($(findstring MINGW,$(OS)),MINGW)
+OS := MINGW
+endif
+
+#==============================================================================
+#
+#                                DIRECTORIES
+#
+#==============================================================================
+
+#----------------------------------------------------------------------------
+# General Unix systems will use these values
+#----------------------------------------------------------------------------
+LOCALBASE ?= /usr/local
+X11BASE   = /usr/X11R6
+X_INC = $(X11BASE)/include
+X_LIB = $(X11BASE)/lib
+
+# Mac OS X users only
+FINK_LIB   	 ?= /sw/lib
+FINK_INC	 = /sw/include
+OSX_APPS   = $(VTP_ROOT)/OSX
+
+#----------------------------------------------------------------------------
+# Common Build variables
+#----------------------------------------------------------------------------
+
+CSRC   = $(wildcard *.c)
+CXXSRC = $(wildcard *.cpp)
+CHEAD =  $(wildcard *.h)
+CXXHEAD = $(wildcard *.hpp)
+HEADERS = $(CHEAD) $(CXXHEAD)
+OBJS   = $(CSRC:%.c=%.o) $(CXXSRC:%.cpp=%.o)
+LIB_EXT = so
+
+CFLAGS   = $(COPT) $(SWITCHES) $(IFLAGS) -finput-charset=ISO-8859-1
+CXXFLAGS = $(COPT) $(SWITCHES) $(IFLAGS) -finput-charset=ISO-8859-1
+LIB = $(LIB_NAME).$(LIB_EXT)
+#----------------------------------------------------------------------------
+#                                DIRECTORIES
+#----------------------------------------------------------------------------
+
+# NOTE: VTP_ROOT is set in each Makefile
+
+APIS_DIR         = /usr/local
+TERRAIN_SDK_DIR  = $(VTP_ROOT)/TerrainSDK
+TERRAIN_APPS_DIR = $(VTP_ROOT)/TerrainApps
+VTDATA_DIR       = $(TERRAIN_SDK_DIR)/vtdata
+VTLIB_DIR        = $(TERRAIN_SDK_DIR)/vtlib
+VTUI_DIR         = $(TERRAIN_SDK_DIR)/vtui
+VTOSG_DIR        = $(VTLIB_DIR)/vtosg
+XMLHELPER_DIR    = $(TERRAIN_SDK_DIR)/xmlhelper
+UNZIP_DIR        = $(TERRAIN_SDK_DIR)/unzip
+
+NETCDF_INC = $(LOCALBASE)/include
+NETCDF_LIB = $(LOCALBASE)/lib
+
+PNG_INC = $(LOCALBASE)/include
+PNG_LIB = $(LOCALBASE)/lib
+
+OSG_BASE = $(LOCALBASE)
+OSG_INC = $(OSG_BASE)/include
+OSG_LIB = $(OSG_BASE)/lib
+
+GDAL_INC = $(LOCALBASE)/include
+GDAL_LIB = $(LOCALBASE)/lib
+
+MINI_INC = $(LOCALBASE)/include/mini
+MINI_LIB = $(LOCALBASE)/lib/libMini.a
+
+VTDATA_INST_DIR = $(VTDATA_DIR)
+VTUI_INST_DIR = $(VTUI_DIR)
+VTOSG_INST_DIR  = $(VTOSG_DIR)
+XMLHELPER_INST_DIR = $(XMLHELPER_DIR)
+UNZIP_INST_DIR = $(UNZIP_DIR)
+
+WX_DIR		 ?= /usr/local
+
+VTP_INSTALL_DIR = /usr/local
+
+#============================================================================
+#
+# OS Specific build parameters
+#
+#============================================================================
+
+#----------------------------------------------------------------------------
+#
+# IRIX Specific definitions
+#
+#----------------------------------------------------------------------------
+
+ifeq ($(OS),IRIX)
+
+   CXX = CC
+   ifeq ($(CXX),CC) 
+       #--------------------------------------------------------------------
+       # SGI IRIX with MIPSPro compilers  (tested with ver. 7.3.1.1m)
+       #   (IRIX Folks:  Read TerrainApps/README.sgi!)
+       #--------------------------------------------------------------------
+
+	CC        = cc -n32 -mips4 -w
+	CXX       = CC -n32 -mips4 -w -LANG:std -exceptions -prelink -ptnone
+	AR        = CC -n32 -mips4 -ar -WR,-v -o
+	COPT      = -O -g
+	LD        = $(CXX)
+	LD_SHARED = $(CXX) -shared
+	 
+	GLUT_LIB = -lglut
+	GLU_LIB  = -lGLU
+	LDIRFLAGS = $(LDIRS:%=-L%)                \
+	              -Wl,-rpath,$(subst $(space),$(colon),$(LDIRS))
+   else  
+	 #--------------------------------------------------------------------
+	 # SGI IRIX with GCC  (tested with ver. 2.95.3-test2)
+	 #   (IRIX Folks:  Read TerrainApps/README.sgi!)
+	 #--------------------------------------------------------------------
+	 CC        = gcc
+	 CXX       = g++
+	 AR        = ar ruv
+	 COPT      = -O -g
+	 LD        = $(CXX)
+	 LD_SHARED = $(CXX) -shared
+
+	 GLUT_LIB = $(HOME)/software/Mesa-3.4.1/lib/libglut.a
+	 GLU_LIB  = $(HOME)/software/Mesa-3.4.1/lib/libGLU.a
+	 LDIRFLAGS = $(LDIRS:%=-L%)                \
+	             -Wl,-rpath,$(subst $(space),$(colon),$(LDIRS))
+   endif
+endif
+
+#------------------------------------------------------------------------------
+# FreeBSD with GCC (tested with ver. 2.95.2)
+#------------------------------------------------------------------------------
+
+ifeq ($(OS),FreeBSD)
+   CC        = gcc
+   CXX       = g++
+   AR        = ar ruv
+   #COPT      = -O -fpic -DPIC
+   LD        = $(CXX)
+   LD_SHARED = $(CXX) -shared
+   PTHREAD_LIBS = -pthread
+    
+   GLUT_LIB = -lglut
+   GLU_LIB  = -lGLU
+   EXTRA_LIBS = -lXi $(PTHREAD_LIBS)
+   LDIRFLAGS = $(LDIRS:%=-L%)                \
+                -rpath $(subst $(space),$(colon),$(LDIRS))
+endif
+
+#------------------------------------------------------------------------------
+# Mac OS X (10.2.6) with GCC (OSX)
+#------------------------------------------------------------------------------
+ifeq ($(OS),Darwin)
+   CC        = gcc
+   CXX       = g++
+   AR        = ar ruv
+   COPT      = -g -O3 -Dunix=1 -D__DARWIN_OSX__ -fPIC -I$(FINK_INC) -F$(FRAMEWORKS)
+   LD        = $(CXX)
+   LD_SHARED = $(CXX) -dynamiclib -Wl,-single_module
+   LIB_EXT   = dynlib
+
+   GLUT_LIB = -framework GLUT
+   GLU_LIB  = -framework OpenGL -framework Carbon
+   EXTRA_LIBS = -lXi
+   LDIRFLAGS = $(LDIRS:%=-L%)
+
+   # disable this if you built OSG with XCode
+   OSG_NO_FRAMEWORKS = 1
+
+   # remove the "lib" string from the LIB_NAME
+   NEW_LIB_NAME := $(subst lib, ,$(LIB_NAME))
+   LIB_NAME := $(strip $(NEW_LIB_NAME))
+
+   LIB_EXT = dylib
+   FRAMEWORKS = $(VTP_ROOT)/OSX/Shared/Frameworks
+   FRAMEWORK =  $(FRAMEWORKS)/$(LIB_NAME).framework
+   FRAMEWORK_LIB = $(FRAMEWORK)/Versions/A/$(LIB_NAME)
+   # Most frameworks, including osg, are built either with:
+   # @executable_path/../Frameworks/*.framework
+   # if they are expected to be local to only the application 
+   # (e.g. VTP specific osg and OpenThreads), or:
+   # /Library/Frameworks/*.framework if they are global.  
+   # We build everything to be local, and applications use relative symlinks to
+   # the $FRAMEWORKS directory to share the libraries.
+   FRAMEWORK_INSTALL_NAME = @executable_path/../Frameworks/$(LIB_NAME).framework/Versions/A/$(LIB_NAME)
+   FRAMEWORK_EXE = $(FRAMEWORK)/$(LIB_NAME)
+
+   # flags 
+   COMMON_OPTS = -F$(OSX_APPS)/Shared/Frameworks -compatibility_version 1.2 -current_version 1.2.1 -L$(GDAL_LIB) -lgdal -L/sw/lib -lnetcdf -lpng -ljpeg -lcurl -lbz2 -lz -F$(FRAMEWORKS)
+
+   #
+   # Enumerates the build flags required to use each lib/framework
+   #
+ifeq ($(OSG_NO_FRAMEWORKS),0)
+# Swap these definitions if you are not using Xcode built osg frameworks
+#   OSG_OPTS = -L$(OSG_LIB) -losg -losgGA -losgUtil \
+#	      -losgText -losgDB -losgGA -losgUtil -lOpenThreads
+   OSG_OPTS = -framework osg -framework osgGA -framework osgUtil \
+	      -framework osgText -framework osgDB -framework osgGA -framework OpenThreads
+else
+   OSG_OPTS = -losg -losgGA -losgUtil \
+	      -losgText -losgDB -losgGA -losgParticle -lOpenThreads
+endif
+   XMLHELPER_OPTS = -framework xmlhelper
+   VTDATA_OPTS = -framework vtdata -framework unzip -lMini
+   VTUI_OPTS = -framework vtdata -framework unzip -framework unzip
+   UNZIP_OPTS = -framework unzip
+
+   #
+   # options used by individual make files to build their respective packages.
+   # E.g. if you need to modify the build opts for XmlHelper, modify the 
+   # XMLHELPER_LINK_OPTS variable.
+   #
+   XMLHELPER_LINK_OPTS = -lstdc++ -lz   
+
+   VTDATA_LINK_OPTS =  $(COMMON_OPTS) \
+		       $(XMLHELPER_OPTS) \
+		       $(UNZIP_OPTS)
+
+   VTUI_LINK_OPTS = $(shell $(WX_DIR)/bin/wx-config --libs) \
+		    $(COMMON_OPTS) \
+		    $(GLU_LIB)  \
+		    $(OSG_OPTS) \
+		    $(XMLHELPER_OPTS) \
+		    $(VTDATA_OPTS) \
+		    $(VTUI_OPTS)
+#		    -undefined dynamic_lookup
+#		    -flat_namespace \
+#		    -undefined suppress \
+
+   VTOSG_LINK_OPTS =  $(OSG_OPTS) \
+                      $(COMMON_OPTS) \
+		      $(GLU_LIB) \
+		      $(XMLHELPER_OPTS)\
+		      $(VTDATA_OPTS) \
+		      -lMini -lz -lbz2
+
+   #
+   # The default rule for building an *.app package.  Requires the
+   # OSX_APPS directory. And EXEC = name of the App: Enviro, VTBuilder,
+   # etc.
+   #
+   %.app: $(OSX_APPS) 
+	-mkdir -p $(OSX_APPS)/$(EXEC).app/Contents/MacOS
+	-mkdir -p $(OSX_APPS)/$(EXEC).app/Contents/Resources
+	if [ -e osx/$(EXEC).plist ]; then \
+		cp osx/$(EXEC).plist $(OSX_APPS)/$(EXEC).app/Contents/Info.plist; \
+	fi
+	echo -n "APPL????" > $(OSX_APPS)/$(EXEC).app/Contents/PkgInfo
+	if [ ! -h $(OSX_APPS)/$(EXEC).app/Contents/Frameworks ] ; then \
+	       (cd $(OSX_APPS)/$(EXEC).app/Contents && \
+		ln -s ../../Shared/Frameworks Frameworks ); \
+	fi 
+	if [ ! -h $(OSX_APPS)/$(EXEC).app/Contents/Plugins ] ; then \
+	       (cd $(OSX_APPS)/$(EXEC).app/Contents && \
+		ln -s ../../Shared/Plugins Plugins ); \
+	fi 
+	if [ ! -h $(OSX_APPS)/$(EXEC).app/Contents/Shared ] ; then \
+	       (cd $(OSX_APPS)/$(EXEC).app/Contents && \
+		ln -s ../../Shared Shared ); \
+	fi 
+	if [ -e osx/$(EXEC).rsrc ]; then \
+		cp osx/$(EXEC).rsrc $(OSX_APPS)/$(EXEC).app/Contents/Resources/$(EXEC).rsrc; \
+	fi
+	if [ -e osx/$(EXEC).icns ]; then \
+		cp osx/$(EXEC).icns $(OSX_APPS)/$(EXEC).app/Contents/Resources/; \
+	fi
+
+   %.framework: $(HEADERS)
+	-mkdir -p $(FRAMEWORKS)
+	-mkdir -p $*.framework/Versions/A 
+	-mkdir -p $*.framework/Headers
+	-if [ ! -h $*.framework/Versions/Current ] ; then \
+		(cd $*.framework/Versions && \
+		 ln -s A Current) ; fi
+	if [ ! -h $*.framework/Versions/Current/Shared ] ; then \
+	       (cd $*.framework/Versions/Current && \
+		ln -s ../../../../../Shared Shared ); \
+	fi 
+	-cp -r $(HEADERS) $*.framework/Headers/
+
+endif
+#------------------------------------------------------------------------------
+# Linux with GCC (tested with ver. 2.95.3)
+#------------------------------------------------------------------------------
+
+ifeq ($(OS),Linux)
+   CC        = gcc
+   CXX       = g++
+   AR        = ar ruv
+   LD        = $(CXX)
+   LD_SHARED = $(CXX) -shared
+
+   GLUT_LIB = -lglut
+   GLU_LIB  = -lGLU
+   EXTRA_LIBS = -lXi
+
+   NETCDF_INC = $(LOCALBASE)/include/netcdf-3
+
+   ARCH := $(shell uname -m)
+   ifeq ($(ARCH),x86_64)
+      COPT      = -O -g -fPIC
+      LDIRFLAGS = -L/usr/lib64 $(LDIRS:%=-L%)
+      X_LIB     = $(X11BASE)/lib64
+      MINI_LIB = $(LOCALBASE)/lib64/libMini.a
+      NETCDF_LIB = $(LOCALBASE)/lib64/netcdf-3
+   else
+      COPT      = -O -g
+      LDIRFLAGS = $(LDIRS:%=-L%)
+      NETCDF_LIB = $(LOCALBASE)/lib/netcdf-3
+   endif
+endif
+
+#------------------------------------------------------------------------------
+# Cygwin with GCC (tested with ver. 2.95.3)
+#------------------------------------------------------------------------------
+ifeq ($(OS),CYGWIN)
+   CC        = gcc-2
+   CXX       = c++-2
+   AR        = ar ruv
+   COPT      = -O2 -W -Wall -Wno-unused -g -DWIN32 -DNOMINMAX
+   ### -fvtable-thunks
+   SO_EXT	  = dll
+   SO_PREFIX = cyg
+
+   LD        = $(CXX) $(COPT)
+   LD_SHARED = $(CXX) $(COPT) -shared \
+	-Wl,--export-all-symbols \
+	-Wl,--allow-multiple-definition \
+	-W1,--enable-stdcall-fixup \
+	-Wl,--output-def,$(VTP_ROOT)/lib/lib$(TARGET_BASENAME).def \
+	-Wl,--out-implib,$(VTP_ROOT)/lib/lib$(TARGET_BASENAME).a 
+    X_INC = 
+    X_LIB = 
+    OSG_BASE = $(VTP_ROOT)/OpenSceneGraph-0.9.2
+
+    GLUT_LIB = -lglut32
+    GLU_LIB  = -lglu32
+    EXTRA_LIBS =
+    LDIRFLAGS = $(LDIRS:%=-L%)
+endif
+#------------------------------------------------------------------------------
+# End System specific defs
+#------------------------------------------------------------------------------
+
+# Turns on debugging: to enable run "make -DDEBUG=1"
+ifeq ($(DEBUG),1)
+COPT += -DDEBUG=1
+endif
+
+#------------------------------------------------------------------------------
+
+colon:= :
+empty:=  
+space:= $(empty) $(empty)
