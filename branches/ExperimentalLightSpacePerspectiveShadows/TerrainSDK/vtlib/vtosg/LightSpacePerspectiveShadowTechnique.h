@@ -52,6 +52,9 @@ public:
 
 	void InitJittering(osg::StateSet *pStateSet);
 	unsigned int m_JitterTextureUnit;
+	void AddAdditionalTerrainTextureUnit(const unsigned int Unit, const unsigned int Mode);
+	void RemoveAdditionalTerrainTextureUnit(const unsigned int Unit);
+	void RemoveAllAdditionalTerrainTextureUnits();
 
 protected:
 	std::string GenerateFragmentShaderSource();

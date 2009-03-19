@@ -18,80 +18,7 @@ CLightSpacePerspectiveShadowTechnique::CLightSpacePerspectiveShadowTechnique()
 	_mainVertexShader = NULL;
 	_shadowVertexShader = NULL;
 	_shadowFragmentShader = NULL;
-/*	_mainFragmentShader = new osg::Shader( osg::Shader::FRAGMENT,
-		" // following expressions are auto modified - do not change them:       \n"
-		" // gl_TexCoord[0]  0 - can be subsituted with other index              \n"
-		" // gl_TexCoord[1]  1 - can be subsituted with other index              \n"
-		"                                                                        \n"
-		// Number of pixels over which to tile the jitter map
-		"#define JITTER_MAP_TILING 32                                            \n"
-		// Size of penumbra as a fraction of this fragments shadow map eye space z
-		"#define PENUMBRA_SIZE_FACTOR 0.005                                      \n"
-		"                                                                        \n"
-		"uniform bool renderingVTPBaseTexture;                                   \n"
-		"                                                                        \n"
-		"uniform sampler2D baseTexture;                                          \n"
-        "uniform sampler2DShadow shadowTexture;                                  \n"
-        "uniform sampler3D VTPJitterTextureUnit;                                 \n"
-		"                                                                        \n"
-		"void main(void)                                                         \n"
-		"{                                                                       \n"
-		// The following code assumes that the return value from shadow map lookup will
-		// be zero or one. This appears not to be the case when the mag filter is set
-		// to LINEAR when it looks like some PCF filtering is done. This may only apply on
-		// certain GPUs.
-		"  float shadow = 0.0;                                                   \n" 
-		"  float shadow2 = 0.0;                                                  \n" 
-		"  int totalSamples = 64;                                                \n" 
-		"  int testSamples = 8;                                                  \n"  
-		"  vec4 shadowMapCoord = gl_TexCoord[1];                                 \n"
-		"  vec4 smCoord = shadowMapCoord;                                        \n"
-		// shadowMapCoord.w holds the distance this fragment is from the shadow
-		// casting camera (-shadoweyespace.z) normally always positive.
-		// I am not sure how well this works in LISPSM as the draw bounds camera
-		// seems to be always nearer than the view bounds camera giving a smaller penumbra.
-		"  float penumbraWidth = PENUMBRA_SIZE_FACTOR * shadowMapCoord.w;        \n"
-		"  vec3 jitterCoord = vec3( gl_FragCoord.xy/JITTER_MAP_TILING, 0.0 );    \n"
-		"  gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);                              \n"
-		"  for(int i = 0; i < testSamples/2; i++)                                \n" 
-		"  {                                                                     \n" 
-		"    vec4 offset = (2.0 * texture3D(VTPJitterTextureUnit, jitterCoord)) - 1.0; \n"
-		"    jitterCoord.z += 1.0/32.0;                                          \n" 
-		"    smCoord.xy = offset.xy * penumbraWidth + shadowMapCoord.xy;  \n" 
-		"    shadow += shadow2DProj(shadowTexture, smCoord).r;            \n" 
-		"    smCoord.xy = offset.zw * penumbraWidth + shadowMapCoord.xy;  \n" 
-		"    shadow += shadow2DProj(shadowTexture, smCoord).r;            \n" 
-		"  }                                                                     \n" 
-		"  shadow /= testSamples;                                                \n" 
-		"  if((shadow - 1) * shadow != 0)                                        \n" 
-		"  {                                                                     \n" 
-		"    for(int i = 0; i < (totalSamples - testSamples)/2; i++)             \n" 
-		"    {                                                                   \n" 
-		"      vec4 offset = (2.0 * texture3D(VTPJitterTextureUnit, jitterCoord)) - 1.0; \n"
-		"      jitterCoord.z += 1.0/32.0;                                        \n"
-		"      smCoord.xy = offset.xy * penumbraWidth + shadowMapCoord.xy;\n"
-		"      shadow2 += shadow2DProj(shadowTexture, smCoord);           \n"
-		"      smCoord.xy = offset.zw * penumbraWidth + shadowMapCoord.xy;\n"
-		"      shadow2 += shadow2DProj(shadowTexture, smCoord);           \n"
-		"    }                                                                   \n"
-		"    shadow = (shadow * testSamples + shadow2) / totalSamples;           \n"
-		"  }                                                                     \n"
-		// A dummy white texture has been applied by default to all geometry
-		// so the call to texture2d will always return a valid value
-		"  vec4 colorAmbientEmissive;                                            \n"
-		"  if (renderingVTPBaseTexture)                                          \n"
-		// Lighting is off so make up a sensible value
-		// I could pass this in as a parameter
-		"    colorAmbientEmissive = vec4(0.4, 0.4, 0.4, 1.0);                    \n"
-		"  else                                                                  \n"
-		"    colorAmbientEmissive =  gl_FrontLightModelProduct.sceneColor        \n"
-		"                            +  gl_FrontLightProduct[0].ambient;         \n"
-
-		"  vec4 color = texture2D( baseTexture, gl_TexCoord[0].xy );             \n"
-		"  color *= mix( colorAmbientEmissive, gl_Color, shadow );               \n"
-		"  gl_FragColor = color;                                                 \n"
-		"} \n" ); */
-	_mainFragmentShader = new osg::Shader( osg::Shader::FRAGMENT, GenerateFragmentShaderSource());
+	_mainFragmentShader = NULL;
 
 	int MaxFragmentShaderTextureUnits; 
 	glGetIntegerv(0x8872, &MaxFragmentShaderTextureUnits);
@@ -100,6 +27,8 @@ CLightSpacePerspectiveShadowTechnique::CLightSpacePerspectiveShadowTechnique()
 
 void CLightSpacePerspectiveShadowTechnique::ViewData::init(ThisClass * st, osgUtil::CullVisitor * cv)           
 {
+	// Reset the main shader
+	st->_mainFragmentShader = new osg::Shader( osg::Shader::FRAGMENT, st->GenerateFragmentShaderSource());
 	BaseClass::ViewData::init( st, cv );
 	// The base class init has set up a fake texture for the base texture unit
 	// so add this texture to any of the other active units 
@@ -223,7 +152,7 @@ std::string CLightSpacePerspectiveShadowTechnique::GenerateFragmentShaderSource(
 		<< "  float shadow2 = 0.0;" << std::endl 
 		<< "  int totalSamples = 64;" << std::endl 
 		<< "  int testSamples = 8;" << std::endl  
-		<< "  vec4 shadowMapCoord = gl_TexCoord[1];" << std::endl
+		<< "  vec4 shadowMapCoord = gl_TexCoord[" << _shadowTextureUnit << "];" << std::endl
 		<< "  vec4 smCoord = shadowMapCoord;" << std::endl
 		// shadowMapCoord.w holds the distance this fragment is from the shadow
 		// casting camera (-shadoweyespace.z) normally always positive.
@@ -267,9 +196,9 @@ std::string CLightSpacePerspectiveShadowTechnique::GenerateFragmentShaderSource(
 
 		// A dummy white texture has been applied by default to all geometry
 		// so the call to texture2d will always return a valid value
-		<< "  vec4 Colour = texture2D( baseTexture, gl_TexCoord[" << _baseTextureUnit << "].xy );" << std::endl
+		<< "  vec4 Colour = texture2D( baseTexture, gl_TexCoord[" << _baseTextureUnit << "].xy );" << std::endl;
 
-		<< "  Colour *= mix( colorAmbientEmissive, gl_Color, shadow );" << std::endl;
+	// Apply any additional terrain textures before the shadow is applied
 	if (m_AdditionalTerrainTextureUnits.size())
 	{
 		ShaderSource
@@ -277,19 +206,19 @@ std::string CLightSpacePerspectiveShadowTechnique::GenerateFragmentShaderSource(
 			<< "  {" << std::endl
 			<< "    vec3 TempColour;" << std::endl
 			<< "    vec4 TexColour;" << std::endl;
-		// Apply any additional terrain textures after the shadow has been applied
 		int Index = 0;
 		for (std::map<unsigned int, unsigned int>::iterator iTr = m_AdditionalTerrainTextureUnits.begin();
 							iTr != m_AdditionalTerrainTextureUnits.end(); iTr++)
 		{
-			int Mode = (*iTr).second;
+			unsigned int Unit = (*iTr).first;
+			unsigned int Mode = (*iTr).second;
 			switch (Mode)
 			{
 			case GL_ADD:
 				ShaderSource
 					<< "    TexColour = texture2D(LSPST_AdditionalTerrainTextures["
 					<< Index << "], gl_TexCoord["
-					<< Index << "].xy);" << std::endl
+					<< Unit << "].xy);" << std::endl
 					<< "    Colour.rgb += TexColour.rgb;" << std::endl
 					<< "    Colour.a *= TexColour.a;" << std::endl
 					<< "    Colour = clamp(Colour, 0.0. 1.0);" << std::endl;
@@ -298,7 +227,7 @@ std::string CLightSpacePerspectiveShadowTechnique::GenerateFragmentShaderSource(
 				ShaderSource
 					<< "    TexColour = texture2D(LSPST_AdditionalTerrainTextures["
 					<< Index << "], gl_TexCoord["
-					<< Index << "].xy);" << std::endl
+					<< Unit << "].xy);" << std::endl
 					<< "    TempColour = mix(Colour.rgb, gl_TextureEnvColor[" << Index << "].rgb, TexColour.rgb);" << std::endl
 					<< "    Colour = vec4(TempColour, Colour.a * TexColour.a);" << std::endl;
 				break;
@@ -306,19 +235,19 @@ std::string CLightSpacePerspectiveShadowTechnique::GenerateFragmentShaderSource(
 				ShaderSource
 					<< "    Colour = texture2D(LSPST_AdditionalTerrainTextures["
 					<< Index << "], gl_TexCoord["
-					<< Index << "].xy);" << std::endl;
+					<< Unit << "].xy);" << std::endl;
 				break;
 			case GL_MODULATE:
 				ShaderSource
 					<< "    Colour *= texture2D(LSPST_AdditionalTerrainTextures["
 					<< Index << "], gl_TexCoord["
-					<< Index << "].xy);" << std::endl;
+					<< Unit << "].xy);" << std::endl;
 				break;
 			case GL_DECAL:
 				ShaderSource
 					<< "    TexColour = texture2D(LSPST_AdditionalTerrainTextures["
 					<< Index << "], gl_TexCoord["
-					<< Index << "].xy);" << std::endl
+					<< Unit << "].xy);" << std::endl
 					<< "    TempColour = mix(Colour.rgb, TexColour.rgb, TexColour.a);" << std::endl
 					<< "    Colour = vec4(TempColour, Colour.a);" << std::endl;
 				break;
@@ -329,7 +258,27 @@ std::string CLightSpacePerspectiveShadowTechnique::GenerateFragmentShaderSource(
 			<< "  }" << std::endl;
 	}
 	ShaderSource
+		<< "  Colour *= mix( colorAmbientEmissive, gl_Color, shadow );" << std::endl
 		<< "  gl_FragColor = Colour;" << std::endl
 		<< "}" << std::endl;
 	return ShaderSource.str();
 }
+
+void CLightSpacePerspectiveShadowTechnique::AddAdditionalTerrainTextureUnit(const unsigned int Unit, const unsigned int Mode)
+{
+	m_AdditionalTerrainTextureUnits[Unit] = Mode;
+	dirty();
+}
+
+void CLightSpacePerspectiveShadowTechnique::RemoveAdditionalTerrainTextureUnit(const unsigned int Unit)
+{
+	m_AdditionalTerrainTextureUnits.erase(Unit);
+	dirty();
+}
+
+void CLightSpacePerspectiveShadowTechnique::RemoveAllAdditionalTerrainTextureUnits()
+{
+	m_AdditionalTerrainTextureUnits.clear();
+	dirty();
+}
+
