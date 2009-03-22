@@ -17,7 +17,7 @@
 #include <osg/Version>
 #include <osgShadow/ShadowedScene>
 
-#define VTLISPSM 1
+#define VTLISPSM 0
 
 /** \addtogroup sg */
 /*@{*/
