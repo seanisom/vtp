@@ -1623,7 +1623,7 @@ void vtShadow::SetShadowSphereRadius(const float ShadowSphereRadius)
 #else
 	CSimpleInterimShadowTechnique *pTechnique = dynamic_cast<CSimpleInterimShadowTechnique *>(m_pShadowedScene->getShadowTechnique());
 	if (pTechnique)
-		pTechnique->SetShadowSphereRadius(setMaxFarPlane);
+		pTechnique->SetShadowSphereRadius(ShadowSphereRadius);
 #endif
 }
 
