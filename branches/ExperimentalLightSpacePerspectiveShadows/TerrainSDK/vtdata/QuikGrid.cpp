@@ -19,11 +19,7 @@
 #include "QuikGrid.h"
 
 #ifdef _MSC_VER
-#if VTDEBUG
-#pragma comment( lib, "QuikGridd.lib" )
-#else
 #pragma comment( lib, "QuikGrid.lib" )
-#endif
 #endif
 
 static ContourCallback s_pLineCallbackFunction = NULL;
