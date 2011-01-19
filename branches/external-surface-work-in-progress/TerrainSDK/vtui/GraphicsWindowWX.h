@@ -27,7 +27,9 @@ public:
     virtual bool isRealizedImplementation() const;
 private:
 	wxGLCanvas* m_pCanvas;
+#ifndef __WXMAC__
 	LocalGLContext *m_pGLContext;
+#endif
 	bool m_bIsRealized;
 	bool m_bValid;
 };
