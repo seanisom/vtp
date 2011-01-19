@@ -1004,8 +1004,8 @@ public:
 		if (NULL != m_Argv)
 		{
 			for (int i = 0; NULL != m_Argv[i]; i++)
-				delete m_Argv[i];
-			delete m_Argv;
+				delete[] m_Argv[i];
+			delete[] m_Argv;
 		}
 	}
 	void ConvertArgcArgv(int wxArgc, wxChar** wxArgv, int* pArgc, char*** pArgv)
