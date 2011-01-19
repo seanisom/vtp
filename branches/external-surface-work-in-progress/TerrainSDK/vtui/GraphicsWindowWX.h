@@ -1,7 +1,5 @@
 #pragma once
 
-#ifdef USE_OSG_VIEWER
-
 #include <osgViewer/GraphicsWindow>
 
 
@@ -33,4 +31,3 @@ private:
 	bool m_bIsRealized;
 	bool m_bValid;
 };
-#endif

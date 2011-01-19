@@ -4,7 +4,6 @@
 #include "wx/wx.h"
 #endif
 
-#ifdef USE_OSG_VIEWER
 
 #include "wx/glcanvas.h"
 #include "GraphicsWindowWX.h"
@@ -93,5 +92,3 @@ void GraphicsWindowWX::CloseOsgContext()
 	// Force handling of event before the idle loop can call frame();
 	dynamic_cast<osgViewer::View*>(getCameras().front()->getView())->getViewerBase()->eventTraversal();
 }
-
-#endif

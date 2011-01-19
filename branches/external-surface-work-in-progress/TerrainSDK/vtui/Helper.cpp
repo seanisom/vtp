@@ -986,7 +986,6 @@ void LaunchAppDocumentation(const vtString &appname,
 	wxLaunchDefaultBrowser(wxString(url, wxConvUTF8));
 }
 
-#ifdef USE_OSG_VIEWER
 // Convert wxWidgets argc argv to char format
 class MyLocalArgs
 {
@@ -1033,5 +1032,3 @@ void ConvertArgcArgv(int wxArgc, wxChar** wxArgv, int* pArgc, char*** pArgv)
 {
 	return s_LocalArgs.ConvertArgcArgv(wxArgc, wxArgv, pArgc, pArgv);
 }
-
-#endif

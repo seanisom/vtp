@@ -1,7 +1,8 @@
 set(VTLIB_OSG_SOURCE_FILES ImageOSG.cpp MeshMat.cpp NodeOSG.cpp SceneOSG.cpp SimpleInterimShadowTechnique.cpp StructureShadowsOSG.cpp
-					LightSpacePerspectiveShadowTechnique.cpp)
+					LightSpacePerspectiveShadowTechnique.cpp ExternalHeightField3d.cpp)
 set(VTLIB_OSG_HEADER_FILES ImageOSG.h MathOSG.h MeshMat.h NodeOSG.h SceneOSG.h SimpleInterimShadowTechnique.h StructureShadowsOSG.h
-					LightSpacePerspectiveShadowTechnique.h)
+					LightSpacePerspectiveShadowTechnique.h ExternalHeightField3d.h)
+
 
 
 # Add a library target called vtlib_osg

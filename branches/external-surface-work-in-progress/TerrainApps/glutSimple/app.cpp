@@ -148,11 +148,7 @@ bool CreateScene()
 {
 	// Get a handle to the vtScene - one is already created for you
 	vtScene *pScene = vtGetScene();
-#ifdef USE_OSG_VIEWER
 	vtGetScene()->Init(0, NULL);
-#else
-	pScene->Init();
-#endif
 
 	// Log messages to make troubleshooting easier
 	VTSTARTLOG("debug.txt");
