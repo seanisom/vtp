@@ -2305,10 +2305,6 @@ bool vtTerrain::CreateStep1()
 		}
 		// Try raw value for external terrain
 		elev_path = elev_file;
-		vtString msg;
-		msg.Format("Couldn't find elevation '%s'", (const char *) elev_file);
-		_SetErrorMessage(msg);
-		return false;
 	}
 
 	VTLOG("\tFound elevation at: %s\n", (const char *) elev_path);
@@ -2434,6 +2430,7 @@ bool vtTerrain::CreateStep1()
 	}
 	else if (surface_type == 3)
 	{
+
 		m_pExternalHeightField = new vtExternalHeightField3d;
 		if (!m_pExternalHeightField->Initialize(elev_path))
 		{
