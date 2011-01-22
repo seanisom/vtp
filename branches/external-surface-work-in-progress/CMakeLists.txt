@@ -43,6 +43,7 @@ find_package(JPEG)
 find_package(PNG)
 find_package(OSG)
 find_package(QuikGrid)
+find_package(osgEarth)
 
 # Optionally use NVidia performance monitoring if present
 find_path(NVPERFSDK_INCLUDE_DIR NVPerfSDK.h PATHS "c:/Program Files/NVIDIA Corporation/NVIDIA PerfSDK/inc")

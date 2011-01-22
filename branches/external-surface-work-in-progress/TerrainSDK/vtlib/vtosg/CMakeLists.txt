@@ -34,6 +34,10 @@ if(OSG_FOUND)
 	include_directories(${OSG_INCLUDE_DIR})
 endif(OSG_FOUND)
 
+if(OSGEARTH_FOUND)
+	include_directories(${OSGEARTH_INCULDE_DIRS})
+endif(OSGEARTH_FOUND)
+
 # Find the directory containing mini/mini.h
 find_path(MINI_INCLUDE_DIR mini/mini.h DOC "Directory containing mini/mini.h")
 if (MINI_INCLUDE_DIR)
@@ -55,3 +59,6 @@ endif (WIN32)
 
 # Specify normal preprocessor definition for this target
 set_property(TARGET vtlib_osg APPEND PROPERTY COMPILE_DEFINITIONS VTLIB_OSG=1)
+if(OSGEARTH_FOUND)
+	set_property(TARGET vtlib_osg APPEND PROPERTY COMPILE_DEFINITIONS USE_OSGEARTH=1)
+endif(OSGEARTH_FOUND)

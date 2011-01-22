@@ -4,6 +4,9 @@
 #include <osgTerrain/TerrainTile>
 #include <osgSim/HeightAboveTerrain>
 #include "ExternalHeightField3d.h"
+#ifdef USE_OSGEARTH
+#include <osgEarth/MapNode>
+#endif
 
 vtExternalHeightField3d::vtExternalHeightField3d(void)
 {
@@ -18,12 +21,32 @@ vtExternalHeightField3d::~vtExternalHeightField3d(void)
 
 bool vtExternalHeightField3d::Initialize(const char *external_data)
 {
+    // Set up a visitor for calculating height
+	m_pHat = new osgSim::HeightAboveTerrain;
+	if (NULL == m_pHat)
+		return false;
+
 	// OSG doesn't yet support utf-8 or wide filenames, so convert
 	vtString fname_local = UTF8ToLocal(external_data);
 	osg::Node *pNode = osgDB::readNodeFile((const char *)fname_local);
 	if (NULL == pNode)
 		return false;
-	// Top level node may be a coordinate system node
+
+#ifdef USE_OSGEARTH
+    osgEarth::MapNode *pMapNode = dynamic_cast<osgEarth::MapNode*>(pNode);
+    if (NULL != pMapNode)
+    {
+      osgEarth::TerrainEngineNode *pTerrainEngine = pMapNode->getTerrainEngine();
+      const osgEarth::Map *pMap = pTerrainEngine->getMap();
+      if (pMap->isGeocentric())
+        return false;
+      m_Projection.SetTextDescription((const char *)"wkt", pTerrainEngine->getCoordinateSystem().c_str());
+      // Testing only at the moment so return false
+      return false;
+    }
+#endif
+    // Find the top level TerrainTile
+    // Top level node may be a coordinate system node
 	osg::CoordinateSystemNode *pCoordSystem = dynamic_cast<osg::CoordinateSystemNode*>(pNode);
 	// Look for the PagedLOD node
 	osg::PagedLOD *pLod;
@@ -37,12 +60,16 @@ bool vtExternalHeightField3d::Initialize(const char *external_data)
 	osgTerrain::TerrainTile *pTopTile = dynamic_cast<osgTerrain::TerrainTile*>(pLod->getChild(0));
 	if (NULL == pTopTile)
 		return false;
+
+    // OK -got the top tile now get the top level elevation layer and initialise the vtHeightField3d
+    // from the information in the layer
 	m_pLayer = pTopTile->getElevationLayer();
 	if (osgTerrain::Locator::GEOCENTRIC == m_pLayer->getLocator()->getCoordinateSystemType())
-		// I have not worked out whether I need to do something about the ellisoidal model yet
+		// I have not worked out how to do something about the ellipsoidal model yet
 		return false;
 	// Use coordinate system of top tile for conversions
 	m_Projection.SetTextDescription((const char *)"wkt", m_pLayer->getLocator()->getCoordinateSystem().c_str());
+	// Calculate the rough minimum and maximum heights
 	osg::BoundingBox bb;
 	unsigned int numColumns = m_pLayer->getNumColumns();
 	unsigned int numRows = m_pLayer->getNumRows();
@@ -53,9 +80,9 @@ bool vtExternalHeightField3d::Initialize(const char *external_data)
 		{
 			float value = 0.0f;
 			bool validValue = m_pLayer->getValidValue(c,r, value);
-			if (validValue) 
+			if (validValue)
 			{
-				Local.x() = 0; 
+				Local.x() = 0;
 				Local.y() = 0;
 				Local.z() = value;
 
@@ -73,24 +100,24 @@ bool vtExternalHeightField3d::Initialize(const char *external_data)
 	// I do not handle geocentric at the moment(see above)
 	// So I treat projected and geographic as basically the same as VTP Earth coordinates but Y up
 	vtHeightField3d::Initialize(m_Projection.GetUnits(), DRECT(ModelBottomLeft.x(), ModelTopRight.y(), ModelTopRight.x(), ModelBottomLeft.y()), bb.zMin(), bb.zMax());
-	// Computer a matrix to take OSG model coordinates - Left Handed Z up origin the origin of the coordinate system (obvious!(
+
+	// Finished initalising the heightfield.
+	// Computer a matrix to take OSG model coordinates - Left Handed Z up origin the origin of the coordinate system
 	// into VTP world - Left Handed Y up origin always at the bottom left of the terrain extents.
+	// So...
 	// Translate to origin
 	m_TransfromOSGModel2VTPWorld.set(osg::Matrix::translate(osg::Vec3(-ModelBottomLeft.x(), -ModelBottomLeft.y(), 0)));
 	// Spin Y up
 	m_TransfromOSGModel2VTPWorld.postMult(osg::Matrix::rotate(-PID2d, osg::Vec3(1,0,0)));
 	m_TransformVTPWorld2OSGModel.invert(m_TransfromOSGModel2VTPWorld);
-
 	osg::MatrixTransform *transform = new osg::MatrixTransform;
 	m_pNode = transform;
 	transform->setName("Translate then spin Y up");
 	transform->setMatrix(m_TransfromOSGModel2VTPWorld);
-	transform->addChild(pNode);
 	transform->setDataVariance(osg::Object::STATIC);
+	// Place the Terrain Geometry under the transform
+	transform->addChild(pNode);
 
-	m_pHat = new osgSim::HeightAboveTerrain;
-	if (NULL == m_pHat)
-		return false;
 	return true;
 }
 
