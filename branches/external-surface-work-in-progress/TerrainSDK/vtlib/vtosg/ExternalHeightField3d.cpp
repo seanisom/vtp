@@ -11,6 +11,7 @@
 vtExternalHeightField3d::vtExternalHeightField3d(void)
 {
 	m_pHat = NULL;
+	m_bOsgEarth = false;
 }
 
 vtExternalHeightField3d::~vtExternalHeightField3d(void)
@@ -36,13 +37,34 @@ bool vtExternalHeightField3d::Initialize(const char *external_data)
     osgEarth::MapNode *pMapNode = dynamic_cast<osgEarth::MapNode*>(pNode);
     if (NULL != pMapNode)
     {
-      osgEarth::TerrainEngineNode *pTerrainEngine = pMapNode->getTerrainEngine();
-      const osgEarth::Map *pMap = pTerrainEngine->getMap();
-      if (pMap->isGeocentric())
-        return false;
-      m_Projection.SetTextDescription((const char *)"wkt", pTerrainEngine->getCoordinateSystem().c_str());
-      // Testing only at the moment so return false
-      return false;
+    	osgEarth::Map *pMap = pMapNode->getMap();
+    	if (pMap->isGeocentric())
+			return false;
+		m_bOsgEarth = true;
+		const osgEarth::Profile *pProfile = pMap->getProfile();
+		if (!pProfile->isOK())
+			return false;
+		const osgEarth::GeoExtent& GeoExtent = pProfile->getExtent();
+		const osgEarth::SpatialReference *pSRS = pProfile->getSRS();
+		m_Projection.SetTextDescription((const char *)"wkt", pSRS->getWKT().c_str());
+		vtHeightField3d::Initialize(m_Projection.GetUnits(), DRECT(GeoExtent.xMin(), GeoExtent.yMax(), GeoExtent.xMax(), GeoExtent.yMin()), 0, 1000); // TODO find min and max height
+		// osgEarth coords are  - Left Handed Z up origin the origin of the coordinate system
+		// Translate to origin
+		m_TransfromOSGModel2VTPWorld.set(osg::Matrix::translate(osg::Vec3(-GeoExtent.xMin(), -GeoExtent.yMin(), 0)));
+		// Spin Y up
+		m_TransfromOSGModel2VTPWorld.postMult(osg::Matrix::rotate(-PID2d, osg::Vec3(1,0,0)));
+		m_TransformVTPWorld2OSGModel.invert(m_TransfromOSGModel2VTPWorld);
+		osg::MatrixTransform *transform = new osg::MatrixTransform;
+		m_pNode = transform;
+		transform->setName("Translate then spin Y up");
+		transform->setMatrix(m_TransfromOSGModel2VTPWorld);
+		transform->setDataVariance(osg::Object::STATIC);
+		// Place the Terrain Geometry under the transform
+		transform->addChild(pNode);
+
+		m_pElevationManager = new osgEarth::Util::ElevationManager(pMap);
+
+		return true;
     }
 #endif
     // Find the top level TerrainTile
@@ -151,31 +173,42 @@ bool vtExternalHeightField3d::FindAltitudeAtPoint(const FPoint3 &p3, float &fAlt
 		return false; // Cannot do normals at the moment
 	// Transform to OSG Model and then to OSG Local
 	osg::Vec3d Model = osg::Vec3d(p3.x, p3.y, p3.z) * m_TransformVTPWorld2OSGModel;
-	osg::Vec3d Local;
-	m_pLayer->getLocator()->convertModelToLocal(Model, Local);
-	// Check if over heightfield
-	if (Local.x() < 0.0 || Local.x() > 1.0 || Local.y() < 0.0 || Local.y() > 1.0)
-		return false;
-	// Use HAT
-	Model.z() = m_fMaxHeight + 1;
-	if (m_pHat->getNumPoints() == 0)
-		m_pHat->addPoint(Model);
-	else
-		m_pHat->setPoint(0, Model);
-	if (bTrue)
-		m_pHat->computeIntersections(m_pLOD);
-	else
+	if (m_bOsgEarth)
 	{
-		// Kill database reading
-		osg::ref_ptr<osgSim::DatabaseCacheReadCallback> pCallback = m_pHat->getDatabaseCacheReadCallback();
-		m_pHat->setDatabaseCacheReadCallback(NULL);
-		m_pHat->computeIntersections(m_pLOD);
-		m_pHat->setDatabaseCacheReadCallback(pCallback.get());
+#ifdef USE_OSGEARTH
+		return false;
+#else
+		return false;
+#endif
 	}
-	fAltitude = (float)(Model.z() - m_pHat->getHeightAboveTerrain(0));
-	return true;
+else
+	{
+		osg::Vec3d Local;
+		m_pLayer->getLocator()->convertModelToLocal(Model, Local);
+		// Check if over heightfield
+		if (Local.x() < 0.0 || Local.x() > 1.0 || Local.y() < 0.0 || Local.y() > 1.0)
+			return false;
+		// Use HAT
+		Model.z() = m_fMaxHeight + 1;
+		if (m_pHat->getNumPoints() == 0)
+			m_pHat->addPoint(Model);
+		else
+			m_pHat->setPoint(0, Model);
+		if (bTrue)
+			m_pHat->computeIntersections(m_pLOD);
+		else
+		{
+			// Kill database reading
+			osg::ref_ptr<osgSim::DatabaseCacheReadCallback> pCallback = m_pHat->getDatabaseCacheReadCallback();
+			m_pHat->setDatabaseCacheReadCallback(NULL);
+			m_pHat->computeIntersections(m_pLOD);
+			m_pHat->setDatabaseCacheReadCallback(pCallback.get());
+		}
+		fAltitude = (float)(Model.z() - m_pHat->getHeightAboveTerrain(0));
+		return true;
 //		Just use the top level
 //		return m_pLayer->getInterpolatedValue(Local.x(), Local.y(), fAltitude);
+	}
 }
 
 bool vtExternalHeightField3d::CastRayToSurface(const FPoint3 &point, const FPoint3 &dir, FPoint3 &result) const
@@ -200,60 +233,71 @@ bool vtExternalHeightField3d::CastRayToSurface(const FPoint3 &point, const FPoin
 	if (bOn && point.y < alt)
 		return false;	// already firmly underground
 
-	unsigned int NumColumns = m_pLayer->getNumColumns();
-	unsigned int NumRows = m_pLayer->getNumRows();
-	osg::Vec3d Local((double)1.0/(double)(NumColumns - 1), double(1.0)/(double)(NumRows - 1), 0.0);
-	osg::Vec3d Model;
-	m_pLayer->getLocator()->convertLocalToModel(Local, Model);
-	osg::Vec3d World = Model * m_TransfromOSGModel2VTPWorld;
-
-	// adjust magnitude of dir until 2D component has a good magnitude
-	float smallest = std::min(World.x(), -World.z());
-	float adjust = smallest / mag2;
-	FPoint3 dir2 = dir * adjust;
-
-	bool found_above = false;
-	FPoint3 p = point, lastp = point;
-	while (true)
+	if (m_bOsgEarth)
 	{
-		// are we out of bounds and moving away?
-		if (p.x < m_WorldExtents.left && dir2.x < 0)
-			return false;
-		if (p.x > m_WorldExtents.right && dir2.x > 0)
-			return false;
-		if (p.z < m_WorldExtents.top && dir2.z < 0)
-			return false;
-		if (p.z > m_WorldExtents.bottom && dir2.z > 0)
-			return false;
-
-		bOn = FindAltitudeAtPoint(p, alt);
-		if (bOn)
-		{
-			if (p.y > alt)
-				found_above = true;
-			else
-				break;
-		}
-		lastp = p;
-		p += dir2;
-	}
-	if (!found_above)
+#ifdef USE_OSGEARTH
 		return false;
-
-	// now, do a binary search to refine the result
-	FPoint3 p0 = lastp, p1 = p, p2;
-	for (int i = 0; i < 10; i++)
-	{
-		p2 = (p0 + p1) / 2.0f;
-		int above = PointIsAboveTerrain(p2);
-		if (above == 1)	// above
-			p0 = p2;
-		else if (above == 0)	// below
-			p1 = p2;
+#else
+		return false;
+#endif
 	}
-	p2 = (p0 + p1) / 2.0f;
-	// make sure it's precisely on the ground
-	FindAltitudeAtPoint(p2, p2.y);
-	result = p2;
-	return true;
+else
+	{
+		unsigned int NumColumns = m_pLayer->getNumColumns();
+		unsigned int NumRows = m_pLayer->getNumRows();
+		osg::Vec3d Local((double)1.0/(double)(NumColumns - 1), double(1.0)/(double)(NumRows - 1), 0.0);
+		osg::Vec3d Model;
+		m_pLayer->getLocator()->convertLocalToModel(Local, Model);
+		osg::Vec3d World = Model * m_TransfromOSGModel2VTPWorld;
+
+		// adjust magnitude of dir until 2D component has a good magnitude
+		float smallest = std::min(World.x(), -World.z());
+		float adjust = smallest / mag2;
+		FPoint3 dir2 = dir * adjust;
+
+		bool found_above = false;
+		FPoint3 p = point, lastp = point;
+		while (true)
+		{
+			// are we out of bounds and moving away?
+			if (p.x < m_WorldExtents.left && dir2.x < 0)
+				return false;
+			if (p.x > m_WorldExtents.right && dir2.x > 0)
+				return false;
+			if (p.z < m_WorldExtents.top && dir2.z < 0)
+				return false;
+			if (p.z > m_WorldExtents.bottom && dir2.z > 0)
+				return false;
+
+			bOn = FindAltitudeAtPoint(p, alt);
+			if (bOn)
+			{
+				if (p.y > alt)
+					found_above = true;
+				else
+					break;
+			}
+			lastp = p;
+			p += dir2;
+		}
+		if (!found_above)
+			return false;
+
+		// now, do a binary search to refine the result
+		FPoint3 p0 = lastp, p1 = p, p2;
+		for (int i = 0; i < 10; i++)
+		{
+			p2 = (p0 + p1) / 2.0f;
+			int above = PointIsAboveTerrain(p2);
+			if (above == 1)	// above
+				p0 = p2;
+			else if (above == 0)	// below
+				p1 = p2;
+		}
+		p2 = (p0 + p1) / 2.0f;
+		// make sure it's precisely on the ground
+		FindAltitudeAtPoint(p2, p2.y);
+		result = p2;
+		return true;
+	}
 }

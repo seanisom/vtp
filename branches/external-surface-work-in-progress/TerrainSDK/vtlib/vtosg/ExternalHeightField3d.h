@@ -1,6 +1,9 @@
 #pragma once
 #include "vtdata/HeightField.h"
 #include <osg/Node>
+#ifdef USE_OSGEARTH
+#include <osgEarthUtil/ElevationManager>
+#endif
 
 
 class vtGeom;
@@ -40,4 +43,9 @@ private:
 	osg::Matrix m_TransfromOSGModel2VTPWorld;
 	osg::Matrix m_TransformVTPWorld2OSGModel;
 	osgSim::HeightAboveTerrain *m_pHat;
+	bool m_bOsgEarth;
+#ifdef USE_OSGEARTH
+	osg::ref_ptr<osgEarth::Util::ElevationManager> m_pElevationManager;
+#endif
+
 };

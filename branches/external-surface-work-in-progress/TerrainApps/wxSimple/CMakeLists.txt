@@ -39,7 +39,7 @@ if(BUILD_WXSIMPLE_OSG)
 	endif (OSG_FOUND)
 	
 	if (OSGEARTH_FOUND)
-		target_link_libraries(wxSimple_osg ${OSGEARTH_LIBRARY})
+		target_link_libraries(wxSimple_osg ${OSGEARTH_ALL_LIBRARIES})
 	endif(OSGEARTH_FOUND)
 	
 	if(BZIP2_FOUND)
