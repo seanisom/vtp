@@ -35,20 +35,20 @@ if(OSG_FOUND)
 endif(OSG_FOUND)
 
 if(OSGEARTH_FOUND)
-	include_directories(${OSGEARTH_INCULDE_DIRS})
+	include_directories(${OSGEARTH_INCLUDE_DIR})
 endif(OSGEARTH_FOUND)
 
 # Find the directory containing mini/mini.h
 find_path(MINI_INCLUDE_DIR mini/mini.h DOC "Directory containing mini/mini.h")
 if (MINI_INCLUDE_DIR)
-	# Add the mini include directory to the compilers search path 
+	# Add the mini include directory to the compilers search path
 	include_directories(${MINI_INCLUDE_DIR})
 endif (MINI_INCLUDE_DIR)
 
 # Find the directory containing GL/glext.h
 find_path(GLEXT_INCLUDE_DIR GL/glext.h DOC "Directory containing GL/glext.h")
 if (GLEXT_INCLUDE_DIR)
-	# Add the glext include directory to the compilers search path 
+	# Add the glext include directory to the compilers search path
 	include_directories(${GLEXT_INCLUDE_DIR})
 endif (GLEXT_INCLUDE_DIR)
 

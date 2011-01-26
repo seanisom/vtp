@@ -13,7 +13,9 @@
 
 #include "DynTerrain.h"
 
+#ifdef USE_OSGEARTH
 namespace VTP {
+#endif
 
 /**
  * This class provides an example of how to add a CLOD implementation to
@@ -53,7 +55,9 @@ private:
 	float m_fZScale;
 };
 
+#ifdef USE_OSGEARTH
 }
+#endif
 
 /*@}*/	// Group dynterr
 

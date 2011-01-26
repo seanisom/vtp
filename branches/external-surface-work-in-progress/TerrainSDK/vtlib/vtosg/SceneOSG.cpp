@@ -129,9 +129,9 @@ bool vtScene::Init(int argc, char** argv, bool bStereo, int iStereoMode)
 		if (iStereoMode == 1) mode = osg::DisplaySettings::QUAD_BUFFER;
 		displaySettings->setStereoMode(mode);
 	}
-//#ifdef __DARWIN_OSX__
+#ifdef __DARWIN_OSX__
 	m_pOsgViewer->setThreadingModel(osgViewer::Viewer::SingleThreaded); // Kill multi-threading on OSX until wxGLContext properly implemented on that platform
-//#endif
+#endif
 #ifdef USE_OSG_STATS
 	osgViewer::StatsHandler* pStatsHandler = new osgViewer::StatsHandler;
 	pStatsHandler->setKeyEventPrintsOutStats(0);

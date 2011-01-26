@@ -839,7 +839,11 @@ bool vtTerrain::_CreateDynamicTerrain()
 	}
 	else if (method == LM_CUSTOM)
 	{
+#ifdef USE_OSGEARTH
 		m_pDynGeom = new VTP::CustomTerrain;
+#else
+		m_pDynGeom = new CustomTerrain;
+#endif
 		m_pDynGeom->SetName2("CustomTerrain Geom");
 	}
 	else if (method == LM_ROETTGER)
