@@ -176,7 +176,11 @@ bool vtExternalHeightField3d::FindAltitudeAtPoint(const FPoint3 &p3, float &fAlt
 	if (m_bOsgEarth)
 	{
 #ifdef USE_OSGEARTH
-		return false;
+        double Resolution;
+        double Elevation;
+		bool bRet = m_pElevationManager->getElevation(Model.x(), Model.y(), 0, NULL, Elevation, Resolution);
+		fAltitude = (float)Elevation;
+		return bRet;
 #else
 		return false;
 #endif
