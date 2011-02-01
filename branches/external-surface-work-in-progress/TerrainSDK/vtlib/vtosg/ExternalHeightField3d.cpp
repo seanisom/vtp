@@ -33,6 +33,8 @@ bool vtExternalHeightField3d::Initialize(const char *external_data)
 	if (NULL == pNode)
 		return false;
 
+// !!!! TODO - Scaling from non metric co-ordinate systems !!!!!!!!!!!!!!!!!
+
 #ifdef USE_OSGEARTH
     osgEarth::MapNode *pMapNode = dynamic_cast<osgEarth::MapNode*>(pNode);
     if (NULL != pMapNode)
@@ -63,6 +65,29 @@ bool vtExternalHeightField3d::Initialize(const char *external_data)
 		transform->addChild(pNode);
 
 		m_pElevationManager = new osgEarth::Util::ElevationManager(pMap);
+		osgEarth::MapFrame MapFrame(pMap, osgEarth::Map::ELEVATION_LAYERS);
+
+		MapFrame.sync();
+		int TileSize = 0;
+
+        for( osgEarth::ElevationLayerVector::const_iterator i = MapFrame.elevationLayers().begin();
+            i != MapFrame.elevationLayers().end();
+            ++i )
+        {
+            // I need the maximum tile size
+            int layerTileSize = i->get()->getTileSize();
+            if ( layerTileSize > TileSize)
+                TileSize = layerTileSize;
+        }
+		unsigned int tiles_wide, tiles_high;
+		double tile_width, tile_height;
+        pProfile->getNumTiles(0, tiles_wide, tiles_high);
+        pProfile->getTileDimensions(0, tile_width, tile_height);
+        double WidthResolution = GeoExtent.width() / (double)tiles_wide / (double)TileSize / FUDGE_FACTOR;
+        double HeightResolution = GeoExtent.height() / (double)tiles_high / (double)TileSize / FUDGE_FACTOR;
+
+
+        m_Smallest = (float)std::min(WidthResolution, HeightResolution);
 
 		return true;
     }
@@ -237,71 +262,72 @@ bool vtExternalHeightField3d::CastRayToSurface(const FPoint3 &point, const FPoin
 	if (bOn && point.y < alt)
 		return false;	// already firmly underground
 
+    float smallest;
 	if (m_bOsgEarth)
 	{
 #ifdef USE_OSGEARTH
-		return false;
+		smallest = m_Smallest;
 #else
 		return false;
 #endif
 	}
 else
 	{
-		unsigned int NumColumns = m_pLayer->getNumColumns();
-		unsigned int NumRows = m_pLayer->getNumRows();
-		osg::Vec3d Local((double)1.0/(double)(NumColumns - 1), double(1.0)/(double)(NumRows - 1), 0.0);
-		osg::Vec3d Model;
-		m_pLayer->getLocator()->convertLocalToModel(Local, Model);
-		osg::Vec3d World = Model * m_TransfromOSGModel2VTPWorld;
+        unsigned int NumColumns = m_pLayer->getNumColumns();
+        unsigned int NumRows = m_pLayer->getNumRows();
+        osg::Vec3d Local((double)1.0/(double)(NumColumns - 1), double(1.0)/(double)(NumRows - 1), 0.0);
+        osg::Vec3d Model;
+        m_pLayer->getLocator()->convertLocalToModel(Local, Model);
+        osg::Vec3d World = Model * m_TransfromOSGModel2VTPWorld;
 
-		// adjust magnitude of dir until 2D component has a good magnitude
-		float smallest = std::min(World.x(), -World.z());
-		float adjust = smallest / mag2;
-		FPoint3 dir2 = dir * adjust;
-
-		bool found_above = false;
-		FPoint3 p = point, lastp = point;
-		while (true)
-		{
-			// are we out of bounds and moving away?
-			if (p.x < m_WorldExtents.left && dir2.x < 0)
-				return false;
-			if (p.x > m_WorldExtents.right && dir2.x > 0)
-				return false;
-			if (p.z < m_WorldExtents.top && dir2.z < 0)
-				return false;
-			if (p.z > m_WorldExtents.bottom && dir2.z > 0)
-				return false;
-
-			bOn = FindAltitudeAtPoint(p, alt);
-			if (bOn)
-			{
-				if (p.y > alt)
-					found_above = true;
-				else
-					break;
-			}
-			lastp = p;
-			p += dir2;
-		}
-		if (!found_above)
-			return false;
-
-		// now, do a binary search to refine the result
-		FPoint3 p0 = lastp, p1 = p, p2;
-		for (int i = 0; i < 10; i++)
-		{
-			p2 = (p0 + p1) / 2.0f;
-			int above = PointIsAboveTerrain(p2);
-			if (above == 1)	// above
-				p0 = p2;
-			else if (above == 0)	// below
-				p1 = p2;
-		}
-		p2 = (p0 + p1) / 2.0f;
-		// make sure it's precisely on the ground
-		FindAltitudeAtPoint(p2, p2.y);
-		result = p2;
-		return true;
+        // adjust magnitude of dir until 2D component has a good magnitude
+        smallest = std::min(World.x(), -World.z());
 	}
+    float adjust = smallest / mag2;
+    FPoint3 dir2 = dir * adjust;
+
+    bool found_above = false;
+    FPoint3 p = point, lastp = point;
+    while (true)
+    {
+        // are we out of bounds and moving away?
+        if (p.x < m_WorldExtents.left && dir2.x < 0)
+            return false;
+        if (p.x > m_WorldExtents.right && dir2.x > 0)
+            return false;
+        if (p.z < m_WorldExtents.top && dir2.z < 0)
+            return false;
+        if (p.z > m_WorldExtents.bottom && dir2.z > 0)
+            return false;
+
+        bOn = FindAltitudeAtPoint(p, alt);
+        if (bOn)
+        {
+            if (p.y > alt)
+                found_above = true;
+            else
+                break;
+        }
+        lastp = p;
+        p += dir2;
+    }
+    if (!found_above)
+        return false;
+
+    // now, do a binary search to refine the result
+    FPoint3 p0 = lastp, p1 = p, p2;
+    for (int i = 0; i < 10; i++)
+    {
+        p2 = (p0 + p1) / 2.0f;
+        int above = PointIsAboveTerrain(p2);
+        if (above == 1)	// above
+            p0 = p2;
+        else if (above == 0)	// below
+            p1 = p2;
+    }
+    p2 = (p0 + p1) / 2.0f;
+    // make sure it's precisely on the ground
+    FindAltitudeAtPoint(p2, p2.y);
+    result = p2;
+    return true;
 }
