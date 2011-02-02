@@ -203,6 +203,13 @@ void vtGLCanvas::OnMouseEvent(wxMouseEvent& event1)
 		event.type = VT_MOVE;
 		event.button = VT_NONE;
 	}
+#ifdef __WXGTK__
+    // wxGTK does not automatically set keyboard focus on to an OpenGL canvas window
+	else if (type == wxEVT_ENTER_WINDOW)
+	{
+	    SetFocus();
+	}
+#endif
 	else
 	{
 		// ignore other mouse events, such as wxEVT_LEAVE_WINDOW
