@@ -7,5 +7,4 @@ VTP has been building on OS X for several years by a few developers.  VTP on OS 
 
 Currently, a set of download/build/install scripts are maintained in a separate repository.
 
-Instructions can be found [http://nino.walker.googlepages.com/vterrainmacosxinstallscripts here]
-
+Nino's scripts and instructions can be found [http://nino.walker.googlepages.com/vterrainmacosxinstallscripts here]
