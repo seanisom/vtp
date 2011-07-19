@@ -9,6 +9,7 @@
 //
 
 #include "vtlib/vtlib.h"
+#include "vtlib/vtosg/GeometryUtils.h"
 #include "vtdata/DataPath.h"
 #include "vtdata/HeightField.h"
 #include "vtdata/PolyChecker.h"
@@ -171,6 +172,11 @@ bool vtBuilding3d::CreateGeometry(vtHeightField3d *pHeightField)
 
 	UpdateWorldLocation(pHeightField);
 
+#if 1
+	osg::ref_ptr<OSGGeometryUtils::GenerateBuildingGeometry> pGenerator = new OSGGeometryUtils::GenerateBuildingGeometry(*this);
+	m_pGeode = pGenerator->Generate();
+#else
+
 	// TEMP: we can handle complex polys now - i think
 	//if (!PolyChecker.IsSimplePolygon(GetLocalFootprint(0)))
 	//	return false;
@@ -269,6 +275,7 @@ bool vtBuilding3d::CreateGeometry(vtHeightField3d *pHeightField)
 		int index = m_Mesh[j].m_iMatIdx;
 		m_pGeode->AddMesh(mesh, index);
 	}
+#endif
 
 	// resize bounding box
 	if (m_pHighlight)
