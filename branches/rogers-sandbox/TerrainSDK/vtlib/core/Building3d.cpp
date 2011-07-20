@@ -166,16 +166,17 @@ void vtBuilding3d::CreateUpperPolygon(vtLevel *lev, FPolygon3 &polygon,
 
 bool vtBuilding3d::CreateGeometry(vtHeightField3d *pHeightField)
 {
+#if USE_EXPERIMENTAL_BUILDING_GEOMETRY_GENERATOR
+	UpdateWorldLocation(pHeightField);
+
+	osg::ref_ptr<OSGGeometryUtils::GenerateBuildingGeometry> pGenerator = new OSGGeometryUtils::GenerateBuildingGeometry(*this);
+	m_pGeode = pGenerator->Generate();
+#else
 	PolyChecker PolyChecker;
 	int i;
 	unsigned int j, k;
 
 	UpdateWorldLocation(pHeightField);
-
-#if 1
-	osg::ref_ptr<OSGGeometryUtils::GenerateBuildingGeometry> pGenerator = new OSGGeometryUtils::GenerateBuildingGeometry(*this);
-	m_pGeode = pGenerator->Generate();
-#else
 
 	// TEMP: we can handle complex polys now - i think
 	//if (!PolyChecker.IsSimplePolygon(GetLocalFootprint(0)))
