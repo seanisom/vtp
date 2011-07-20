@@ -99,7 +99,7 @@ vtString MakeFilenameDB(const vtString &base, int col, int row,
 						int relative_lod);
 
 /////
-wxString StartOfFilename(const wxString &strFullPath);
+wxString StartOfFilenameWX(const wxString &strFullPath);
 wxString ToBackslash(const wxString &path);
 void RemoveFileExtensions(wxString &fname, bool bAll = true);
 
@@ -110,9 +110,7 @@ void CheckForGDALAndWarn();
 
 // Display a message to the user, and also send it to the log file.
 void DisplayAndLog(const char *pFormat, ...);
-#if SUPPORT_WSTRING
 void DisplayAndLog(const wchar_t *pFormat, ...);
-#endif
 
 void LaunchAppDocumentation(const vtString &appname,
 							const vtString &local_lang_code);
