@@ -15,6 +15,94 @@ class vtLevel;
 
 namespace OSGGeometryUtils
 {
+	osg::PrimitiveSet* MakeMeAPrimitiveSet(const int VertexType, const osg::PrimitiveSet::Type Type, const osg::PrimitiveSet::Mode Mode);
+
+	class Arrays
+	{
+	public:
+		int m_VertexType;
+		osg::ref_ptr<osg::Vec3Array> m_Vertices;
+		osg::ref_ptr<osg::Vec3Array> m_Normals;
+		osg::ref_ptr<osg::Vec2Array> m_TexCoords;
+	};
+
+	class DrawArraysTriangles : public osg::DrawArrays, public Arrays
+	{
+	public:
+		DrawArraysTriangles(const int VertexType, const osg::PrimitiveSet::Mode Mode);
+	};
+
+	class DrawArrayLengthsLineStrip : public osg::DrawArrayLengths, public Arrays
+	{
+	public:
+		DrawArrayLengthsLineStrip(const int VertexType, const osg::PrimitiveSet::Mode Mode);
+	};
+
+	class PrimitiveSetCacheEntry : public osg::Referenced
+	{
+	public:
+		PrimitiveSetCacheEntry(osg::PrimitiveSet* PrimitiveSet) : m_pPrimitiveSet(PrimitiveSet) {}
+		osg::ref_ptr<osg::PrimitiveSet> m_pPrimitiveSet;
+	protected:
+		~PrimitiveSetCacheEntry() {}
+	};
+
+	class PrimitiveSetCache : public std::vector<osg::ref_ptr<PrimitiveSetCacheEntry>>, public osg::Referenced
+	{
+	public:
+		osg::PrimitiveSet* FindOrCreatePrimitive(const int VertexType, const vtMaterial* pMaterial, const osg::PrimitiveSet::Type Type,
+												const osg::PrimitiveSet::Mode Mode);
+	protected:
+		~PrimitiveSetCache() {}
+	};
+
+	class StateSetCacheEntry : public osg::Referenced
+	{
+	public:
+		StateSetCacheEntry(osg::StateSet& StateSet) : m_StateSet(StateSet)
+		{
+			m_pPrimitiveSetCache = new PrimitiveSetCache;
+		}
+		osg::StateSet& m_StateSet;
+		osg::ref_ptr<PrimitiveSetCache> m_pPrimitiveSetCache;
+	protected:
+		~StateSetCacheEntry() {}
+	};
+
+	class StateSetCache : public std::vector<osg::ref_ptr<StateSetCacheEntry>>, public osg::Referenced
+	{
+	public:
+		osg::PrimitiveSet* FindOrCreatePrimitive(const int VertexType, vtMaterial* pMaterial, const osg::PrimitiveSet::Type Type,
+												const osg::PrimitiveSet::Mode Mode);
+	protected:
+		~StateSetCache() {}
+	};
+
+	class VertexTypeCacheEntry : public osg::Referenced
+	{
+	public:
+		VertexTypeCacheEntry(const int VertexType) : m_VertexType(VertexType)
+		{
+			m_pStateSetCache = new StateSetCache;
+		}
+		int m_VertexType;
+		osg::ref_ptr<StateSetCache> m_pStateSetCache;
+	protected:
+		~VertexTypeCacheEntry() {}
+	};
+
+	class PrimitiveCache : public std::vector<osg::ref_ptr<VertexTypeCacheEntry>>, public osg::Referenced
+	{
+	public:
+		DrawArraysTriangles* FindOrCreateDrawArraysTriangles(const int VertexType, vtMaterial* pMaterial);
+		DrawArrayLengthsLineStrip* FindOrCreateDrawArrayLengthsLineStrip(const int VertexType, vtMaterial* pMaterial);
+		osg::PrimitiveSet* FindOrCreatePrimitive(const int VertexType, vtMaterial* pMaterial, const osg::PrimitiveSet::Type Type,
+												const osg::PrimitiveSet::Mode Mode);
+		vtGeode* Realise() const;
+	protected:
+		~PrimitiveCache() {}
+	};
+
 	class GenerateBuildingGeometry : public osg::Referenced, public vtStructure3d // subclass vtStructure3d to get hold of shared material functions 
 	{
 	public:
@@ -39,7 +127,7 @@ namespace OSGGeometryUtils
 		int FindVertex(FPoint3 Point, FLine3 &RoofSection3D, vtArray<int> &iaVertices);
 		~GenerateBuildingGeometry() {}
 		const vtBuilding3d& m_Building;
-		osg::ref_ptr<vtGeode> m_pGeode;
+		osg::ref_ptr<PrimitiveCache> m_pPrimitiveCache;
 
 		// abstract memebers
 		osg::Node *vtStructure3d::GetContained(void) { return NULL; }
@@ -47,8 +135,10 @@ namespace OSGGeometryUtils
 		bool vtStructure3d::IsCreated(void) { return false; }
 		void vtStructure3d::DeleteNode(void) {}
 	};
+
 	class osg::Geometry* FindOrCreateGeometryObject(osg::Geode *pGeode, vtMaterial& Material, const int ArraysRequired);
 	class osg::PrimitiveSet* FindOrCreatePrimitiveSet(osg::Geometry* pGeometry, const osg::PrimitiveSet::Mode Mode, const osg::PrimitiveSet::Type Type);
+
 };
 #endif	// VTOSG_GEOMETRYUTILSH
 
