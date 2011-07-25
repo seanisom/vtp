@@ -3,11 +3,12 @@
 //
 // Two different methods for triangulating polygons.
 //
-// Copyright (c) 2006-2009 Virtual Terrain Project
+// Copyright (c) 2006-2011 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
 #include "Triangulate.h"
+#include "vtdata/vtLog.h"
 
 static const float EPSILON=0.0000000001f;
 
@@ -144,6 +145,7 @@ bool Triangulate_f::Process(const FLine2 &contour,FLine2 &result)
 		if (0 >= (count--))
 		{
 			//** Triangulate: ERROR - probable bad polygon!
+			delete [] V;
 			return false;
 		}
 
@@ -173,7 +175,7 @@ bool Triangulate_f::Process(const FLine2 &contour,FLine2 &result)
 			count = 2*nv;
 		}
 	}
-	delete V;
+	delete [] V;
 	return true;
 }
 
@@ -204,6 +206,7 @@ bool Triangulate_f::Process(const FLine3 &contour,FLine3 &result)
 		if (0 >= (count--))
 		{
 			//** Triangulate: ERROR - probable bad polygon!
+			delete [] V;
 			return false;
 		}
 
@@ -233,7 +236,7 @@ bool Triangulate_f::Process(const FLine3 &contour,FLine3 &result)
 			count = 2*nv;
 		}
 	}
-	delete[] V;
+	delete [] V;
 	return true;
 }
 
@@ -264,6 +267,7 @@ bool Triangulate_f::Process(const FLine3 &contour, vtArray<int> &result)
 		if (0 >= (count--))
 		{
 			//** Triangulate: ERROR - probable bad polygon!
+			delete [] V;
 			return false;
 		}
 
@@ -293,7 +297,7 @@ bool Triangulate_f::Process(const FLine3 &contour, vtArray<int> &result)
 			count = 2*nv;
 		}
 	}
-	delete V;
+	delete [] V;
 	return true;
 }
 
@@ -395,6 +399,7 @@ bool Triangulate_d::Process(const DLine2 &contour,DLine2 &result)
 		if (0 >= (count--))
 		{
 			//** Triangulate: ERROR - probable bad polygon!
+			delete [] V;
 			return false;
 		}
 
@@ -424,7 +429,7 @@ bool Triangulate_d::Process(const DLine2 &contour,DLine2 &result)
 			count = 2*nv;
 		}
 	}
-	delete V;
+	delete [] V;
 	return true;
 }
 
@@ -705,4 +710,121 @@ void CallTriangle(const DPolygon2 &contour, DLine2 &result)
 	free(out.edgelist);
 	free(out.edgemarkerlist);
 }
+
+#if POLY2TRI
+#include "C:\APIs\poly2tri\poly2tri\poly2tri.h"
+
+void CallPoly2Tri(const DLine2 &contour, DLine2 &result)
+{
+	/// Constrained triangles
+	std::vector<p2t::Triangle*> triangles;
+	std::vector<p2t::Point*> polyline;
+
+	for (unsigned int i = 0; i < contour.GetSize(); i++)
+		polyline.push_back(new p2t::Point(contour.GetAt(i).x, contour.GetAt(i).y));
+
+	/*
+	* STEP 1: Create CDT and add primary polyline
+	* NOTE: polyline must be a simple polygon. The polyline's points
+	* constitute constrained edges. No repeat points!!!
+	*/
+	p2t::CDT cdt1(polyline);// = new p2t::CDT(polyline);
+	p2t::CDT *cdt = &cdt1;
+
+	/*
+	* STEP 3: Triangulate!
+	*/
+	cdt->Triangulate();
+
+	triangles = cdt->GetTriangles();
+
+	for (size_t i = 0; i < triangles.size(); i++) {
+		p2t::Triangle& t = *triangles[i];
+		p2t::Point& a = *t.GetPoint(0);
+		p2t::Point& b = *t.GetPoint(1);
+		p2t::Point& c = *t.GetPoint(2);
+
+		//VTLOG("tri %lf, %lf | %lf, %lf | %lf, %lf\n", a.x, a.y, b.x, b.y, c.x, c.y);
+		result.Append(DPoint2(a.x, a.y));
+		result.Append(DPoint2(b.x, b.y));
+		result.Append(DPoint2(c.x, c.y));
+	}
+
+	// Free input
+	for (size_t i = 0; i < polyline.size(); i++)
+		delete polyline[i];
+}
+
+void CallPoly2Tri(const DPolygon2 &contour, DLine2 &result)
+{
+	/// Constrained triangles
+	std::vector<p2t::Triangle*> triangles;
+
+	std::vector<p2t::Point*> polyline;
+
+	const DLine2 &outer = contour[0];
+	DPoint2 origin = outer.GetAt(0);
+
+	for (unsigned int i = 0; i < outer.GetSize(); i++)
+	{
+		DPoint2 p = outer.GetAt(i) - origin;
+		polyline.push_back(new p2t::Point(p.x, p.y));
+	}
+
+	/*
+	* STEP 1: Create CDT and add primary polyline
+	* NOTE: polyline must be a simple polygon. The polyline's points
+	* constitute constrained edges. No repeat points!!!
+	*/
+	p2t::CDT cdt1(polyline);// = new p2t::CDT(polyline);
+	p2t::CDT *cdt = &cdt1;
+
+	/*
+	* STEP 2: Add holes or Steiner points if necessary
+	*/
+	for (size_t r = 1; r < contour.size(); r++)
+	{
+		const DLine2 &inner = contour[r];
+		std::vector<p2t::Point*> hole;
+
+		unsigned int npoints = inner.GetSize();
+		for (unsigned int i = 0; i < npoints; i++)
+		{
+			//hole.push_back(new p2t::Point(inner.GetAt(i).x, inner.GetAt(i).y));
+
+			DPoint2 p = inner.GetAt(npoints-1-i) - origin;
+
+			hole.push_back(new p2t::Point(p.x, p.y));
+		}
+
+		cdt->AddHole(hole);
+	}
+
+	/*
+	* STEP 3: Triangulate!
+	*/
+	cdt->Triangulate();
+
+	triangles = cdt->GetTriangles();
+	//cout << "Number of triangles = " << triangles.size() << endl;
+
+	//map = cdt->GetMap();
+
+	for (size_t i = 0; i < triangles.size(); i++) {
+		p2t::Triangle& t = *triangles[i];
+		p2t::Point& a = *t.GetPoint(0);
+		p2t::Point& b = *t.GetPoint(1);
+		p2t::Point& c = *t.GetPoint(2);
+
+		//VTLOG("tri %lf, %lf | %lf, %lf | %lf, %lf\n", a.x, a.y, b.x, b.y, c.x, c.y);
+		result.Append(DPoint2(a.x, a.y) + origin);
+		result.Append(DPoint2(b.x, b.y) + origin);
+		result.Append(DPoint2(c.x, c.y) + origin);
+	}
+
+	// Free input
+	for (size_t i = 0; i < polyline.size(); i++)
+		delete polyline[i];
+}
+#endif // POLY2TRI
 

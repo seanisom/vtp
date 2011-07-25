@@ -416,6 +416,10 @@ public:
 	int FindSimplePolygon(const DPoint2 &p) const;
 	int FindPolygon(const DPoint2 &p) const;
 
+	// Try to address some kinds of degenerate geometry that can occur in polygons
+	int FixGeometry(double dEpsilon);
+	int SelectBadFeatures(double dEpsilon);
+
 	// speed optimization
 	void CreateIndex(int iSize);
 	void FreeIndex();

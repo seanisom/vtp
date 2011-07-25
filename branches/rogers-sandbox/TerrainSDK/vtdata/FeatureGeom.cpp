@@ -7,6 +7,7 @@
 
 #include "Features.h"
 #include "xmlhelper/easyxml.hpp"
+#include "PolyChecker.h"
 #include "vtLog.h"
 #include "DLG.h"
 
@@ -1016,6 +1017,91 @@ int vtFeatureSetPolygon::FindPolygon(const DPoint2 &p) const
 		}
 	}
 	return -1;	// not found
+}
+
+/*
+ Fix geometry: Remove redundant (coincident) points, remove colinear points,
+  fix the winding direction of polygonal rings.
+ */
+int vtFeatureSetPolygon::FixGeometry(double dEpsilon)
+{
+	PolyChecker PolyChecker;
+
+	int removed = 0;
+	int clock = 0, not = 0;
+	int num = m_Poly.size();
+
+	for (int i = 0; i < num; i++)
+	{
+		DPolygon2 &dpoly = m_Poly[i];
+
+		// Remove bad points: degenerate (coincident) and colinear
+		removed += dpoly.RemoveDegeneratePoints(dEpsilon);
+		removed += dpoly.RemoveColinearPoints(dEpsilon);
+
+		DLine2 &outer = dpoly[0];
+		if (PolyChecker.IsClockwisePolygon(outer) == false)
+		{
+			// Incorrect winding
+			outer.ReverseOrder();
+		}
+		// Check clockwisdom (winding direction)
+		for (size_t r = 1; r < dpoly.size(); r++)
+		{
+			DLine2 &inner = dpoly[r];
+			if (PolyChecker.IsClockwisePolygon(inner) == true)
+			{
+				// Incorrect winding
+				inner.ReverseOrder();
+			}
+
+		}
+	}
+	// potential TODO: remove too-small rings (with less than 3 points)
+	return removed;
+}
+
+/**
+ To detect coincident vertices, even between rings, we compare every vertex to
+ every other.  It is too troublesome to try to automatically correct these
+ points, so intead we just select them to let the user know which are bad.
+ */
+int vtFeatureSetPolygon::SelectBadFeatures(double dEpsilon)
+{
+	DeselectAll();
+	int num_bad = 0;
+
+	int num_features = m_Poly.size();
+	for (int f = 0; f < num_features; f++)
+	{
+		DPolygon2 &dpoly = m_Poly[f];
+
+		// Concatenate all the points into a single set
+		DLine2 dline;
+		for (size_t r = 0; r < dpoly.size(); r++)
+			dline.Append(dpoly[r]);
+
+		bool bGood = true;
+		// A naive N^2 comparison should be fine, as the number of points won't
+		//  be huge.
+		int num = dline.GetSize();
+		for (int i = 0; i < num-1; i++)
+		{
+			for (int j = i+1; j < num; j++)
+			{
+				double dist = (dline[j] - dline[i]).Length();
+				if (dist < dEpsilon)
+				{
+					bGood = false;
+					num_bad++;
+					break;
+				}
+			}
+		}
+		if (!bGood)
+			Select(f);
+	}
+	return num_bad;
 }
 
 void vtFeatureSetPolygon::CreateIndex(int iSize)

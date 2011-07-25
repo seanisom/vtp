@@ -1976,12 +1976,6 @@ void BuilderView::RunTest()
 {
 	// a place to put quick hacks and tests
 #if 0
-	vtRawLayer *pRaw = g_bld->GetActiveRawLayer();
-	if (!pRaw) return;
-	pRaw->ReadGeoURL();
-	Refresh();
-#endif
-#if 0
 	vtRoadLayer *pR = (vtRoadLayer *)g_bld->FindLayerOfType(LT_ROAD);
 	vtElevLayer *pE = (vtElevLayer *)g_bld->FindLayerOfType(LT_ELEVATION);
 	pR->CarveRoadway(pE, 2.0);
@@ -2159,7 +2153,7 @@ void BuilderView::RunTest()
 #endif
 #if 0
 	{
-		vtStructureArray *sa = new vtStructureArray();
+		vtStructureArray *sa = new vtStructureArray;
 		sa->m_proj.SetGeogCSFromDatum(EPSG_DATUM_WGS84);
 		// 1557 buildings
 		sa->ReadXML("G:/Data-USA/Data-Hawaii/BuildingData/stage5.vtst");
@@ -2224,6 +2218,13 @@ void BuilderView::RunTest()
 			}
 		}
 	}
+#endif
+#if 0
+	vtRawLayer *pRaw = g_bld->GetActiveRawLayer();
+	if (!pRaw) return;
+	vtFeatureSetPolygon *fsp = (vtFeatureSetPolygon*) pRaw->GetFeatureSet();
+	int fixed = fsp->SelectBadFeatures(0.05);	// 5 cm
+	Refresh();
 #endif
 }
 
