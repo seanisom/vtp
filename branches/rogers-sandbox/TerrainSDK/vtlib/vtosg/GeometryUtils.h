@@ -98,7 +98,7 @@ namespace OSGGeometryUtils
 		DrawArrayLengthsLineStrip* FindOrCreateDrawArrayLengthsLineStrip(const int VertexType, vtMaterial* pMaterial);
 		osg::PrimitiveSet* FindOrCreatePrimitive(const int VertexType, vtMaterial* pMaterial, const osg::PrimitiveSet::Type Type,
 												const osg::PrimitiveSet::Mode Mode);
-		vtGeode* Realise() const;
+		vtGeode* Realise(bool bUseVertexBufferObjects = false) const;
 	protected:
 		~PrimitiveCache() {}
 	};

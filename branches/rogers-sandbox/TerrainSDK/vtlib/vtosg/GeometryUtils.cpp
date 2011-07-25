@@ -127,7 +127,7 @@ osg::PrimitiveSet* PrimitiveCache::FindOrCreatePrimitive(const int VertexType, v
 	return (*VertexTypeCacheItr)->m_pStateSetCache->FindOrCreatePrimitive(VertexType, pMaterial, Type, Mode);
 }
 
-vtGeode* PrimitiveCache::Realise() const
+vtGeode* PrimitiveCache::Realise(bool bUseVertexBufferObjects) const
 {
 	osg::ref_ptr<vtGeode> pGeode = new vtGeode; 
 
@@ -219,7 +219,8 @@ vtGeode* PrimitiveCache::Realise() const
 						break;
 				}
 			}
-			pGeometry->setUseVertexBufferObjects(true);
+			if (bUseVertexBufferObjects)
+				pGeometry->setUseVertexBufferObjects(true);
 		}
 	}
 	return pGeode.release();
@@ -307,11 +308,11 @@ vtGeode* GenerateBuildingGeometry::Generate()
 		}
 	}
 
-	osg::ref_ptr<vtGeode> pGeode = m_pPrimitiveCache->Realise();
+	vtGeode* pGeode = m_pPrimitiveCache->Realise();
 
 	//osgDB::Registry::instance()->writeNode(*pGeode, std::string("building.osg"), NULL);
 
-	return pGeode.release();
+	return pGeode;
 }
 
 void GenerateBuildingGeometry::AddFlatRoof(const FPolygon3 &pp,  const vtLevel *pLev)
