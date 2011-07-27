@@ -16,6 +16,17 @@
 
 namespace OSGGeometryUtils {
 
+DrawArrayLengthsTriangleFan::DrawArrayLengthsTriangleFan(const int VertexType, const osg::PrimitiveSet::Mode Mode)
+{
+	m_VertexType = VertexType;
+	setMode(Mode);
+	m_Vertices = new osg::Vec3Array;
+	if (VertexType & VT_Normals)
+		m_Normals = new osg::Vec3Array;
+	if (VertexType & VT_TexCoords)
+		m_TexCoords = new osg::Vec2Array;
+}
+
 DrawArrayLengthsLineStrip::DrawArrayLengthsLineStrip(const int VertexType, const osg::PrimitiveSet::Mode Mode)
 {
 	m_VertexType = VertexType;
@@ -57,6 +68,9 @@ osg::PrimitiveSet* MakeMeAPrimitiveSet(const int VertexType, const osg::Primitiv
 		{
 			case osg::PrimitiveSet::LINE_STRIP:
 				pPrimitiveSet = new DrawArrayLengthsLineStrip(VertexType, Mode);
+			break;
+			case osg::PrimitiveSet::TRIANGLE_FAN:
+				pPrimitiveSet = new DrawArrayLengthsTriangleFan(VertexType, Mode);
 			break;
 		}
 		break;
@@ -110,6 +124,12 @@ DrawArrayLengthsLineStrip* PrimitiveCache::FindOrCreateDrawArrayLengthsLineStrip
 																	osg::PrimitiveSet::LINE_STRIP));
 }
 
+DrawArrayLengthsTriangleFan* PrimitiveCache::FindOrCreateDrawArrayLengthsTriangleFan(const int VertexType, vtMaterial* pMaterial)
+{
+	return static_cast<DrawArrayLengthsTriangleFan*>(FindOrCreatePrimitive(VertexType, pMaterial, osg::PrimitiveSet::DrawArrayLengthsPrimitiveType,
+																	osg::PrimitiveSet::TRIANGLE_FAN));
+}
+
 osg::PrimitiveSet* PrimitiveCache::FindOrCreatePrimitive(const int VertexType, vtMaterial* pMaterial, const osg::PrimitiveSet::Type Type,
 														 const osg::PrimitiveSet::Mode Mode)
 {
@@ -154,7 +174,10 @@ vtGeode* PrimitiveCache::Realise(bool bUseVertexBufferObjects) const
 			pGeode->addDrawable(pGeometry.get());
 			pGeometry->setVertexArray(pVertices.get());
 			if ((*VertexTypeCacheItr)->m_VertexType & VT_Normals)
+			{
 				pGeometry->setNormalArray(pNormals.get());
+				pGeometry->setNormalBinding(osg::Geometry::BIND_PER_VERTEX);
+			}
 			if ((*VertexTypeCacheItr)->m_VertexType & VT_TexCoords)
 				pGeometry->setTexCoordArray(0, pTexCoords);
 			pGeometry->setStateSet(&(*StateSetCacheItr)->m_StateSet);
@@ -163,6 +186,9 @@ vtGeode* PrimitiveCache::Realise(bool bUseVertexBufferObjects) const
 			// and add the primitive sets to the osg::Geometry
 			PrimitiveSetCache::const_iterator PrimitiveSetCacheItr;
 			PrimitiveSetCache *pPrimitiveSetCache = (*StateSetCacheItr)->m_pPrimitiveSetCache.get();
+			DrawArraysTriangles* pDrawArraysTriangles;
+			DrawArrayLengthsLineStrip* pDrawArrayLengthsLineStrip;
+			DrawArrayLengthsTriangleFan* pDrawArrayLengthsTriangleFan;
 			for (PrimitiveSetCacheItr = pPrimitiveSetCache->begin(); PrimitiveSetCacheItr != pPrimitiveSetCache->end(); PrimitiveSetCacheItr++)
 			{
 				pGeometry->addPrimitiveSet((*PrimitiveSetCacheItr)->m_pPrimitiveSet.get());
@@ -172,7 +198,7 @@ vtGeode* PrimitiveCache::Realise(bool bUseVertexBufferObjects) const
 						switch ((*PrimitiveSetCacheItr)->m_pPrimitiveSet->getMode())
 						{
 							case osg::PrimitiveSet::TRIANGLES:
-								DrawArraysTriangles* pDrawArraysTriangles = static_cast<DrawArraysTriangles*>((*PrimitiveSetCacheItr)->m_pPrimitiveSet.get());
+								pDrawArraysTriangles = static_cast<DrawArraysTriangles*>((*PrimitiveSetCacheItr)->m_pPrimitiveSet.get());
 								pDrawArraysTriangles->setFirst(pVertices->size());
 								pDrawArraysTriangles->setCount(pDrawArraysTriangles->m_Vertices->size());
 								for (osg::Vec3Array::const_iterator iTr = pDrawArraysTriangles->m_Vertices->begin();
@@ -197,7 +223,7 @@ vtGeode* PrimitiveCache::Realise(bool bUseVertexBufferObjects) const
 						switch ((*PrimitiveSetCacheItr)->m_pPrimitiveSet->getMode())
 						{
 							case osg::PrimitiveSet::LINE_STRIP:
-								DrawArrayLengthsLineStrip* pDrawArrayLengthsLineStrip = static_cast<DrawArrayLengthsLineStrip*>((*PrimitiveSetCacheItr)->m_pPrimitiveSet.get());
+								pDrawArrayLengthsLineStrip = static_cast<DrawArrayLengthsLineStrip*>((*PrimitiveSetCacheItr)->m_pPrimitiveSet.get());
 								pDrawArrayLengthsLineStrip->setFirst(pVertices->size());
 								for (osg::Vec3Array::const_iterator iTr = pDrawArrayLengthsLineStrip->m_Vertices->begin();
 											iTr != pDrawArrayLengthsLineStrip->m_Vertices->end(); iTr++)
@@ -212,6 +238,25 @@ vtGeode* PrimitiveCache::Realise(bool bUseVertexBufferObjects) const
 								{
 									for (osg::Vec2Array::const_iterator iTr = pDrawArrayLengthsLineStrip->m_TexCoords->begin();
 												iTr != pDrawArrayLengthsLineStrip->m_TexCoords->end(); iTr++)
+										pTexCoords->push_back(*iTr);
+								}
+								break;
+							case osg::PrimitiveSet::TRIANGLE_FAN:
+								pDrawArrayLengthsTriangleFan = static_cast<DrawArrayLengthsTriangleFan*>((*PrimitiveSetCacheItr)->m_pPrimitiveSet.get());
+								pDrawArrayLengthsTriangleFan->setFirst(pVertices->size());
+								for (osg::Vec3Array::const_iterator iTr = pDrawArrayLengthsTriangleFan->m_Vertices->begin();
+											iTr != pDrawArrayLengthsTriangleFan->m_Vertices->end(); iTr++)
+									pVertices->push_back(*iTr);
+								if ((*VertexTypeCacheItr)->m_VertexType & VT_Normals)
+								{
+									for (osg::Vec3Array::const_iterator iTr = pDrawArrayLengthsTriangleFan->m_Normals->begin();
+												iTr != pDrawArrayLengthsTriangleFan->m_Normals->end(); iTr++)
+										pNormals->push_back(*iTr);
+								}
+								if ((*VertexTypeCacheItr)->m_VertexType & VT_TexCoords)
+								{
+									for (osg::Vec2Array::const_iterator iTr = pDrawArrayLengthsTriangleFan->m_TexCoords->begin();
+												iTr != pDrawArrayLengthsTriangleFan->m_TexCoords->end(); iTr++)
 										pTexCoords->push_back(*iTr);
 								}
 								break;
@@ -531,27 +576,22 @@ bool GenerateBuildingGeometry::MakeFacade(vtEdge *pEdge, FLine3 &quad, int stori
 
 	vtMaterial* pMaterial = GetSharedMaterialArray()->at(MaterialIndex);
 
-	DrawArraysTriangles* pTriangles = m_pPrimitiveCache->FindOrCreateDrawArraysTriangles(VT_Normals|VT_TexCoords, pMaterial);
+	DrawArrayLengthsTriangleFan* pTriangleFan = m_pPrimitiveCache->FindOrCreateDrawArrayLengthsTriangleFan(VT_Normals|VT_TexCoords, pMaterial);
 
 	float v = (float) stories;
-	pTriangles->m_Vertices->push_back(osg::Vec3(quad[0].x, quad[0].y, quad[0].z));
-	pTriangles->m_Normals->push_back(norm);
-	pTriangles->m_TexCoords->push_back(osg::Vec2(0.0, 0.0));
-	pTriangles->m_Vertices->push_back(osg::Vec3(quad[1].x, quad[1].y, quad[1].z));
-	pTriangles->m_Normals->push_back(norm);
-	pTriangles->m_TexCoords->push_back(osg::Vec2(1.0, 0.0));
-	pTriangles->m_Vertices->push_back(osg::Vec3(quad[2].x, quad[2].y, quad[2].z));
-	pTriangles->m_Normals->push_back(norm);
-	pTriangles->m_TexCoords->push_back(osg::Vec2(0.0, v));
-	pTriangles->m_Vertices->push_back(osg::Vec3(quad[2].x, quad[2].y, quad[2].z));
-	pTriangles->m_Normals->push_back(norm);
-	pTriangles->m_TexCoords->push_back(osg::Vec2(0.0, v));
-	pTriangles->m_Vertices->push_back(osg::Vec3(quad[1].x, quad[1].y, quad[1].z));
-	pTriangles->m_Normals->push_back(norm);
-	pTriangles->m_TexCoords->push_back(osg::Vec2(1.0, 0.0));
-	pTriangles->m_Vertices->push_back(osg::Vec3(quad[3].x, quad[3].y, quad[3].z));
-	pTriangles->m_Normals->push_back(norm);
-	pTriangles->m_TexCoords->push_back(osg::Vec2(1.0, v));
+	pTriangleFan->m_Vertices->push_back(osg::Vec3(quad[0].x, quad[0].y, quad[0].z));
+	pTriangleFan->m_Normals->push_back(norm);
+	pTriangleFan->m_TexCoords->push_back(osg::Vec2(0.0, 0.0));
+	pTriangleFan->m_Vertices->push_back(osg::Vec3(quad[1].x, quad[1].y, quad[1].z));
+	pTriangleFan->m_Normals->push_back(norm);
+	pTriangleFan->m_TexCoords->push_back(osg::Vec2(1.0, 0.0));
+	pTriangleFan->m_Vertices->push_back(osg::Vec3(quad[3].x, quad[3].y, quad[3].z));
+	pTriangleFan->m_Normals->push_back(norm);
+	pTriangleFan->m_TexCoords->push_back(osg::Vec2(1.0, v));
+	pTriangleFan->m_Vertices->push_back(osg::Vec3(quad[2].x, quad[2].y, quad[2].z));
+	pTriangleFan->m_Normals->push_back(norm);
+	pTriangleFan->m_TexCoords->push_back(osg::Vec2(0.0, v));
+	pTriangleFan->push_back(4);
 	return true;
 }
 
@@ -586,7 +626,7 @@ void GenerateBuildingGeometry::AddWallSection(vtEdge *pEdge, bool bUniform,
 		MaterialIndex = FindMatIndex(*pEdge->m_pMaterial, pEdge->m_Color);
 	vtMaterial* pMaterial = GetSharedMaterialArray()->at(MaterialIndex);
 
-	DrawArraysTriangles* pTriangles = m_pPrimitiveCache->FindOrCreateDrawArraysTriangles(VT_Normals|VT_TexCoords, pMaterial);
+	DrawArrayLengthsTriangleFan* pTriangleFan = m_pPrimitiveCache->FindOrCreateDrawArrayLengthsTriangleFan(VT_Normals|VT_TexCoords, pMaterial);
 
 	// determine normal and primary axes of the face
 	osg::Vec3 norm = Normal(p0, p1, p2);
@@ -626,24 +666,19 @@ void GenerateBuildingGeometry::AddWallSection(vtEdge *pEdge, bool bUniform,
 		}
 	}
 
-	pTriangles->m_Vertices->push_back(p0);
-	pTriangles->m_Normals->push_back(norm);
-	pTriangles->m_TexCoords->push_back(uv0);
-	pTriangles->m_Vertices->push_back(p1);
-	pTriangles->m_Normals->push_back(norm);
-	pTriangles->m_TexCoords->push_back(uv1);
-	pTriangles->m_Vertices->push_back(p3);
-	pTriangles->m_Normals->push_back(norm);
-	pTriangles->m_TexCoords->push_back(uv3);
-	pTriangles->m_Vertices->push_back(p3);
-	pTriangles->m_Normals->push_back(norm);
-	pTriangles->m_TexCoords->push_back(uv3);
-	pTriangles->m_Vertices->push_back(p1);
-	pTriangles->m_Normals->push_back(norm);
-	pTriangles->m_TexCoords->push_back(uv1);
-	pTriangles->m_Vertices->push_back(p2);
-	pTriangles->m_Normals->push_back(norm);
-	pTriangles->m_TexCoords->push_back(uv2);
+	pTriangleFan->m_Vertices->push_back(p0);
+	pTriangleFan->m_Normals->push_back(norm);
+	pTriangleFan->m_TexCoords->push_back(uv0);
+	pTriangleFan->m_Vertices->push_back(p1);
+	pTriangleFan->m_Normals->push_back(norm);
+	pTriangleFan->m_TexCoords->push_back(uv1);
+	pTriangleFan->m_Vertices->push_back(p2);
+	pTriangleFan->m_Normals->push_back(norm);
+	pTriangleFan->m_TexCoords->push_back(uv2);
+	pTriangleFan->m_Vertices->push_back(p3);
+	pTriangleFan->m_Normals->push_back(norm);
+	pTriangleFan->m_TexCoords->push_back(uv3);
+	pTriangleFan->push_back(4);
 }
 
 /**
@@ -1225,29 +1260,24 @@ void GenerateBuildingGeometry::AddWindowSection(vtEdge *pEdge, vtEdgeFeature *pF
 	int MaterialIndex = MaterialIndex = FindMatIndex(BMAT_NAME_WINDOW, pEdge->m_Color);
 	vtMaterial* pMaterial = GetSharedMaterialArray()->at(MaterialIndex);
 
-	DrawArraysTriangles* pTriangles = m_pPrimitiveCache->FindOrCreateDrawArraysTriangles(VT_Normals|VT_TexCoords, pMaterial);
+	DrawArrayLengthsTriangleFan* pTriangleFan = m_pPrimitiveCache->FindOrCreateDrawArrayLengthsTriangleFan(VT_Normals|VT_TexCoords, pMaterial);
 
 	// determine normal (flat shading, all vertices have the same normal)
 	osg::Vec3  norm = Normal(p0,p1,p2);
 
-	pTriangles->m_Vertices->push_back(p0);
-	pTriangles->m_Normals->push_back(norm);
-	pTriangles->m_TexCoords->push_back(osg::Vec2(0.0f, 0.0f));
-	pTriangles->m_Vertices->push_back(p1);
-	pTriangles->m_Normals->push_back(norm);
-	pTriangles->m_TexCoords->push_back(osg::Vec2(1.0f, 0.0f));
-	pTriangles->m_Vertices->push_back(p3);
-	pTriangles->m_Normals->push_back(norm);
-	pTriangles->m_TexCoords->push_back(osg::Vec2(0.0f, 1.0f));
-	pTriangles->m_Vertices->push_back(p3);
-	pTriangles->m_Normals->push_back(norm);
-	pTriangles->m_TexCoords->push_back(osg::Vec2(0.0f, 1.0f));
-	pTriangles->m_Vertices->push_back(p1);
-	pTriangles->m_Normals->push_back(norm);
-	pTriangles->m_TexCoords->push_back(osg::Vec2(1.0f, 0.0f));
-	pTriangles->m_Vertices->push_back(p2);
-	pTriangles->m_Normals->push_back(norm);
-	pTriangles->m_TexCoords->push_back(osg::Vec2(1.0f, 1.0f));
+	pTriangleFan->m_Vertices->push_back(p0);
+	pTriangleFan->m_Normals->push_back(norm);
+	pTriangleFan->m_TexCoords->push_back(osg::Vec2(0.0f, 0.0f));
+	pTriangleFan->m_Vertices->push_back(p1);
+	pTriangleFan->m_Normals->push_back(norm);
+	pTriangleFan->m_TexCoords->push_back(osg::Vec2(1.0f, 0.0f));
+	pTriangleFan->m_Vertices->push_back(p2);
+	pTriangleFan->m_Normals->push_back(norm);
+	pTriangleFan->m_TexCoords->push_back(osg::Vec2(1.0f, 1.0f));
+	pTriangleFan->m_Vertices->push_back(p3);
+	pTriangleFan->m_Normals->push_back(norm);
+	pTriangleFan->m_TexCoords->push_back(osg::Vec2(0.0f, 1.0f));
+	pTriangleFan->push_back(4);
 }
 
 /**
@@ -1271,29 +1301,24 @@ void GenerateBuildingGeometry::AddDoorSection(vtEdge *pEdge, vtEdgeFeature *pFea
 	int MaterialIndex = MaterialIndex = FindMatIndex(BMAT_NAME_DOOR, pEdge->m_Color);
 	vtMaterial* pMaterial = GetSharedMaterialArray()->at(MaterialIndex);
 
-	DrawArraysTriangles* pTriangles = m_pPrimitiveCache->FindOrCreateDrawArraysTriangles(VT_Normals|VT_TexCoords, pMaterial);
+	DrawArrayLengthsTriangleFan* pTriangleFan = m_pPrimitiveCache->FindOrCreateDrawArrayLengthsTriangleFan(VT_Normals|VT_TexCoords, pMaterial);
 
 	// determine normal (flat shading, all vertices have the same normal)
 	osg::Vec3 norm = Normal(p0, p1, p2);
 
-	pTriangles->m_Vertices->push_back(p0);
-	pTriangles->m_Normals->push_back(norm);
-	pTriangles->m_TexCoords->push_back(osg::Vec2(0.0f, 0.0f));
-	pTriangles->m_Vertices->push_back(p1);
-	pTriangles->m_Normals->push_back(norm);
-	pTriangles->m_TexCoords->push_back(osg::Vec2(1.0f, 0.0f));
-	pTriangles->m_Vertices->push_back(p3);
-	pTriangles->m_Normals->push_back(norm);
-	pTriangles->m_TexCoords->push_back(osg::Vec2(0.0f, 1.0f));
-	pTriangles->m_Vertices->push_back(p3);
-	pTriangles->m_Normals->push_back(norm);
-	pTriangles->m_TexCoords->push_back(osg::Vec2(0.0f, 1.0f));
-	pTriangles->m_Vertices->push_back(p1);
-	pTriangles->m_Normals->push_back(norm);
-	pTriangles->m_TexCoords->push_back(osg::Vec2(1.0f, 0.0f));
-	pTriangles->m_Vertices->push_back(p2);
-	pTriangles->m_Normals->push_back(norm);
-	pTriangles->m_TexCoords->push_back(osg::Vec2(1.0f, 1.0f));
+	pTriangleFan->m_Vertices->push_back(p0);
+	pTriangleFan->m_Normals->push_back(norm);
+	pTriangleFan->m_TexCoords->push_back(osg::Vec2(0.0f, 0.0f));
+	pTriangleFan->m_Vertices->push_back(p1);
+	pTriangleFan->m_Normals->push_back(norm);
+	pTriangleFan->m_TexCoords->push_back(osg::Vec2(1.0f, 0.0f));
+	pTriangleFan->m_Vertices->push_back(p2);
+	pTriangleFan->m_Normals->push_back(norm);
+	pTriangleFan->m_TexCoords->push_back(osg::Vec2(1.0f, 1.0f));
+	pTriangleFan->m_Vertices->push_back(p3);
+	pTriangleFan->m_Normals->push_back(norm);
+	pTriangleFan->m_TexCoords->push_back(osg::Vec2(0.0f, 1.0f));
+	pTriangleFan->push_back(4);
 
 	//add wall above door
 	AddWallSection(pEdge, false, quad, vf2, 1.0f);

@@ -38,6 +38,12 @@ namespace OSGGeometryUtils
 		DrawArrayLengthsLineStrip(const int VertexType, const osg::PrimitiveSet::Mode Mode);
 	};
 
+	class DrawArrayLengthsTriangleFan : public osg::DrawArrayLengths, public Arrays
+	{
+	public:
+		DrawArrayLengthsTriangleFan(const int VertexType, const osg::PrimitiveSet::Mode Mode);
+	};
+
 	class PrimitiveSetCacheEntry : public osg::Referenced
 	{
 	public:
@@ -96,6 +102,7 @@ namespace OSGGeometryUtils
 	public:
 		DrawArraysTriangles* FindOrCreateDrawArraysTriangles(const int VertexType, vtMaterial* pMaterial);
 		DrawArrayLengthsLineStrip* FindOrCreateDrawArrayLengthsLineStrip(const int VertexType, vtMaterial* pMaterial);
+		DrawArrayLengthsTriangleFan* FindOrCreateDrawArrayLengthsTriangleFan(const int VertexType, vtMaterial* pMaterial);
 		osg::PrimitiveSet* FindOrCreatePrimitive(const int VertexType, vtMaterial* pMaterial, const osg::PrimitiveSet::Type Type,
 												const osg::PrimitiveSet::Mode Mode);
 		vtGeode* Realise(bool bUseVertexBufferObjects = false) const;
