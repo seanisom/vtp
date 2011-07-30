@@ -152,7 +152,7 @@ vtGeode* PrimitiveCache::Realise(bool bUseVertexBufferObjects) const
 	osg::ref_ptr<vtGeode> pGeode = new vtGeode; 
 
 	const_iterator VertexTypeCacheItr; 
-	// For each vertex type createthe relevant buffers buffers which will be shared
+	// For each vertex type create the relevant buffers buffers which will be shared
 	// between all the geometry drawables that are created for this vertex type
 	for (VertexTypeCacheItr = begin(); VertexTypeCacheItr != end(); VertexTypeCacheItr++)
 	{
