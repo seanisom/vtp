@@ -1,6 +1,0 @@
-add_subdirectory(VTBuilder)
-add_subdirectory(Enviro)
-add_subdirectory(CManager)
-add_subdirectory(glutSimple)
-add_subdirectory(VTConvert)
-add_subdirectory(wxSimple)
