@@ -1,7 +1,7 @@
 //
 // TerrainScene.h
 //
-// Copyright (c) 2001-2013 Virtual Terrain Project
+// Copyright (c) 2001-2006 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -76,11 +76,11 @@ public:
 	void UpdateSkydomeForTerrain(vtTerrain *pTerrain);
 
 	/// Access the terrains in the list.
-	uint NumTerrains() { return m_Terrains.size(); }
-	vtTerrain *GetTerrain(uint i) const { return m_Terrains[i]; }
+	unsigned int NumTerrains() { return m_Terrains.size(); }
+	vtTerrain *GetTerrain(unsigned int i) { return m_Terrains[i]; }
 
 	/// Get the terrain currently being shown.
-	vtTerrain *GetCurrentTerrain() const { return m_pCurrentTerrain; }
+	vtTerrain *GetCurrentTerrain() { return m_pCurrentTerrain; }
 
 	/// Find a terrain by its name.
 	vtTerrain *FindTerrainByName(const char *name);
@@ -135,6 +135,7 @@ protected:
 
 // global helper function
 vtTerrainScene *vtGetTS();
+vtContentManager3d &vtGetContent();
 
 /*@}*/	// Group terrain
 

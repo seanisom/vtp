@@ -188,7 +188,7 @@ int ExpandTGZ(const char *archive_fname, const char *prepend_path)
 		}
 		else
 		{
-			uint bytes = (remaining > BLOCKSIZE) ? BLOCKSIZE : remaining;
+			unsigned int bytes = (remaining > BLOCKSIZE) ? BLOCKSIZE : remaining;
 
 			if (outfile != NULL)
 			{

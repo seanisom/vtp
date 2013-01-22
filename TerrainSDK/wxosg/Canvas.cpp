@@ -60,19 +60,21 @@ static vtGLCanvas *s_canvas = NULL;
 
 vtGLCanvas::vtGLCanvas(wxWindow *parent, wxWindowID id, const wxPoint &pos,
 					   const wxSize &size, long style, const wxString &name, int *gl_attrib):
+#ifdef __WXMAC__
+		wxGLCanvas(parent, id, pos, size, style, name, gl_attrib)
+#else
 		wxGLCanvas(parent, id, gl_attrib, pos, size, style, name)
+#endif
 {
 	VTLOG1("vtGLCanvas constructor\n");
 
-#if 0	// __WXMAC__
-	// Do we still need this?  Has trouble compiling on recent Macs.
+#ifdef __WXMAC__
 	const GLint Value = 1;
 	aglSetInteger(GetContext()->m_glContext, AGL_SWAP_INTERVAL, &Value); // Force VSYNC on
-#endif
-
+#else
 	m_bFirstPaint = true;
 	m_bPainting = false;
-
+#endif
 	m_bRunning = true;
 	m_bCapture = false;
 
@@ -103,21 +105,12 @@ vtGLCanvas::~vtGLCanvas(void)
 	((GraphicsWindowWX*)vtGetScene()->GetGraphicsContext())->CloseOsgContext();
 }
 
-void vtGLCanvas::InitGraphicsWindowWX()
-{
-	// We need to get the display settings from the Viewer to pass them to the
-	//  GraphicsWindow for its "traits".
-	osg::DisplaySettings *ds = vtGetScene()->getViewer()->getDisplaySettings();
-	GraphicsWindowWX *gfxwin = new GraphicsWindowWX(this, ds);
-	vtGetScene()->SetGraphicsContext(gfxwin);
-}
-
 void vtGLCanvas::EnableSpaceNav()
 {
 #if WIN32
 	// Initialize spacenavigator, if there is one present
 	g_SpaceNav.Init();
-	g_SpaceNav.AddTarget(vtGetScene()->GetCamera());
+	g_SpaceNav.SetTarget(vtGetScene()->GetCamera());
 #endif
 }
 
@@ -237,7 +230,7 @@ void vtGLCanvas::OnSize(wxSizeEvent& event)
 void vtGLCanvas::OnChar(wxKeyEvent& event)
 {
 #ifdef USE_OSG_STATS
-	osgViewer::GraphicsWindow *pGW = vtGetScene()->GetGraphicsWindow();
+	GraphicsWindowWX* pGW = (GraphicsWindowWX*)vtGetScene()->GetGraphicsContext();
 	if ((NULL != pGW) && pGW->valid())
 		pGW->getEventQueue()->keyPress(event.GetKeyCode());
 #endif
@@ -260,7 +253,7 @@ void vtGLCanvas::OnChar(wxKeyEvent& event)
 	// pass the char to the vtlib Scene
 	vtGetScene()->OnKey(key, flags);
 
-	// Allow wxWidgets to pass the event along to other code
+	// Allow wxWindows to pass the event along to other code
 	event.Skip();
 }
 
@@ -387,17 +380,12 @@ void vtGLCanvas::OnMouseEvent(wxMouseEvent& event1)
 	if (event1.AltDown())
 		mevent.flags |= VT_ALT;
 
-	// inform the terrainscene (this is awkward; need a better mechanism)
-	// it will return false if it takes over the event
-	if (vtGetTS())
-	{
-		if (vtGetTS()->OnMouse(mevent) == false)
-			return;
-	}
-
-	// and the vtlib scene, which informs the engines
+	// inform vtlib scene, which informs the engines
 	vtGetScene()->OnMouse(mevent);
 
+	// and the terrainscene (this is awkward; need a better mechanism)
+	if (vtGetTS())
+		vtGetTS()->OnMouse(mevent);
 }
 
 void vtGLCanvas::OnEraseBackground(wxEraseEvent& event)
@@ -421,11 +409,6 @@ void vtGLCanvas::OnMouseCaptureLost(wxMouseCaptureLostEvent& event1)
 
 void vtGLCanvas::OnIdle(wxIdleEvent &event)
 {
-	// Prevent re-entrance
-	static bool s_in = false;
-	if (s_in) return;
-	s_in = true;
-
 	// We use the "Refresh on Idle" approach to continuous rendering.
 	if (m_bRunning)
 #ifdef __WXMAC__
@@ -446,6 +429,5 @@ void vtGLCanvas::OnIdle(wxIdleEvent &event)
 #else
 		Refresh(FALSE);
 #endif
-	s_in = false;
 }
 

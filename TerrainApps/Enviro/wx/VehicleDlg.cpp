@@ -15,6 +15,7 @@
 #include <wx/colordlg.h>
 
 #include "vtlib/vtlib.h"
+#include "vtlib/core/TerrainScene.h"	// for vtGetContent
 #include "vtui/Helper.h"				// for FillWithColor
 
 #include "VehicleDlg.h"
@@ -110,7 +111,7 @@ void VehicleDlg::OnInitDialog(wxInitDialogEvent& event)
 	wxString prev = GetChoice()->GetStringSelection();
 	wxArrayString names;
 	vtContentManager3d &con = vtGetContent();
-	for (uint i = 0; i < con.NumItems(); i++)
+	for (unsigned int i = 0; i < con.NumItems(); i++)
 	{
 		vtItem *item = con.GetItem(i);
 		const char *type = item->GetValueString("type");

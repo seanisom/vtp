@@ -12,15 +12,16 @@
 
 #include "vtdata/MathTypes.h"
 #include "vtdata/Content.h"
-#include "vtdata/LayerBase.h"
 
 /** \addtogroup terrain */
 /*@{*/
 
+typedef unsigned int unint;
+
 enum TextureEnum {
 	TE_NONE,
 	TE_SINGLE,
-	TE_OBSOLETE,
+	TE_TILED,
 	TE_DERIVED,
 	TE_TILESET
 };
@@ -41,8 +42,6 @@ enum LodMethodEnum {
 #define TERR_LTYPE_STRUCTURE	"Structure"
 #define TERR_LTYPE_ABSTRACT		"Abstract"
 #define TERR_LTYPE_IMAGE		"Image"
-#define TERR_LTYPE_VEGETATION	"Vegetation"
-#define TERR_LTYPE_ELEVATION	"Elevation"
 
 ////////////////////////////////////////////////////////////////////////
 // Class to encapsulate a scenarios parameters.
@@ -230,7 +229,7 @@ protected:
 	<td>Texture</td>
 	<td>Int</td>
 	<td>0</td>
-	<td>Enumeration for source of ground texture. 0=none, 1=single,
+	<td>Enumeration for source of ground texture. 0=none, 1=single, 
 		3=derived from elevation, 4=tileset</td>
 </tr>
 <tr>
@@ -284,6 +283,8 @@ Color_Map
 Texture_Retain
 Detail_Texture
 DTexture_Name
+DTexture_Scale
+DTexture_Distance
 Roads
 Road_File
 Highway
@@ -296,7 +297,6 @@ Road_Culture
 Trees
 Tree_File
 Tree_Distance
-Trees_Use_Shaders
 Fog
 Fog_Distance
 Fog_Color
@@ -315,6 +315,7 @@ Ocean_Plane
 Ocean_Plane_Level
 Depress_Ocean
 Depress_Ocean_Level
+Horizon
 Background_Color
 Distance_Tool_Height
 HUD_Overlay
@@ -352,11 +353,6 @@ public:
 	void SetOverlay(const vtString &fname, int x, int y);
 	bool GetOverlay(vtString &fname, int &x, int &y) const;
 
-	// COnvenience
-	uint NumLayers() { return m_Layers.size(); }
-	int NumLayersOfType(const vtString &layer_type);
-	LayerType LayerType(int iLayerNum);
-
 public:
 	// this must be a public member (currently..)
 	std::vector<vtTagArray> m_Layers;
@@ -368,6 +364,23 @@ private:
 };
 
 ////////////////////////////////////////////////////////////////////////
+// Visitor class for XML parsing of TParams files.
+
+class TParamsVisitor : public TagVisitor
+{
+public:
+	TParamsVisitor(TParams *pParams) : TagVisitor(pParams), m_pParams(pParams), m_bInLayer(false), m_bInScenario(false) {}
+	void startElement(const char *name, const XMLAttributes &atts);
+	void endElement (const char *name);
+
+protected:
+	TParams *m_pParams;
+	vtTagArray m_layer;
+	bool m_bViz;
+	ScenarioParams m_Scenario;
+	bool m_bInLayer;
+	bool m_bInScenario;
+};
 
 #define STR_TPARAMS_FORMAT_NAME "Terrain_Parameters"
 
@@ -379,7 +392,6 @@ private:
 #define STR_MINHEIGHT "Min_Height"
 #define STR_NAVSTYLE "Nav_Style"
 #define STR_NAVSPEED "Nav_Speed"
-#define STR_NAVDAMPING "Nav_Damping"
 #define STR_LOCFILE "Locations_File"
 #define STR_INITLOCATION "Init_Location"
 #define STR_HITHER "Hither_Distance"
@@ -389,6 +401,7 @@ private:
 #define STR_SURFACE_TYPE "Surface_Type"	// 0=grid, 1=TIN, 2=tiled grid
 #define STR_LODMETHOD "LOD_Method"
 #define STR_TRICOUNT "Tri_Count"
+#define STR_TRISTRIPS "Tristrips"
 #define STR_VERTCOUNT "Vert_Count"
 #define STR_TILE_CACHE_SIZE "Tile_Cache_Size"	// in MB
 #define STR_TILE_THREADING "Tile_Threading"
@@ -398,20 +411,25 @@ private:
 #define STR_TIMESPEED "Time_Speed"
 
 #define STR_TEXTURE "Texture"	// 0=none, 1=single, 3=derived, 4=tileset
+//#define STR_TILESIZE "Tile_Size"				// obsolete
 #define STR_TEXTUREFILE "Texture_Filename"
-#define STR_COLOR_MAP "Color_Map"
-#define STR_TEXTURE_GEOTYPICAL "Texture_Geotypical"
-#define STR_GEOTYPICAL_SCALE "Texture_Geotypical_Scale"
+//#define STR_TEXTUREBASE "Base_Texture"		// obsolete
+//#define STR_TEXTURE4BY4 "Texture_4by4"		// obsolete
+//#define STR_TEXTUREFORMAT "Texture_Format"	// 0=bmp, 1=jpg; obsolete
 #define STR_TEXTURE_GRADUAL "Texture_Gradual"
 #define STR_TEXURE_LOD_FACTOR "Texture_LOD_Factor"
-
+#define STR_MIPMAP "MIP_Map"
+#define STR_REQUEST16BIT "Request_16_Bit"
 #define STR_PRELIGHT "Pre-Light"
 #define STR_PRELIGHTFACTOR "PreLight_Factor"
 #define STR_CAST_SHADOWS "Cast_Shadows"
-#define STR_MIPMAP "MIP_Map"
-#define STR_REQUEST16BIT "Request_16_Bit"
-#define STR_SHOW_UNDERSIDE "Show_Underside"
-#define STR_OPACITY "Opacity"
+#define STR_COLOR_MAP "Color_Map"
+#define STR_TEXTURE_RETAIN "Texture_Retain"
+
+#define STR_DETAILTEXTURE "Detail_Texture"
+#define STR_DTEXTURE_NAME "DTexture_Name"
+#define STR_DTEXTURE_SCALE "DTexture_Scale"
+#define STR_DTEXTURE_DISTANCE "DTexture_Distance"
 
 #define STR_ROADS "Roads"
 #define STR_ROADFILE "Road_File"
@@ -426,7 +444,6 @@ private:
 #define STR_TREES "Trees"
 #define STR_TREEFILE "Tree_File"
 #define STR_VEGDISTANCE "Tree_Distance"
-#define STR_TREES_USE_SHADERS "Trees_Use_Shaders"
 
 #define STR_FOG "Fog"
 #define STR_FOGDISTANCE "Fog_Distance"
@@ -464,9 +481,11 @@ private:
 #define STR_WATERFILE "Water_File"
 #define STR_DEPRESSOCEAN "Depress_Ocean"
 #define STR_DEPRESSOCEANLEVEL "Depress_Ocean_Level"
+#define STR_HORIZON "Horizon"
 #define STR_BGCOLOR "Background_Color"
 
-#define STR_UTILITY_FILE "Utility_File"
+#define STR_ROUTEENABLE "Route_Enable"	// not used yet
+#define STR_ROUTEFILE "Route_File"		// not used yet
 
 #define STR_DIST_TOOL_HEIGHT "Distance_Tool_Height"
 #define STR_HUD_OVERLAY "HUD_Overlay"

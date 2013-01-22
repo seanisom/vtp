@@ -10,10 +10,11 @@
 /** Catch wxWidgets logging message, direct them to the vtLog */
 class LogCatcher : public wxLog
 {
-	void DoLogText(const wxString& msg)
+	void DoLogString(const wxChar *szString, time_t t)
 	{
 		VTLOG1(" wxLog: ");
-		VTLOG1(msg.ToUTF8());
+		wxString str(szString);
+		VTLOG1(str.ToUTF8());
 		VTLOG1("\n");
 	}
 };

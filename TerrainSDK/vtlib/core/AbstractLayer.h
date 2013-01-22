@@ -11,8 +11,6 @@
 #include "TerrainLayers.h"
 #include "vtdata/Features.h"
 
-#include <memory>	// for auto_ptr
-
 class vtTerrain;
 
 class vtVisual
@@ -67,8 +65,6 @@ typedef std::map<vtFeature*,vtVisual*> VizMap;
 		Default is 18.
 	 - "Font": Filename (may include path) of the font to use for text labels.
 		Example: "Arial.ttf"
-	 - "LabelOutline": true to put a dark outline around the font to improve its
-		readability against most backgrounds.
 
  When a terrain description (TParams) contains an abstract layer, these same
  style properties are encoded.  On disk, they are stored as XML elements.
@@ -76,43 +72,39 @@ typedef std::map<vtFeature*,vtVisual*> VizMap;
 class vtAbstractLayer : public vtLayer
 {
 public:
-	vtAbstractLayer();
+	vtAbstractLayer(vtTerrain *pTerr);
 	~vtAbstractLayer();
 
-	bool Load(const vtProjection &proj, vtFeatureLoader *loader = NULL,
-		bool progress_callback(int) = NULL);
 	void SetLayerName(const vtString &fname);
 	vtString GetLayerName();
 	void SetVisible(bool vis);
+	bool GetVisible();
 
-	void SetHeightfield(vtHeightField3d *pHF) { m_pHeightField = pHF; }
 	void SetFeatureSet(vtFeatureSet *pSet);
-	vtFeatureSet *GetFeatureSet() const { return m_pSet; }
+	vtFeatureSet *GetFeatureSet() const { return pSet; }
 	vtGroup *GetLabelGroup() const { return pLabelGroup; }
 	vtGroup *GetContainer() const { return pContainer; }
 	vtVisual *GetViz(vtFeature *feat);
 	vtMultiTexture *GetMultiTexture() const { return pMultiTexture; }
-	void CreateContainer(osg::Group *pParent);
-	bool EarthExtents(DRECT &ext);
+	void CreateContainer();
 
 	// Create for all features
-	void CreateFeatureVisuals(osg::Group *pParent, vtHeightField3d *pHF,
-		float fSpacing, bool progress_callback(int) = NULL);
-	void RecreateFeatureVisuals(bool progress_callback(int) = NULL);
+	void CreateStyledFeatures();
+	bool CreateTextureOverlay();
 	void CreateLineGeometryForPoints();
 
 	// Create for a single feature
-	void CreateFeatureVisual(int iIndex);
-	void CreateObjectGeometry(uint iIndex);
-	void CreateLineGeometry(uint iIndex);
-	void CreateFeatureLabel(uint iIndex);
+	void CreateStyledFeature(int iIndex);
+	void CreateObjectGeometry(unsigned int iIndex);
+	void CreateLineGeometry(unsigned int iIndex);
+	void CreateFeatureLabel(unsigned int iIndex);
 
 	void ReleaseGeometry();
 	void ReleaseFeatureGeometry(vtFeature *f);
 
 	// When the underlying feature changes, we need to rebuild the visual
-	void RefreshFeatureVisuals(bool progress_callback(int) = NULL);
-	void RefreshFeature(uint iIndex);
+	void Rebuild();
+	void RebuildFeature(unsigned int iIndex);
 	void UpdateVisualSelection();
 	void Reload();
 
@@ -122,28 +114,35 @@ public:
 	void EditEnd();
 	void DeleteFeature(vtFeature *f);
 
+	/// Set the properties for this layer, which includes style.
+	void SetProperties(const vtTagArray &props) { m_StyleProps = props; }
+	/// Get the properties for this layer, which includes style.
+	vtTagArray &GetProperties() { return m_StyleProps; }
+
 protected:
 	void CreateGeomGroup();
 	void CreateLabelGroup();
-	int GetObjectMaterialIndex(vtTagArray &style, uint iIndex);
+	int GetObjectMaterialIndex(vtTagArray &style, unsigned int iIndex);
+
+	// A set of properties that can provide additional information, such as
+	//  style information for visual display.
+	vtTagArray	m_StyleProps;
+
+	vtTerrain *m_pTerr;
 
 	/// This is the set of features which the layer contains.
-	vtFeatureSet *m_pSet;
+	vtFeatureSet *pSet;
 	vtGroupPtr pContainer;
 	vtGroup *pGeomGroup;
 	vtGroup *pLabelGroup;
 	vtMultiTexture *pMultiTexture;
 
 	// Handy pointers to disambiguate pSet
-	vtFeatureSetPoint2D *m_pSetP2;
-	vtFeatureSetPoint3D *m_pSetP3;
-	vtFeatureSetLineString   *m_pSetLS2;
-	vtFeatureSetLineString3D *m_pSetLS3;
-	vtFeatureSetPolygon *m_pSetPoly;
-
-	// For draped features, the heightfield to drape on.
-	vtHeightField3d *m_pHeightField;
-	float m_fSpacing;		// The horizontal spacing for draping vectors.
+	vtFeatureSetPoint2D *pSetP2;
+	vtFeatureSetPoint3D *pSetP3;
+	vtFeatureSetLineString   *pSetLS2;
+	vtFeatureSetLineString3D *pSetLS3;
+	vtFeatureSetPolygon *pSetPoly;
 
 	// Used to create the visual features
 	vtFontPtr m_pFont;
@@ -156,9 +155,6 @@ protected:
 	vtGeode *pGeodeLine;
 
 	VizMap m_Map;
-
-	// A transform from the CRS of the featureset to the CRS of the scene they are shown in.
-	std::auto_ptr<OCT> m_pOCTransform;
 
 	// Edit tracking
 	bool CreateAtOnce();

@@ -53,7 +53,6 @@ private:
 	bool	m_bFullscreen;
 	bool	m_bStereo;
 	int		m_iStereoMode;
-	int		m_iMultiSamples;
 	IPoint2 m_WinPos, m_WinSize;
 	bool	m_bLocationInside;
 

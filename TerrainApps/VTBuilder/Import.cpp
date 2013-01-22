@@ -1,7 +1,7 @@
 //
 // Import.cpp - MainFrame methods for importing data
 //
-// Copyright (c) 2001-2012 Virtual Terrain Project
+// Copyright (c) 2001-2011 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -18,7 +18,6 @@
 #include "vtdata/DLG.h"
 #include "vtdata/DxfParser.h"
 #include "vtdata/ElevationGrid.h"
-#include "vtdata/FileFilters.h"
 #include "vtdata/FilePath.h"
 #include "vtdata/LULC.h"
 #include "vtdata/Unarchive.h"
@@ -27,6 +26,8 @@
 #include "vtui/ProjectionDlg.h"
 
 #include "Builder.h"
+#include "Helper.h"
+#include "FileFilters.h"
 #include "Tin2d.h"
 // Layers
 #include "StructLayer.h"
@@ -105,7 +106,7 @@ void Builder::ImportData(LayerType ltype)
 	// TESTING code here
 //	ImportDataFromS57(strFileName);
 
-	for (uint i=0; i<strFileNameArray.GetCount(); ++i)
+	for (unsigned int i=0; i<strFileNameArray.GetCount(); ++i)
 	{
 		const wxString &fname = strFileNameArray.Item(i);
 		if (ImportDataFromArchive(ltype, fname, true) != 0)
@@ -153,21 +154,19 @@ int Builder::ImportDataFromArchive(LayerType ltype, const wxString &fname_in,
 
 	if (!bTGZip && !bZip)
 	{
-		LayerArray layers;
-		layers.SetOwnership(false);
-		bool got = ImportLayersFromFile(ltype, fname, layers, bRefresh, true);
-		if (!got)
+		// simple case
+		vtLayer *pLayer = ImportDataFromFile(ltype, fname, bRefresh, true);
+		if (!pLayer)
 			return 0;	// no layers created
 
-		int num_imported = 0;
-		for (uint i = 0; i < layers.size(); i++)
+		bool success = AddLayerWithCheck(pLayer, true);
+		if (success)
+			return 1;	// 1 layer created
+		else
 		{
-			if (AddLayerWithCheck(layers[i], true))
-				num_imported++;		// Layer accepted
-			else
-				delete layers[i];	// Discard the failed layer
+			delete pLayer;
+			return 0;	// no layers created
 		}
-		return num_imported;
 	}
 
 	// try to uncompress
@@ -175,8 +174,8 @@ int Builder::ImportDataFromArchive(LayerType ltype, const wxString &fname_in,
 	path = GetTempFolderName(fname_in.mb_str(wxConvUTF8));
 
 	VTLOG("Creating temp dir at '%s'\n", (const char *)path.mb_str(wxConvUTF8));
-	bool created = vtCreateDir(path.mb_str(wxConvUTF8));
-	if (!created && errno != EEXIST)
+	int result = vtCreateDir(path.mb_str(wxConvUTF8));
+	if (result == 0 && errno != EEXIST)
 	{
 		DisplayAndLog("Couldn't create temporary directory to hold contents of archive.");
 		return 0;	// no layers created
@@ -187,20 +186,19 @@ int Builder::ImportDataFromArchive(LayerType ltype, const wxString &fname_in,
 	vtString str2 = (const char *) prepend_path.mb_str(wxConvUTF8);
 
 	OpenProgressDialog(_("Expanding archive"), false, m_pParentWindow);
-	int num_files;
 	if (bTGZip)
-		num_files = ExpandTGZ(str1, str2);
+		result = ExpandTGZ(str1, str2);
 	if (bZip)
-		num_files = ExpandZip(str1, str2, progress_callback);
+		result = ExpandZip(str1, str2, progress_callback);
 	CloseProgressDialog();
 
 	int layer_count = 0;
-	VTLOG(" Unarchived %d files.\n", num_files);
-	if (num_files < 1)
+	VTLOG(" Unarchived %d files.\n", result);
+	if (result < 1)
 	{
 		DisplayAndLog("Couldn't expand archive.");
 	}
-	else if (num_files == 1)
+	else if (result == 1)
 	{
 		// the archive contained a single file
 		std::string pathname = (const char *) prepend_path.mb_str(wxConvUTF8);
@@ -223,28 +221,24 @@ int Builder::ImportDataFromArchive(LayerType ltype, const wxString &fname_in,
 		else
 		{
 			// Otherwise, try importing
-			LayerArray layers;
-			layers.SetOwnership(false);
-			if (ImportLayersFromFile(ltype, fname, layers, bRefresh, true))
+			pLayer = ImportDataFromFile(ltype, fname, bRefresh, true);
+			if (pLayer)
 			{
-				int num_imported = 0;
-				for (uint i = 0; i < layers.size(); i++)
+				bool success = AddLayerWithCheck(pLayer, true);
+				if (success)
+					layer_count = 1;
+				else
 				{
-					if (AddLayerWithCheck(layers[i], true))
-					{
-						num_imported++;
-						// use the internal filename, not the archive filename which is temporary
-						layers[i]->SetLayerFilename(internal_name);
-						layers[i]->SetImportedFrom(fname_in);
-					}
-					else
-						delete layers[i];
+					delete pLayer;
+					return 0;	// no layers created
 				}
-				layer_count = num_imported;
+				// use the internal filename, not the archive filename which is temporary
+				pLayer->SetLayerFilename(internal_name);
+				pLayer->SetImportedFrom(fname_in);
 			}
 		}
 	}
-	else if (num_files > 1)
+	else if (result > 1)
 	{
 		vtArray<vtLayer *> LoadedLayers;
 		vtLayer *pLayer;
@@ -297,8 +291,7 @@ int Builder::ImportDataFromArchive(LayerType ltype, const wxString &fname_in,
 		}
 		if (found_cat || found_hdr)
 		{
-			// We expect a single layer from SDTS or BIL/HDR.
-			pLayer = ImportLayerFromFile(ltype, fname, bRefresh, true);
+			pLayer = ImportDataFromFile(ltype, fname, bRefresh, true);
 			if (pLayer)
 			{
 				bool success = AddLayerWithCheck(pLayer, true);
@@ -330,7 +323,7 @@ int Builder::ImportDataFromArchive(LayerType ltype, const wxString &fname_in,
 
 				// Try importing w/o warning on failure, since it could just
 				// be some harmless files in there.
-				pLayer = ImportLayerFromFile(ltype, fname, bRefresh, false);
+				pLayer = ImportDataFromFile(ltype, fname, bRefresh, false);
 				if (pLayer)
 				{
 					bool success = AddLayerWithCheck(pLayer, true);
@@ -349,7 +342,7 @@ int Builder::ImportDataFromArchive(LayerType ltype, const wxString &fname_in,
 			DisplayAndLog("Don't know what to do with contents of archive.");
 
 		// set the original imported filename
-		for (uint i = 0; i < LoadedLayers.GetSize(); i++)
+		for (unsigned int i = 0; i < LoadedLayers.GetSize(); i++)
 			LoadedLayers[i]->SetImportedFrom(fname_in);
 	}
 
@@ -361,56 +354,18 @@ int Builder::ImportDataFromArchive(LayerType ltype, const wxString &fname_in,
 }
 
 /**
- * ImportLayersFromFile: the main import method.
- *
- * \param strFileName	The filename.
- * \param layers		A container by reference, to hold any resulting layers.
- * \param bRefresh		True if the GUI should be refreshed after import.
- * \param bWarn			True if the GUI should be warned on failure.
- *
- * \return	True if any layers were successfully imported.
- */
-bool Builder::ImportLayersFromFile(LayerType ltype, const wxString &strFileName,
-	LayerArray &layers, bool bRefresh, bool bWarn)
-{
-	// check the file extension
-	wxString strExt = strFileName.AfterLast('.');
-
-	// Is it a kind of file we might get multiple layers from?
-	if (!strExt.CmpNoCase(_T("osm")))
-	{
-		OpenProgressDialog(_("Importing from OpenStreetMap"), false, m_pParentWindow);
-		UpdateProgressDialog(0, strFileName);
-		ImportDataFromOSM(strFileName, layers, progress_callback);
-		CloseProgressDialog();
-	}
-	else if (!strExt.CmpNoCase(_T("ntf")))
-	{
-		ImportDataFromNTF(strFileName, layers);
-	}
-	else
-	{
-		// We only expect at most one layer.
-		vtLayer *layer = ImportLayerFromFile(ltype, strFileName,
-			bRefresh, bWarn);
-		if (layer)
-			layers.push_back(layer);
-	}
-	return (layers.size() > 0);
-}
-
-/**
- * ImportLayerFromFile: a main import method.
+ * ImportDataFromFile: the main import method.
  *
  * \param ltype			The Layer type suspected.
  * \param strFileName	The filename.
  * \param bRefresh		True if the GUI should be refreshed after import.
  * \param bWarn			True if the GUI should be warned on failure.
  *
- * \return	The layer imported, or NULL if we got nothing.
+ * \return	True if a layer was created from the given file, or false if
+ *			nothing importable was found in the file.
  */
-vtLayer *Builder::ImportLayerFromFile(LayerType ltype, const wxString &strFileName,
-									 bool bRefresh, bool bWarn)
+vtLayer *Builder::ImportDataFromFile(LayerType ltype, const wxString &strFileName,
+								   bool bRefresh, bool bWarn)
 {
 	VTLOG1("ImportDataFromFile '");
 	VTLOG1(strFileName.ToUTF8());
@@ -428,9 +383,9 @@ vtLayer *Builder::ImportLayerFromFile(LayerType ltype, const wxString &strFileNa
 	{
 		// Cannot Open File
 		VTLOG("Couldn't open file %s\n", (const char *) fname);
-		return NULL;
+		return false;
 	}
-	bool bIsDB = (strExt.Len() == 2 && !strExt.Left(2).CmpNoCase(_T("db")));
+	bool bIsDB = !strExt.Left(2).CmpNoCase(_T("db"));
 	if (bIsDB)
 	{
 		// Get type from DB file
@@ -487,6 +442,14 @@ vtLayer *Builder::ImportLayerFromFile(LayerType ltype, const wxString &strFileNa
 				 !strExt.CmpNoCase(_T("tab")))
 		{
 			pLayer = ImportVectorsWithOGR(strFileName, ltype);
+		}
+		else if (!strExt.CmpNoCase(_T("osm")))
+		{
+			vtRoadLayer *pRL = new vtRoadLayer;
+			if (pRL->ImportFromOSM(fname, progress_callback))
+				pLayer = pRL;
+			else
+				delete pRL;
 		}
 		break;
 	case LT_STRUCTURE:
@@ -636,8 +599,6 @@ vtLayer *Builder::ImportLayerFromFile(LayerType ltype, const wxString &strFileNa
 			pLayer = ImportRawFromOGR(strFileName);
 		}
 		break;
-	default:	// Keep picky compilers quiet.
-		break;
 	}
 	if (bIsDB)
 	{
@@ -786,8 +747,6 @@ wxString GetImportFilterString(LayerType ltype)
 		break;
 	case LT_UTILITY:
 		AddType(filter, FSTRING_SHP);
-		break;
-	default:	// Keep picky compilers quiet.
 		break;
 	}
 	return filter;
@@ -947,6 +906,12 @@ vtLayerPtr Builder::ImportFromSHP(const wxString &strFileName, LayerType ltype)
 		success = pSL->AddElementsFromSHP(strFileName, proj, m_area);
 		if (!success)
 			return NULL;
+	}
+
+	if (ltype == LT_UTILITY)
+	{
+		vtUtilityLayer *pUL = (vtUtilityLayer *)pLayer;
+		pUL->ImportFromSHP(strFileName.mb_str(wxConvUTF8), proj);
 	}
 
 	if (ltype == LT_RAW)
@@ -1184,19 +1149,13 @@ void Builder::ImportFromMapSource(const char *fname)
 			str.Printf(_T("zone %d, "), proj.GetUTMZone());
 			choices[i] += str;
 		}
-		str.Printf(_T("points %d"), layers[i]->GetFeatureSet()->NumEntities());
+		str.Printf(_T("points %d"), layers[i]->GetFeatureSet()->GetNumEntities());
 		choices[i] += str;
 		choices[i] += _T(")");
 	}
 
-#if wxVERSION_NUMBER > 2900		// 2.9.0
-	int nsel = wxGetSelectedChoices(selections, _("Which layers to import?"),
-		_("Import Tracks"), n, choices);
-#else
-	// Older API
 	int nsel = (int)wxGetMultipleChoices(selections, _("Which layers to import?"),
 		_("Import Tracks"), n, choices);
-#endif
 
 	// for each of the layers the user wants, add them to our project
 	for (i = 0; i < nsel; i++)
@@ -1629,7 +1588,7 @@ vtLayerPtr Builder::ImportVectorsWithOGR(const wxString &strFileName, LayerType 
 		ImportDialog.SetDatasource(datasource);
 
 		if (ImportDialog.ShowModal() != wxID_OK)
-			return NULL;
+			return false;
 
 		if (ImportDialog.m_iType == 0)
 			ImportDialog.m_opt.type = ST_BUILDING;
@@ -1782,7 +1741,7 @@ int Builder::ImportDataFromTIGER(const wxString &strDirName)
 			if (!strncmp(cfcc, "A", 1))
 			{
 				// Road: implicit nodes at start and end
-				LinkEdit *r = pRL->AddNewLink();
+				LinkEdit *r = (LinkEdit *) pRL->NewLink();
 				bool bReject = pRL->ApplyCFCC((LinkEdit *)r, cfcc);
 				if (bReject)
 				{
@@ -1794,16 +1753,23 @@ int Builder::ImportDataFromTIGER(const wxString &strDirName)
 					r->Append(DPoint2(pLineString->getX(j),
 						pLineString->getY(j)));
 				}
-				TNode *n1 = pRL->AddNewNode();
-				n1->SetPos(pLineString->getX(0), pLineString->getY(0));
+				TNode *n1 = pRL->NewNode();
+				n1->m_p.Set(pLineString->getX(0), pLineString->getY(0));
 
-				TNode *n2 = pRL->AddNewNode();
-				n2->SetPos(pLineString->getX(num_points-1), pLineString->getY(num_points-1));
+				TNode *n2 = pRL->NewNode();
+				n2->m_p.Set(pLineString->getX(num_points-1), pLineString->getY(num_points-1));
 
-				r->ConnectNodes(n1, n2);
+				pRL->AddNode(n1);
+				pRL->AddNode(n2);
+				r->SetNode(0, n1);
+				r->SetNode(1, n2);
+				n1->AddLink(r, true);
+				n2->AddLink(r, false);
 
 				//set bounding box for the road
 				r->ComputeExtent();
+
+				pRL->AddLink(r);
 			}
 
 			if (!strncmp(cfcc, "H", 1))
@@ -1881,7 +1847,8 @@ int Builder::ImportDataFromTIGER(const wxString &strDirName)
 	return layer_count;
 }
 
-void Builder::ImportDataFromNTF(const wxString &strFileName, LayerArray &layers)
+
+void Builder::ImportDataFromNTF(const wxString &strFileName)
 {
 	g_GDALWrapper.RequestOGRFormats();
 
@@ -1988,10 +1955,10 @@ void Builder::ImportDataFromNTF(const wxString &strFileName, LayerArray &layers)
 					{
 						vtBuilding *pDefBld = GetClosestDefault(bld);
 						if (pDefBld)
-							bld->CopyStyleFrom(pDefBld, true);
+							bld->CopyFromDefault(pDefBld, true);
 						else
 						{
-							bld->SetNumStories(1);
+							bld->SetStories(1);
 							bld->SetRoofType(ROOF_FLAT);
 						}
 					}
@@ -2013,8 +1980,14 @@ void Builder::ImportDataFromNTF(const wxString &strFileName, LayerArray &layers)
 #endif
 	}
 
-	layers.push_back(pRL);
-	layers.push_back(pSL);
+	bool success;
+	success = AddLayerWithCheck(pRL, true);
+	if (!success)
+		delete pRL;
+
+	success = AddLayerWithCheck(pSL, true);
+	if (!success)
+		delete pSL;
 
 	delete pDatasource;
 
@@ -2165,9 +2138,9 @@ int Builder::ImportDataFromSCC(const char *filename)
 	pVL->SetLayerFilename(wxString(shortname + "_vegetation", wxConvUTF8));
 	pVL->SetProjection(proj);
 	vtPlantInstanceArray *pia = pVL->GetPIA();
-	pia->SetSpeciesList(&m_SpeciesList);
-	int id = m_SpeciesList.GetSpeciesIdByCommonName("Ponderosa Pine");
-	vtPlantSpecies *ps = m_SpeciesList.GetSpecies(id);
+	pia->SetPlantList(&m_PlantList);
+	int id = m_PlantList.GetSpeciesIdByCommonName("Ponderosa Pine");
+	vtPlantSpecies *ps = m_PlantList.GetSpecies(id);
 
 	// Progress Dialog
 	OpenProgressDialog(_("Importing from SCC..."));
@@ -2401,7 +2374,7 @@ bool Builder::ImportDataFromDXF(const char *filename)
 	fs_polylines->AddField("Color", FT_String, 16);
 
 	vtFeatureSet *set;
-	for (uint i = 0; i < entities.size(); i++)
+	for (unsigned int i = 0; i < entities.size(); i++)
 	{
 		const DxfEntity &ent = entities[i];
 		int record = -1;
@@ -2437,7 +2410,7 @@ bool Builder::ImportDataFromDXF(const char *filename)
 		}
 	}
 
-	if (fs_points->NumEntities() > 0)
+	if (fs_points->GetNumEntities() > 0)
 	{
 		vtRawLayer *pRL = new vtRawLayer;
 		pRL->SetFeatureSet(fs_points);
@@ -2451,7 +2424,7 @@ bool Builder::ImportDataFromDXF(const char *filename)
 	else
 		delete fs_points;
 
-	if (fs_polylines->NumEntities() > 0)
+	if (fs_polylines->GetNumEntities() > 0)
 	{
 		vtRawLayer *pRL = new vtRawLayer;
 		pRL->SetFeatureSet(fs_polylines);

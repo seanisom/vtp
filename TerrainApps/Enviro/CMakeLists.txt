@@ -4,13 +4,13 @@ set(ENVIRO_SOURCE_FILES
 	EarthView.cpp Engines.cpp Enviro.cpp Hawaii.cpp Nevada.cpp Options.cpp)
 
 set(ENVIRO_SOURCE_FILES_WX
-	wx/EnviroCanvas.cpp wx/EnviroApp.cpp wx/EnviroFrame.cpp wx/EnviroGUI.cpp wx/EnviroMenus.cpp wx/StatusBar.cpp)
+	wx/canvas.cpp wx/EnviroApp.cpp wx/EnviroFrame.cpp wx/EnviroGUI.cpp wx/StatusBar.cpp)
 
 set(ENVIRO_HEADER_FILES
 	Engines.h Enviro.h EnviroEnum.h Hawaii.h Nevada.h Options.h PlantingOptions.h)
 
 set(ENVIRO_HEADER_FILES_WX
-	wx/EnviroCanvas.h wx/EnviroApp.h wx/EnviroFrame.h wx/EnviroGUI.h wx/menu_id.h wx/StatusBar.h)
+	wx/canvas.h wx/EnviroApp.h wx/EnviroFrame.h wx/EnviroGUI.h wx/menu_id.h wx/StatusBar.h)
 
 set(ENVIRO_RC_FILES
 	wx/enviro-wx.rc)
@@ -26,12 +26,11 @@ if(MSVC)
 	set_source_files_properties(${ENVIRO_SOURCE_FILES_WX} PROPERTIES COMPILE_FLAGS /Yuwx/wxprec.h)
 	set_source_files_properties(wx/wx_headers.cpp PROPERTIES COMPILE_FLAGS /Ycwx/wxprec.h)
 else(MSVC)
-	add_executable(Enviro WIN32 MACOSX_BUNDLE ${ENVIRO_SOURCE_FILES} ${ENVIRO_SOURCE_FILES_WX} ${ENVIRO_HEADER_FILES}
+	add_executable(Enviro WIN32 ${ENVIRO_SOURCE_FILES} ${ENVIRO_SOURCE_FILES_WX} ${ENVIRO_HEADER_FILES}
 		${ENVIRO_HEADER_FILES_WX} ${ENVIRO_RC_FILES})
 endif(MSVC)
 
-install(TARGETS Enviro RUNTIME DESTINATION bin
-                       BUNDLE DESTINATION bin)
+install(TARGETS Enviro RUNTIME DESTINATION bin)
 
 # Internal dependencies for this target
 target_link_libraries(Enviro envdlg wxosg vtlib vtui minidata vtdata xmlhelper)

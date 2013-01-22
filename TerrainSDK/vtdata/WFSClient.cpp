@@ -34,12 +34,12 @@ vtFeatureSet *vtFeatureLoader::ReadFeaturesFromWFS(const char *szServerURL, cons
 	ReqContext cl;
 	cl.GetURL(url, str);
 	if (str == "")
-		return NULL;
+		return false;
 
 	const char *temp_fname = "C:/temp/gml_temp.gml";
 	FILE *fp = vtFileOpen(temp_fname, "wb");
 	if (!fp)
-		return NULL;
+		return false;
 
 	fwrite((const char *)str, 1, str.GetLength(), fp);
 	fclose(fp);

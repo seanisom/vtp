@@ -6,8 +6,8 @@
 //
 
 #include "vtlib/vtlib.h"
-#include "vtlib/core/Content3d.h"	// for vtGetContent
-#include "vtlib/core/GeomUtil.h"		// for CreateBoundSphereGeode
+#include "vtlib/core/TerrainScene.h"	// for vtGetContent
+#include "vtlib/core/GeomUtil.h"		// for CreateBoundSphereGeom
 #include "vtdata/vtLog.h"
 #include "CarEngine.h"
 #include "Vehicles.h"
@@ -108,7 +108,7 @@ Vehicle *VehicleManager::CreateVehicleFromNode(osg::Node *node, const RGBf &cCol
 	pNewVehicle->m_pFrontLeft = new vtTransform;
 	pNewVehicle->m_pFrontLeft->setName("front_left_xform");
 	InsertNodeBelow(pFrontLeft->asGroup(), pNewVehicle->m_pFrontLeft);
-
+	
 	pNewVehicle->m_pFrontRight = new vtTransform;
 	pNewVehicle->m_pFrontRight->setName("front_right_xform");
 	InsertNodeBelow(pFrontRight->asGroup(), pNewVehicle->m_pFrontRight);
@@ -175,7 +175,7 @@ void Vehicle::ShowBounds(bool bShow)
 				GetBoundSphere(sphere);
 				sphere.center.Set(0,0,0);
 
-				m_pHighlight = CreateBoundSphereGeode(sphere);
+				m_pHighlight = CreateBoundSphereGeom(sphere);
 				addChild(m_pHighlight);
 			}
 		}
@@ -201,11 +201,11 @@ void VehicleSet::AddEngine(CarEngine *e)
 	m_Engines.push_back(e);
 }
 
-int VehicleSet::FindClosestVehicle(const FPoint3 &point, double &closest)
+int VehicleSet::FindClosestVehicle(const FPoint3 &point, float &closest)
 {
 	closest = 1E9;
 	int vehicle = -1;
-	for (uint i = 0; i < m_Engines.size(); i++)
+	for (unsigned int i = 0; i < m_Engines.size(); i++)
 	{
 		FPoint3 vepos = m_Engines[i]->GetCurPos();
 		float dist = (point - vepos).Length();
@@ -233,8 +233,8 @@ void VehicleSet::VisualSelect(int vehicle)
 
 void VehicleSet::VisualDeselectAll()
 {
-	uint size = m_Engines.size();
-	for (uint i = 0; i < size; i++)
+	unsigned int size = m_Engines.size();
+	for (unsigned int i = 0; i < size; i++)
 	{
 		// Resume vehicle simulation while it is deselected
 		CarEngine *eng = m_Engines[i];

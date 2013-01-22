@@ -56,10 +56,39 @@ FPoint3 SidewaysVector(const FPoint3 &p0, const FPoint3 &p1)
 	return cross;
 }
 
+float SidewaysVector(const FPoint3 &p0, const FPoint3 &p1, const FPoint3 &p2,
+					FPoint3 &sideways)
+{
+	// Look at vectors to previous and next points
+	FPoint3 v0 = (p1-p0).Normalize();
+	FPoint3 v1 = (p2-p1).Normalize();
+
+	// we flip axes to turn the path vector 90 degrees (normal to path)
+	FPoint3 bisector(-(v0.z + v1.z), 0, v0.x + v1.x);
+	bisector.Normalize();
+
+	float wider;
+	float dot = v0.Dot(-v1);
+	if (dot <= -0.97 || dot >= 0.97)
+	{
+		// close enough to colinear, no need to widen
+		wider = 1.0f;
+	}
+	else
+	{
+		// factor to widen this corner is proportional to the angle
+		float angle = acos(dot);
+		wider = (float) (1.0 / sin(angle / 2));
+		bisector *= wider;
+	}
+	sideways = bisector;
+	return wider;
+}
+
 void vtFence3d::AddWireMeshes(const FLine3 &p3)
 {
 	// special connector type, consisting of 3 wires
-	uint i, j, npoints = p3.GetSize();
+	unsigned int i, j, npoints = p3.GetSize();
 	if (npoints > 1)
 	{
 		float wire_height[3] = { 0.42f, 0.66f, 0.91f };
@@ -77,7 +106,7 @@ void vtFence3d::AddWireMeshes(const FLine3 &p3)
 			}
 			pWireMesh->AddStrip2(npoints, start);
 		}
-		m_pFenceGeom->AddMesh(pWireMesh, GetMatIndex("Wire"));
+		m_pFenceGeom->AddMesh(pWireMesh, FindMatIndex("Wire"));
 	}
 }
 
@@ -88,7 +117,7 @@ void vtFence3d::AddFlatConnectionMesh(const FLine3 &p3)
 {
 	vtMesh *pMesh = new vtMesh(osg::PrimitiveSet::TRIANGLE_STRIP, VT_TexCoords, 100);
 
-	vtMaterialDescriptor *desc = GetMatDescriptor(m_Params.m_ConnectMaterial);
+	vtMaterialDescriptor *desc = s_MaterialDescriptors.FindMaterialDescriptor(m_Params.m_ConnectMaterial);
 	if (!desc)
 	{
 		VTLOG1("Warning: could not find material:");
@@ -107,7 +136,7 @@ void vtFence3d::AddFlatConnectionMesh(const FLine3 &p3)
 	else
 		v_top = vertical_meters / uvscale.y;
 
-	uint i, npoints = p3.GetSize();
+	unsigned int i, npoints = p3.GetSize();
 	int vidx = 0;
 	for (i = 0; i < npoints; i++)
 	{
@@ -123,7 +152,7 @@ void vtFence3d::AddFlatConnectionMesh(const FLine3 &p3)
 	}
 	pMesh->AddStrip2(npoints * 2, 0);
 
-	m_pFenceGeom->AddMesh(pMesh, GetMatIndex(desc));
+	m_pFenceGeom->AddMesh(pMesh, desc->GetMaterialIndex());
 }
 
 void vtFence3d::AddThickConnectionMesh(const FLine3 &p3)
@@ -131,7 +160,7 @@ void vtFence3d::AddThickConnectionMesh(const FLine3 &p3)
 	vtMesh *pMesh = new vtMesh(osg::PrimitiveSet::TRIANGLE_STRIP, VT_TexCoords | VT_Normals, 100);
 
 	// a solid block, with top/left/right sides, made of 3 strips
-	vtMaterialDescriptor *desc = GetMatDescriptor(m_Params.m_ConnectMaterial);
+	vtMaterialDescriptor *desc = s_MaterialDescriptors.FindMaterialDescriptor(m_Params.m_ConnectMaterial);
 	if (!desc)
 	{
 		VTLOG1("Warning: could not find material: ");
@@ -145,7 +174,7 @@ void vtFence3d::AddThickConnectionMesh(const FLine3 &p3)
 	float fWidthTop = m_Params.m_fConnectWidth / 2;
 	float slope = m_Params.m_iConnectSlope / 180.0f * PIf;
 
-	uint i, j, npoints = p3.GetSize();
+	unsigned int i, j, npoints = p3.GetSize();
 	float u = 0.0f;
 	float v1, v2;
 	for (i = 0; i < 3; i++)
@@ -154,17 +183,14 @@ void vtFence3d::AddThickConnectionMesh(const FLine3 &p3)
 		float z1, z2;
 		FPoint3 pos, sideways, normal;
 
-		int start = pMesh->NumVertices();
+		int start = pMesh->GetNumVertices();
 		for (j = 0; j < npoints; j++)
 		{
 			// determine side-pointing vector
 			if (j == 0)
 				sideways = SidewaysVector(p3[j], p3[j+1]);
 			else if (j > 0 && j < npoints-1)
-			{
-				AngleSideVector(p3[j-1], p3[j], p3[j+1], sideways);
-				sideways = -sideways;	// We want a vector pointing left, not right
-			}
+				SidewaysVector(p3[j-1], p3[j], p3[j+1], sideways);
 			else if (j == npoints-1)
 				sideways = SidewaysVector(p3[j-1], p3[j]);
 
@@ -288,12 +314,12 @@ void vtFence3d::AddThickConnectionMesh(const FLine3 &p3)
 	pMesh->SetVtxTexCoord(start+3, FPoint2(u, v2));
 	pMesh->AddStrip2(4, start);
 
-	m_pFenceGeom->AddMesh(pMesh, GetMatIndex(desc));
+	m_pFenceGeom->AddMesh(pMesh, desc->GetMaterialIndex());
 }
 
 void vtFence3d::AddProfileConnectionMesh(const FLine3 &p3)
 {
-	uint i, j, npoints = p3.GetSize(), prof_points = m_Profile.GetSize();
+	unsigned int i, j, npoints = p3.GetSize(), prof_points = m_Profile.GetSize();
 
 	// Must have at least 2 points in the profile
 	if (prof_points < 2)
@@ -309,7 +335,7 @@ void vtFence3d::AddProfileConnectionMesh(const FLine3 &p3)
 	vtMesh *pMesh = new vtMesh(osg::PrimitiveSet::TRIANGLE_STRIP,
 		VT_TexCoords | VT_Normals, iEstimateVerts);
 
-	vtMaterialDescriptor *desc = GetMatDescriptor(m_Params.m_ConnectMaterial);
+	vtMaterialDescriptor *desc = s_MaterialDescriptors.FindMaterialDescriptor(m_Params.m_ConnectMaterial);
 	if (!desc)
 	{
 		VTLOG1("Warning: could not find material: ");
@@ -328,10 +354,7 @@ void vtFence3d::AddProfileConnectionMesh(const FLine3 &p3)
 		if (j == 0)
 			sideways[j] = SidewaysVector(p3[j], p3[j+1]);
 		else if (j > 0 && j < npoints-1)
-		{
-			AngleSideVector(p3[j-1], p3[j], p3[j+1], sideways[j]);
-			sideways[j] = -sideways[j];	// We want a vector pointing left, not right
-		}
+			SidewaysVector(p3[j-1], p3[j], p3[j+1], sideways[j]);
 		else if (j == npoints-1)
 			sideways[j] = SidewaysVector(p3[j-1], p3[j]);
 
@@ -376,7 +399,7 @@ void vtFence3d::AddProfileConnectionMesh(const FLine3 &p3)
 		z2 = m_Profile[i+1].x;
 
 		u = 0.0f;
-		int start = pMesh->NumVertices();
+		int start = pMesh->GetNumVertices();
 		for (j = 0; j < npoints; j++)
 		{
 			// determine vertex normal (for shading)
@@ -421,7 +444,7 @@ void vtFence3d::AddProfileConnectionMesh(const FLine3 &p3)
 	//  may not be convex.  Hence it must be triangulated.
 	FLine2 result;
 	Triangulate_f::Process(m_Profile, result);
-	uint tcount = result.GetSize()/3;
+	unsigned int tcount = result.GetSize()/3;
 
 	int ind[3];
 	int line_point;
@@ -475,12 +498,12 @@ void vtFence3d::AddProfileConnectionMesh(const FLine3 &p3)
 		pMesh->AddTri(ind[0], ind[2], ind[1]);
 	}
 
-	m_pFenceGeom->AddMesh(pMesh, GetMatIndex(desc));
+	m_pFenceGeom->AddMesh(pMesh, desc->GetMaterialIndex());
 }
 
 void vtFence3d::AddPostExtensions(const FLine3 &p3)
 {
-	uint i, j, npoints = p3.GetSize();
+	unsigned int i, j, npoints = p3.GetSize();
 
 	bool bLeft = false, bRight = false, bWires = (npoints > 1);
 	if (m_Params.m_PostExtension == "left")
@@ -514,10 +537,7 @@ void vtFence3d::AddPostExtensions(const FLine3 &p3)
 		if (i == 0)
 			sideways = SidewaysVector(p3[i], p3[i+1]);
 		else if (i > 0 && i < npoints-1)
-		{
-			AngleSideVector(p3[i-1], p3[i], p3[i+1], sideways);
-			sideways = -sideways;	// We want a vector pointing left, not right
-		}
+			SidewaysVector(p3[i-1], p3[i], p3[i+1], sideways);
 		else if (i == npoints-1)
 			sideways = SidewaysVector(p3[i-1], p3[i]);
 
@@ -541,31 +561,31 @@ void vtFence3d::AddPostExtensions(const FLine3 &p3)
 				pWiresRight->SetVtxPos(j*npoints + i, base + upward * wire_height[j]);
 		}
 	}
-	m_pFenceGeom->AddMesh(pMesh, GetMatIndex("Steel"));
+	m_pFenceGeom->AddMesh(pMesh, FindMatIndex("Steel"));
 
 	if (bLeft && bWires)
 	{
 		pWiresLeft->AddStrip2(npoints, 0);
 		pWiresLeft->AddStrip2(npoints, npoints);
 		pWiresLeft->AddStrip2(npoints, npoints*2);
-		m_pFenceGeom->AddMesh(pWiresLeft, GetMatIndex("Wire"));
+		m_pFenceGeom->AddMesh(pWiresLeft, FindMatIndex("Wire"));
 	}
 	if (bRight && bWires)
 	{
 		pWiresRight->AddStrip2(npoints, 0);
 		pWiresRight->AddStrip2(npoints, npoints);
 		pWiresRight->AddStrip2(npoints, npoints*2);
-		m_pFenceGeom->AddMesh(pWiresRight, GetMatIndex("Wire"));
+		m_pFenceGeom->AddMesh(pWiresRight, FindMatIndex("Wire"));
 	}
 }
 
 void vtFence3d::AddFenceMeshes(vtHeightField3d *pHeightField)
 {
 	// Trigger the creation of any materials we may need
-	GetMatIndex("");
+	FindMatIndex("");
 
-	uint i, j;
-	uint numfencepts = m_pFencePts.GetSize();
+	unsigned int i, j;
+	unsigned int numfencepts = m_pFencePts.GetSize();
 
 	FLine3 p3;
 
@@ -606,7 +626,7 @@ void vtFence3d::AddFenceMeshes(vtHeightField3d *pHeightField)
 			//  coordinates, which might be in e.g. feet or degrees)
 			diff = wpos2 - wpos1;
 			float distance = sqrt(diff.x*diff.x+diff.z*diff.z);
-			uint segments = (uint) (distance / m_Params.m_fPostSpacing);
+			unsigned int segments = (unsigned int) (distance / m_Params.m_fPostSpacing);
 			if (segments < 1) segments = 1;
 			FPoint3 diff_per_segment = diff / (float) segments;
 
@@ -627,11 +647,11 @@ void vtFence3d::AddFenceMeshes(vtHeightField3d *pHeightField)
 		}
 		// generate the posts
 		// Look first for post materials (type 3)
-		int iMatIdx = GetMatIndex(m_Params.m_PostType, RGBf(), 3);
+		int iMatIdx = FindMatIndex(m_Params.m_PostType, RGBf(), 3);
 
 		// If that didn't work, look for any material by that name
 		if (iMatIdx == -1)
-			int iMatIdx = GetMatIndex(m_Params.m_PostType);
+			int iMatIdx = FindMatIndex(m_Params.m_PostType);
 		for (i = 0; i < p3.GetSize(); i++)
 			AddFencepost(p3[i], iMatIdx);
 	}
@@ -680,7 +700,11 @@ void vtFence3d::DestroyGeometry()
 	if (m_pFenceGeom.valid())
 	{
 		// Destroy the meshes so they can be re-made
-		m_pFenceGeom->RemoveAllMeshes();
+		while (m_pFenceGeom->GetNumMeshes())
+		{
+			vtMesh *pMesh = m_pFenceGeom->GetMesh(0);
+			m_pFenceGeom->RemoveMesh(pMesh);
+		}
 		m_pHighlightMesh = NULL;
 	}
 	m_bBuilt = false;
@@ -738,7 +762,7 @@ void vtFence3d::ShowBounds(bool bShow)
 	}
 	if (bShow)
 	{
-		uint i, npoints = m_pFencePts.GetSize();
+		unsigned int i, npoints = m_pFencePts.GetSize();
 
 		// Create border around the feature, also some lines as handles for
 		//  the control points.
@@ -766,10 +790,7 @@ void vtFence3d::ShowBounds(bool bShow)
 			if (i == 0)
 				sideways = SidewaysVector(m_Posts3d[i], m_Posts3d[i+1]);
 			else if (i > 0 && i < npoints-1)
-			{
-				AngleSideVector(m_Posts3d[i-1], m_Posts3d[i], m_Posts3d[i+1], sideways);
-				sideways = -sideways;	// We want a vector pointing left, not right
-			}
+				SidewaysVector(m_Posts3d[i-1], m_Posts3d[i], m_Posts3d[i+1], sideways);
 			else if (i == npoints-1)
 				sideways = SidewaysVector(m_Posts3d[i-1], m_Posts3d[i]);
 
@@ -797,7 +818,7 @@ void vtFence3d::ShowBounds(bool bShow)
 		}
 
 		// Use yellow highlight material
-		int highlight_matidx = GetMatIndex("Highlight", RGBf(1,1,0));
+		int highlight_matidx = FindMatIndex("Highlight", RGBf(1,1,0));
 
 		m_pFenceGeom->AddMesh(m_pHighlightMesh, highlight_matidx);
 	}
@@ -828,5 +849,5 @@ void vtFence3d::LoadProfile()
 	if (path != "")
 		LoadFLine2FromSHP(path, m_Profile);
 	else
-		m_Profile.Clear();
+		m_Profile.Empty();
 }

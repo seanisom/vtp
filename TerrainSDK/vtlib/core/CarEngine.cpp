@@ -41,11 +41,12 @@ float angleNormal(float val)
 
  \param vehicle	The vehicle this engine will control.
  \param hf		The surface to drive on.
+ \param wRadius Wheel radius.
  */
 CarEngine::CarEngine(Vehicle *vehicle, vtHeightField3d *hf)
 {
 	m_pVehicle = vehicle;
-	AddTarget(vehicle);
+	SetTarget(vehicle);
 
 	m_pHeightField = hf;
 
@@ -95,9 +96,6 @@ void CarEngine::Eval()
 		vNext.z = m_vCurPos.z - fDeltaTime*m_fSpeed*sinf(m_fCurRotation);
 		MoveCarTo(vNext);
 		break;
-	case FOLLOW_ROAD:
-	case FOLLOW_PATH:
-		break;
 	}
 	// spin the wheels, adjusted for speed.
 	SpinWheels(fDeltaTime*m_fSpeed/m_pVehicle->GetWheelRadius());
@@ -115,19 +113,19 @@ void CarEngine::SetSpeed(float fMetersPerSec)
 	m_fSpeed = fMetersPerSec;
 }
 
-DPoint2 CarEngine::GetEarthPos(const vtLocalConversion &conv)
+DPoint2 CarEngine::GetEarthPos()
 {
 	// convert terrain to earth coords
 	DPoint3 d3;
-	conv.ConvertToEarth(m_vCurPos, d3);
+	g_Conv.ConvertToEarth(m_vCurPos, d3);
 	return DPoint2(d3.x, d3.y);
 }
 
-void CarEngine::SetEarthPos(const vtLocalConversion &conv, const DPoint2 &pos)
+void CarEngine::SetEarthPos(const DPoint2 &pos)
 {
 	// convert earth to terrain coords
 	DPoint3 d3(pos.x, pos.y, 0);
-	conv.ConvertFromEarth(d3, m_vCurPos);
+	g_Conv.ConvertFromEarth(d3, m_vCurPos);
 
 	ApplyCurrentLocation(true);
 }
@@ -254,13 +252,13 @@ void CarEngine::MoveCarTo(const FPoint3 &next_pos)
 		FPoint3 trans;
 		trans = m_pFrontLeft->GetTrans();
 		m_pFrontLeft->Identity();
-		m_pFrontLeft->Rotate(YAXIS, m_fSteeringAngle);
-		m_pFrontLeft->Translate(trans);
+		m_pFrontLeft->Rotate2(YAXIS, m_fSteeringAngle);
+		m_pFrontLeft->Translate1(trans);
 
 		trans = m_pFrontRight->GetTrans();
 		m_pFrontRight->Identity();
-		m_pFrontRight->Rotate(YAXIS, m_fSteeringAngle);
-		m_pFrontRight->Translate(trans);
+		m_pFrontRight->Rotate2(YAXIS, m_fSteeringAngle);
+		m_pFrontRight->Translate1(trans);
 #endif
 	}
 	// Angle is measure from +X, but our car's "forward" is -Z.  That's a difference

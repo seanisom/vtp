@@ -185,6 +185,11 @@ void MyTreeCtrl::RefreshTreeItems(Builder *pBuilder)
 	wxTreeItemId waterId =	AddRootItem(MyTreeCtrl::TreeCtrlIcon_Water, _("Water"));
 	SetItemData(waterId, new MyTreeItemData(LT_WATER));
 
+#if SUPPORT_TRANSIT
+	wxTreeItemId transId =	AddRootItem(MyTreeCtrl::TreeCtrlIcon_Transit, _("Transit"));
+	SetItemData(transId, new MyTreeItemData(LT_TRANSIT));
+#endif
+
 	wxTreeItemId utilityId = AddRootItem(MyTreeCtrl::TreeCtrlIcon_Utility, _("Utilities"));
 	SetItemData(utilityId, new MyTreeItemData(LT_UTILITY));
 
@@ -206,34 +211,35 @@ void MyTreeCtrl::RefreshTreeItems(Builder *pBuilder)
 		wxTreeItemId hItem;
 		switch (lp->GetType())
 		{
-		case LT_ELEVATION:
-			hItem = AppendItem(elevId, str, image, imageSel);
-			break;
-		case LT_IMAGE:
-			hItem = AppendItem(imageId, str, image, imageSel);
-			break;
-		case LT_ROAD:
-			hItem = AppendItem(roadId, str, image, imageSel);
-			break;
-		case LT_STRUCTURE:
-			hItem = AppendItem(buildId, str, image, imageSel);
-			break;
-		case LT_VEG:
-			hItem = AppendItem(vegId, str, image, imageSel);
-			break;
-		case LT_WATER:
-			hItem = AppendItem(waterId, str, image, imageSel);
-			break;
-		case LT_UTILITY:
-			hItem = AppendItem(utilityId, str, image, imageSel);
-			break;
-		case LT_RAW:
-			hItem = AppendItem(rawId, str, image, imageSel);
-			break;
-		case LT_UNKNOWN:
-		case LAYER_TYPES:
-			// Keep picky compilers quiet.
-			break;
+			case LT_ELEVATION:
+				hItem = AppendItem(elevId, str, image, imageSel);
+				break;
+			case LT_IMAGE:
+				hItem = AppendItem(imageId, str, image, imageSel);
+				break;
+			case LT_ROAD:
+				hItem = AppendItem(roadId, str, image, imageSel);
+				break;
+			case LT_STRUCTURE:
+				hItem = AppendItem(buildId, str, image, imageSel);
+				break;
+			case LT_VEG:
+				hItem = AppendItem(vegId, str, image, imageSel);
+				break;
+			case LT_WATER:
+				hItem = AppendItem(waterId, str, image, imageSel);
+				break;
+#if SUPPORT_TRANSIT
+			case LT_TRANSIT:
+				hItem = AppendItem(transId, str, image, imageSel);
+				break;
+#endif
+			case LT_UTILITY:
+				hItem = AppendItem(utilityId, str, image, imageSel);
+				break;
+			case LT_RAW:
+				hItem = AppendItem(rawId, str, image, imageSel);
+				break;
 		}
 		if (hItem.IsOk())
 		{
@@ -258,6 +264,9 @@ void MyTreeCtrl::RefreshTreeItems(Builder *pBuilder)
 	Expand(buildId);
 	Expand(vegId);
 	Expand(waterId);
+#if SUPPORT_TRANSIT
+	Expand(transId);
+#endif
 	Expand(utilityId);
 	Expand(rawId);
 

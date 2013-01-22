@@ -8,8 +8,6 @@
 #ifndef __StyleDlg_H__
 #define __StyleDlg_H__
 
-#include "wx/colourdata.h"
-
 #include "EnviroUI.h"
 #include "vtui/AutoDialog.h"
 #include "vtdata/Features.h"
@@ -39,8 +37,8 @@ public:
 		m_pFeatureSet = pSet;
 	}
 
-	void SetOptions(const vtTagArray &layer_tags);
-	void GetOptions(vtTagArray &layer_tags);
+	void SetOptions(const vtTagArray &Layer);
+	void GetOptions(vtTagArray &pLayer);
 	wxNotebook *GetNotebook() { return m_notebook; }
 
 private:
@@ -70,6 +68,9 @@ private:
 	wxTextCtrl* GetLabelHeight()  { return (wxTextCtrl*) FindWindow( ID_LABEL_HEIGHT ); }
 	wxTextCtrl* GetLabelSize()  { return (wxTextCtrl*) FindWindow( ID_LABEL_SIZE ); }
 	wxTextCtrl* GetFont()  { return (wxTextCtrl*) FindWindow( ID_FONT ); }
+	// Texture Overlay
+	wxCheckBox* GetEnableTextureOverlay()  { return (wxCheckBox*) FindWindow( ID_ENABLE_TEXTURE_OVERLAY ); }
+	wxChoice* GetTextureMode()  { return (wxChoice*) FindWindow( ID_TEXTURE_MODE ); }
 
 private:
 	// WDR: member variable declarations for StyleDlg
@@ -105,7 +106,10 @@ private:
 	float m_fLabelHeight;
 	float m_fLabelSize;
 	wxString m_strFont;
-	bool m_bLabelOutline;
+
+	// Texture Overlay
+	bool m_bTextureOverlay;
+	wxString m_strTextureMode;
 
 	vtFeatureSetPoint2D m_DummyFeatures;
 	wxColourData m_ColourData;

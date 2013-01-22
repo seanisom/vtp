@@ -17,6 +17,8 @@ vtDynTerrainGeom::vtDynTerrainGeom() : vtDynGeom(), vtHeightFieldGrid3d()
 
 	m_bCulleveryframe = true;
 	m_bCullonce = false;
+	m_bDetailTexture = false;
+	m_pDetailMat = NULL;
 
 	m_fXLookup = m_fZLookup = NULL;
 }
@@ -53,15 +55,15 @@ DTErr vtDynTerrainGeom::BasicInit(const vtElevationGrid *pGrid)
 		return DTErr_EMPTY_EXTENTS;
 
 	// Allocate and set the xz lookup tables
-	m_fXLookup = new float[m_iSize.x];
-	m_fZLookup = new float[m_iSize.y];
+	m_fXLookup = new float[m_iColumns];
+	m_fZLookup = new float[m_iRows];
+	int i;
+	for (i = 0; i < m_iColumns; i++)
+		m_fXLookup[i] = m_WorldExtents.left + i * m_fXStep;
+	for (i = 0; i < m_iRows; i++)
+		m_fZLookup[i] = m_WorldExtents.bottom - i * m_fZStep;
 
-	for (int i = 0; i < m_iSize.x; i++)
-		m_fXLookup[i] = m_WorldExtents.left + i * m_fStep.x;
-	for (int i = 0; i < m_iSize.y; i++)
-		m_fZLookup[i] = m_WorldExtents.bottom - i * m_fStep.y;
-
-	m_iTotalTriangles = m_iSize.x * m_iSize.y * 2;
+	m_iTotalTriangles = m_iColumns * m_iRows * 2;
 
 	return DTErr_OK;
 }
@@ -75,7 +77,7 @@ bool vtDynTerrainGeom::FindAltitudeOnEarth(const DPoint2 &p, float &fAltitude, b
 	int iY = (int)((p.y - m_EarthExtents.bottom) / spacing.y);
 
 	// safety check
-	if (iX < 0 || iX >= m_iSize.x-1 || iY < 0 || iY >= m_iSize.y-1)
+	if (iX < 0 || iX >= m_iColumns-1 || iY < 0 || iY >= m_iRows-1)
 	{
 		fAltitude = 0.0f;
 		return false;
@@ -110,14 +112,14 @@ bool vtDynTerrainGeom::FindAltitudeAtPoint(const FPoint3 &p, float &fAltitude,
 			return true;
 	}
 
-	int iX = (int)((p.x - m_WorldExtents.left) / m_fStep.x);
-	int iZ = (int)(-(p.z - m_WorldExtents.bottom) / m_fStep.y);
+	int iX = (int)((p.x - m_WorldExtents.left) / m_fXStep);
+	int iZ = (int)(-(p.z - m_WorldExtents.bottom) / m_fZStep);
 
 	// safety check
 	bool bogus = false;
-	if (iX < 0 || iX > m_iSize.x-1 || iZ < 0 || iZ > m_iSize.y-1)
+	if (iX < 0 || iX > m_iColumns-1 || iZ < 0 || iZ > m_iRows-1)
 		bogus = true;
-	else if (iX == m_iSize.x-1 || iZ == m_iSize.y-1)
+	else if (iX == m_iColumns-1 || iZ == m_iRows-1)
 	{
 		if (p.x == m_WorldExtents.right || p.z == m_WorldExtents.top)
 		{
@@ -145,8 +147,8 @@ bool vtDynTerrainGeom::FindAltitudeAtPoint(const FPoint3 &p, float &fAltitude,
 		GetWorldLocation(iX, iZ+1, p3, bTrue);
 
 		// find fractional amount (0..1 across quad)
-		float fX = (float)  (p.x - p0.x) / m_fStep.x;
-		float fZ = (float) -(p.z - p0.z) / m_fStep.y;
+		float fX = (float)  (p.x - p0.x) / m_fXStep;
+		float fZ = (float) -(p.z - p0.z) / m_fZStep;
 
 		// which way is this quad split?
 		if ((iX + iZ) & 1)
@@ -181,14 +183,14 @@ bool vtDynTerrainGeom::FindAltitudeAtPoint(const FPoint3 &p, float &fAltitude,
 	{
 		// It's faster to simpler to operate only the elevations, if we don't
 		//  need to compute a normal vector.
-		const float alt0 = GetElevation(iX, iZ, bTrue);
-		const float alt1 = GetElevation(iX+1, iZ, bTrue);
-		const float alt2 = GetElevation(iX+1, iZ+1, bTrue);
-		const float alt3 = GetElevation(iX, iZ+1, bTrue);
+		float alt0 = GetElevation(iX, iZ, bTrue);
+		float alt1 = GetElevation(iX+1, iZ, bTrue);
+		float alt2 = GetElevation(iX+1, iZ+1, bTrue);
+		float alt3 = GetElevation(iX, iZ+1, bTrue);
 
 		// find fractional amount (0..1 across quad)
-		const float fX = (p.x - (m_WorldExtents.left + iX * m_fStep.x)) / m_fStep.x;
-		const float fY = (p.z - (m_WorldExtents.bottom - iZ * m_fStep.y)) / -m_fStep.y;
+		float fX = (p.x - (m_WorldExtents.left + iX * m_fXStep)) / m_fXStep;
+		float fY = (p.z - (m_WorldExtents.bottom - iZ * m_fZStep)) / -m_fZStep;
 
 		// which way is this quad split?
 		if ((iX + iZ) & 1)
@@ -238,16 +240,29 @@ void vtDynTerrainGeom::SetPolygonTarget(int iCount)
  * Get the polygon target, which is the number of polygons (generally
  * triangles) which the CLOD algorithm will try to maintain.
  */
-int vtDynTerrainGeom::GetPolygonTarget() const
+int vtDynTerrainGeom::GetPolygonTarget()
 {
 	return m_iPolygonTarget;
+}
+
+void vtDynTerrainGeom::SetDetailMaterial(vtMaterial *pMat, float fTiling, float fDistance)
+{
+	m_pDetailMat = pMat;
+	m_bDetailTexture = (m_pDetailMat != NULL);
+	m_fDetailTiling = fTiling;
+	m_fDetailDistance = fDistance;
+}
+
+void vtDynTerrainGeom::EnableDetail(bool bOn)
+{
+	m_bDetailTexture = (m_pDetailMat != NULL && bOn);
 }
 
 /**
  * Return the number of triangles that were rendered by this dynamic terrain
  * last frame.
  */
-int vtDynTerrainGeom::NumDrawnTriangles() const
+int vtDynTerrainGeom::GetNumDrawnTriangles()
 {
 	return m_iDrawnTriangles;
 }
@@ -262,7 +277,7 @@ void vtDynTerrainGeom::DoCalcBoundBox(FBox3 &box)
 
 	// units are those of the coordinate space below the transform
 	box.Set(0,				   m_fMinHeight, 0,
-			(float)m_iSize.x, m_fMaxHeight, (float)m_iSize.y);
+			(float)m_iColumns, m_fMaxHeight, (float)m_iRows);
 }
 
 void vtDynTerrainGeom::DoCull(const vtCamera *pCam)
@@ -289,8 +304,8 @@ void vtDynTerrainGeom::DoCull(const vtCamera *pCam)
 
 void vtDynTerrainGeom::SetupTexGen(float fTiling)
 {
-	GLfloat sPlane[4] = { fTiling * 1.0f / (m_iSize.x-1), 0.0f, 0.0f, 0.0f };
-	GLfloat tPlane[4] = { 0.0f, 0.0f, fTiling * 1.0f / (m_iSize.y-1), 0.0f };
+	GLfloat sPlane[4] = { fTiling * 1.0f / (m_iColumns-1), 0.0f, 0.0f, 0.0f };
+	GLfloat tPlane[4] = { 0.0f, 0.0f, fTiling * 1.0f / (m_iRows-1), 0.0f };
 
 	glTexGeni(GL_S, GL_TEXTURE_GEN_MODE, GL_OBJECT_LINEAR);
 	glTexGeni(GL_T, GL_TEXTURE_GEN_MODE, GL_OBJECT_LINEAR);

@@ -1,7 +1,7 @@
 //
 // ScaledView.cpp
 //
-// Copyright (c) 2001-2013 Virtual Terrain Project
+// Copyright (c) 2001-2008 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -26,9 +26,9 @@ vtScaledView::vtScaledView(wxWindow *parent, wxWindowID id, const wxPoint& pos,
 						 const wxSize& size, long style, const wxString& name) :
 	wxScrolledWindow(parent, id, pos, size, style, name )
 {
-	m_limits.left = m_limits.top = -100;
-	m_limits.right = m_limits.bottom = 100;
-	m_dScale = 1.0f;
+	m_limits.x = m_limits.y = -200;
+	m_limits.width = m_limits.height = 100;
+	m_fScale = 1.0f;
 }
 
 void vtScaledView::ZoomToRect(const DRECT &geo_rect, float margin)
@@ -49,8 +49,8 @@ void vtScaledView::ZoomToRect(const DRECT &geo_rect, float margin)
 	DPoint2 scale;
 	scale.x = (float) client.GetWidth() / rect.Width();
 	scale.y = (float) client.GetHeight() / rect.Height();
-	m_dScale = (scale.x < scale.y ? scale.x : scale.y);		// min
-	m_dScale *= (1.0f - margin);
+	m_fScale = (scale.x < scale.y ? scale.x : scale.y);		// min
+	m_fScale *= (1.0f - margin);
 	UpdateRanges();
 
 	DPoint2 center;
@@ -78,7 +78,7 @@ void vtScaledView::ZoomOutToRect(const DRECT &geo_rect)
 	diff = center2 - center1;
 	diff /= delta;
 
-	m_dScale *= delta;
+	m_fScale *= delta;
 	UpdateRanges();
 
 	DPoint2 new_center = center1 + diff;
@@ -101,8 +101,8 @@ void vtScaledView::ZoomToPoint(const DPoint2 &p)
 
 	// this avoids the calls to ScrollWindow which cause undesireable
 	//  extra redrawing
-	m_xScrollPosition = offset.x - m_limits.left;
-	m_yScrollPosition = offset.y - m_limits.top;
+	m_xScrollPosition = offset.x - m_limits.x;
+	m_yScrollPosition = offset.y - m_limits.y;
 	SetScrollPos( wxHORIZONTAL, m_xScrollPosition, TRUE );
 	SetScrollPos( wxVERTICAL, m_yScrollPosition, TRUE );
 	Refresh();
@@ -118,18 +118,6 @@ wxRect vtScaledView::WorldToCanvas(const DRECT &r)
 	sr.height = sy(r.bottom) - sr.y;
 
 	return sr;
-}
-
-DRECT vtScaledView::WorldToCanvasD(const DRECT &r)
-{
-	DRECT screen_rect;
-
-	screen_rect.left = sx(r.left);
-	screen_rect.top = sy(r.top);
-	screen_rect.right = sx(r.right);
-	screen_rect.bottom = sy(r.bottom);
-
-	return screen_rect;
 }
 
 wxRect vtScaledView::WorldToWindow(const DRECT &r)
@@ -177,7 +165,7 @@ void vtScaledView::SetScale(double scale)
 	CalcUnscrolledPosition(center1.x, center1.y, &center2.x, &center2.y);
 	FPoint2 midscreen_coordinate(ox(center2.x), oy(center2.y));
 
-	m_dScale = scale;
+	m_fScale = scale;
 	UpdateRanges();
 
 	ZoomToPoint(midscreen_coordinate);
@@ -185,7 +173,7 @@ void vtScaledView::SetScale(double scale)
 
 double vtScaledView::GetScale()
 {
-	return m_dScale;
+	return m_fScale;
 }
 
 DRECT vtScaledView::GetWorldRect()
@@ -208,19 +196,19 @@ void vtScaledView::UpdateRanges()
 
 	DRECT extents = g_bld->GetExtents();
 
-	m_limits.left = sdx(extents.left);
-	m_limits.right = sdx(extents.right);
-	m_limits.top = sdy(extents.top);
-	m_limits.bottom = sdy(extents.bottom);
+	m_limits.x = sdx(extents.left);
+	m_limits.width = sdx(extents.right) - m_limits.x;
+	m_limits.y = sdy(extents.top);
+	m_limits.height = sdy(extents.bottom) - m_limits.y;
 
-	m_limits.left -= (w/2);
-	m_limits.top -= (h/2);
+	m_limits.x -= (w/2);
+	m_limits.y -= (h/2);
 
-	m_limits.right += (w/2);
-	m_limits.bottom += (h/2);
+	m_limits.width += w;
+	m_limits.height += h;
 
-	int h_range = m_limits.right - m_limits.left;
-	int v_range = m_limits.bottom - m_limits.top;
+	int h_range = m_limits.GetWidth();
+	int v_range = m_limits.GetHeight();
 	SetScrollbars(1, 1, h_range, v_range, 0, 0, TRUE);
 }
 
@@ -228,23 +216,6 @@ void vtScaledView::GetCanvasPosition(const wxMouseEvent &event, wxPoint &pos)
 {
 	wxPoint p = event.GetPosition();
 	CalcUnscrolledPosition(p.x, p.y, &pos.x, &pos.y);
-}
-
-int vtScaledView::ProjectPolyline(wxDC *pDC, const DLine2 &dline, bool bClose)
-{
-	const int size = dline.GetSize();
-	if (size < 2)
-		return 0;
-
-	int i;
-	for (i = 0; i < size && i < SCREENBUF_SIZE-1; i++)
-		screen(dline[i], g_screenbuf[i]);
-	if (bClose)
-	{
-		screen(dline[0], g_screenbuf[i]);
-		i++;
-	}
-	return i;
 }
 
 void vtScaledView::DrawLine(wxDC *pDC, const DPoint2 &p0, const DPoint2 &p1)
@@ -256,13 +227,24 @@ void vtScaledView::DrawLine(wxDC *pDC, const DPoint2 &p0, const DPoint2 &p1)
 
 void vtScaledView::DrawPolyLine(wxDC *pDC, const DLine2 &dline, bool bClose)
 {
-	const int num = ProjectPolyline(pDC, dline, bClose);
-	pDC->DrawLines(num, g_screenbuf);
+	int i, size = dline.GetSize();
+	if (size < 2)
+		return;
+
+	for (i = 0; i < size && i < SCREENBUF_SIZE-1; i++)
+		screen(dline[i], g_screenbuf[i]);
+	if (bClose)
+	{
+		screen(dline[0], g_screenbuf[i]);
+		i++;
+	}
+
+	pDC->DrawLines(i, g_screenbuf);
 }
 
 void vtScaledView::DrawDoubleLine(wxDC *pDC, const DLine2 &line, const DLine2 &width)
 {
-	uint i, size = line.GetSize();
+	unsigned int i, size = line.GetSize();
 	if (size < 2)
 		return;
 
@@ -286,7 +268,7 @@ void vtScaledView::DrawPolygon(wxDC *pDC, const DPolygon2 &poly, bool bFill)
 		int i, size = dline.GetSize();
 
 		for (i = 0; i < size && i < SCREENBUF_SIZE-1; i++)
-			screen(dline[i], g_screenbuf[i]);
+			screen(dline.GetAt(i), g_screenbuf[i]);
 
 		pDC->DrawPolygon(i, g_screenbuf);
 	}
@@ -294,10 +276,10 @@ void vtScaledView::DrawPolygon(wxDC *pDC, const DPolygon2 &poly, bool bFill)
 	{
 #if 0
 		// just draw each ring
-		for (uint ring = 0; ring < poly.size(); ring++)
+		for (unsigned int ring = 0; ring < poly.size(); ring++)
 			DrawPolyLine(pDC, poly[ring], true);
 #else
-		// Draw outer ring
+		// Draw outer ring solid
 		DrawPolyLine(pDC, poly[0], true);
 		if (poly.size() > 0)
 		{
@@ -306,7 +288,7 @@ void vtScaledView::DrawPolygon(wxDC *pDC, const DPolygon2 &poly, bool bFill)
 			wxPen pen2(pen1);			// copy
 			pen2.SetStyle(wxDOT);		// modify
 			pDC->SetPen(pen2);			// use
-			for (uint ring = 1; ring < poly.size(); ring++)
+			for (unsigned int ring = 1; ring < poly.size(); ring++)
 				DrawPolyLine(pDC, poly[ring], true);
 			pDC->SetPen(pen1);			// restore
 		}
@@ -359,8 +341,6 @@ void vtScaledView::DrawOGRPolygon(wxDC *pDC, const OGRPolygon &poly, bool bFill,
 void vtScaledView::DrawDPolygon2(wxDC *pDC, const DPolygon2 &poly, bool bFill,
 								  bool bCircles)
 {
-	static wxPoint s_box[5];
-
 	if (bFill)
 	{
 		// tessellate.  we could also draw these as solid triangles.
@@ -380,36 +360,14 @@ void vtScaledView::DrawDPolygon2(wxDC *pDC, const DPolygon2 &poly, bool bFill,
 	else
 	{
 		// just draw each ring
-		for (uint ring = 0; ring < poly.size(); ring++)
+		for (unsigned int ring = 0; ring < poly.size(); ring++)
 		{
 			DrawPolyLine(pDC, poly[ring], true);
 			if (bCircles)
 			{
 				int size = poly[ring].GetSize();
 				for (int j = 0; j < size; j++)
-				{
-#if 0
 					pDC->DrawCircle(g_screenbuf[j], 3);
-#else
-					// A box is a little faster
-					s_box[0].x = g_screenbuf[j].x - 2;
-					s_box[0].y = g_screenbuf[j].y - 2;
-
-					s_box[1].x = g_screenbuf[j].x + 2;
-					s_box[1].y = g_screenbuf[j].y - 2;
-
-					s_box[2].x = g_screenbuf[j].x + 2;
-					s_box[2].y = g_screenbuf[j].y + 2;
-
-					s_box[3].x = g_screenbuf[j].x - 2;
-					s_box[3].y = g_screenbuf[j].y + 2;
-
-					s_box[4].x = g_screenbuf[j].x - 2;
-					s_box[4].y = g_screenbuf[j].y - 2;
-
-					pDC->DrawLines(5, s_box);
-#endif
-				}
 			}
 		}
 	}

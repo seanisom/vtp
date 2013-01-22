@@ -9,6 +9,7 @@
 
 #include "vtlib/vtlib.h"
 #include "AnimPath.h"
+#include "vtdata/LocalConversion.h"
 #include "vtdata/vtLog.h"
 #include "vtdata/FilePath.h"
 
@@ -65,10 +66,9 @@ vtAnimPath::~vtAnimPath()
 	delete m_pConvertFromWGS;
 }
 
-bool vtAnimPath::SetProjection(const vtProjection &proj, const vtLocalConversion &conv)
+bool vtAnimPath::SetProjection(const vtProjection &proj)
 {
 	m_proj = proj;
-	m_conv = conv;
 
 	// convert from projected to global CS
 	vtProjection global_proj;
@@ -324,8 +324,8 @@ bool vtAnimPath::Write(const char *fname)
 
 		world_p1 = point.m_Position;
 		world_p2 = world_p1 + vector;
-		m_conv.ConvertToEarth(world_p1, earth_p1);
-		m_conv.ConvertToEarth(world_p2, earth_p2);
+		g_Conv.ConvertToEarth(world_p1, earth_p1);
+		g_Conv.ConvertToEarth(world_p2, earth_p2);
 
 		int result = 0;
 		result += m_pConvertToWGS->Transform(1, &earth_p1.x, &earth_p1.y);
@@ -365,7 +365,6 @@ public:
 	void startElement(const char *name, const XMLAttributes &atts);
 	void endElement(const char *name) {}
 	void data(const char *s, int length) {}
-	vtLocalConversion m_conv;
 private:
 	vtAnimPath *m_path;
 };
@@ -394,8 +393,8 @@ void AnimPathVisitor::startElement(const char *name, const XMLAttributes &atts)
 		result += m_path->m_pConvertFromWGS->Transform(1, &earth_p1.x, &earth_p1.y);
 		result += m_path->m_pConvertFromWGS->Transform(1, &earth_p2.x, &earth_p2.y);
 
-		m_conv.ConvertFromEarth(earth_p1, world_p1);
-		m_conv.ConvertFromEarth(earth_p2, world_p2);
+		g_Conv.ConvertFromEarth(earth_p1, world_p1);
+		g_Conv.ConvertFromEarth(earth_p2, world_p2);
 
 		ControlPoint point;
 		point.m_Position = world_p1;
@@ -417,10 +416,9 @@ bool vtAnimPath::Read(const char *fname)
 	LocaleWrap normal_numbers(LC_NUMERIC, "C");
 
 	// Clear before loading
-	Clear();
+	Empty();
 
 	AnimPathVisitor visitor(this);
-	visitor.m_conv = m_conv;
 	try
 	{
 		readXML(fname, visitor);
@@ -457,8 +455,8 @@ bool vtAnimPath::CreateFromLineString(const vtProjection &proj,
 	}
 
 	FPoint3 pos;
-//	for (uint i = 0; i < NumEntities(); i++)
-	uint i = 0, j;	// only first entity
+//	for (unsigned int i = 0; i < GetNumEntities(); i++)
+	unsigned int i = 0, j;	// only first entity
 
 	FLine3 fline;
 	if (pSetLS2)
@@ -478,7 +476,7 @@ bool vtAnimPath::CreateFromLineString(const vtProjection &proj,
 				trans->Transform(1, &current.x, &current.y);
 
 			// Transform 2: earth CRS to world CRS
-			m_conv.convert_earth_to_local_xz(current.x, current.y, pos.x, pos.z);
+			g_Conv.convert_earth_to_local_xz(current.x, current.y, pos.x, pos.z);
 			pos.y = 0;
 
 			fline.Append(pos);
@@ -502,7 +500,7 @@ bool vtAnimPath::CreateFromLineString(const vtProjection &proj,
 				trans->Transform(1, &current.x, &current.y);
 
 			// Transform 2: earth CRS to world CRS
-			m_conv.convert_earth_to_local_xz(current.x, current.y, pos.x, pos.z);
+			g_Conv.convert_earth_to_local_xz(current.x, current.y, pos.x, pos.z);
 			pos.y = (float) current.z;
 
 			fline.Append(pos);
@@ -598,7 +596,7 @@ void vtAnimPathEngine::Eval()
 
 void vtAnimPathEngine::UpdateTargets()
 {
-	for (uint i = 0; i < NumTargets(); i++)
+	for (unsigned int i = 0; i < NumTargets(); i++)
 	{
 		osg::Referenced *target = GetTarget(i);
 		vtTransform *tr = dynamic_cast<vtTransform*>(target);
@@ -617,7 +615,7 @@ void vtAnimPathEngine::UpdateTargets()
 				tr->SetTrans(pos);
 			}
 			else
-				tr->SetTransform(matrix);
+				tr->SetTransform1(matrix);
 		}
 	}
 }

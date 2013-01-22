@@ -1,7 +1,7 @@
 //
 // Projections.cpp
 //
-// Copyright (c) 2001-2013 Virtual Terrain Project
+// Copyright (c) 2001-2009 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 // Parts of the code are derived from public-domain USGS software.
@@ -202,7 +202,7 @@ int vtProjection::GetDatum() const
 	vtString strDatum = datum_string;
 	MassageDatumFromWKT(strDatum);	// Convert WKT name to EPSG name
 
-	for (uint i = 0; i < g_EPSGDatums.size(); i++)
+	for (unsigned int i = 0; i < g_EPSGDatums.GetSize(); i++)
 	{
 		if (!strcmp((const char *)strDatum, g_EPSGDatums[i].szName))
 			return g_EPSGDatums[i].iCode;
@@ -731,7 +731,7 @@ StatePlaneInfo *GetStatePlaneTable()
 	return g_StatePlaneInfo;
 }
 
-int NumStatePlanes()
+int GetNumStatePlanes()
 {
 	return sizeof(g_StatePlaneInfo) /  sizeof(StatePlaneInfo);
 }
@@ -807,7 +807,7 @@ const char *DatumToString(int d)
 	if (d < 24)
 		return datumToString((DATUM)d);	// allow backward compatibility
 
-	for (uint i = 0; i < g_EPSGDatums.size(); i++)
+	for (unsigned int i = 0; i < g_EPSGDatums.GetSize(); i++)
 	{
 		if (g_EPSGDatums[i].iCode == d)
 			return g_EPSGDatums[i].szName;
@@ -886,7 +886,7 @@ const char *DatumToStringShort(int d)
 	if (d < 24)
 		return datumToStringShort((DATUM)d); // allow backward compatibility
 
-	for (uint i = 0; i < g_EPSGDatums.size(); i++)
+	for (unsigned int i = 0; i < g_EPSGDatums.GetSize(); i++)
 	{
 		if (g_EPSGDatums[i].iCode == d)
 		{
@@ -901,7 +901,7 @@ const char *DatumToStringShort(int d)
 
 #include "EPSG_Datums.h"
 
-std::vector<EPSGDatum> g_EPSGDatums;
+vtArray<EPSGDatum> g_EPSGDatums;
 
 int compare_datum(const void *aa, const void *bb)
 {
@@ -920,22 +920,22 @@ void SetupEPSGDatums()
 	int count = sizeof(epsg_datums) / sizeof(epsg_datum);
 	EPSGDatum dat;
 
-	g_EPSGDatums.reserve(count);
+	g_EPSGDatums.SetMaxSize(count);
 	for (int i = 0; i < count; i++)
 	{
 		dat.bCommon = epsg_datums[i].common != 0;
 		dat.iCode = epsg_datums[i].code;
 		dat.szName = epsg_datums[i].name;
 		dat.szShortName = epsg_datums[i].shortname;
-		g_EPSGDatums.push_back(dat);
+		g_EPSGDatums.Append(dat);
 	}
 	// sort them
-	qsort(&g_EPSGDatums.front(), count, sizeof(EPSGDatum), compare_datum);
+	qsort(g_EPSGDatums.GetData(), count, sizeof(EPSGDatum), compare_datum);
 }
 
 void CleanupEPSGDatums()
 {
-	g_EPSGDatums.clear();
+	g_EPSGDatums.Empty();
 }
 
 /**
@@ -1118,34 +1118,20 @@ OCT *CreateCoordTransform(const vtProjection *pSource,
 		return result;
 }
 
-void TransformInPlace(OCT *transform, DPolygon2 &poly)
-{
-	for (uint ring = 0; ring < poly.size(); ring++)
-		TransformInPlace(transform, poly[ring]);
-}
-
-void TransformInPlace(OCT *transform, DLine2 &line)
-{
-	for (uint v = 0; v < line.GetSize(); v++)
-		transform->Transform(1, &line[v].x, &line[v].y);
-}
 
 double GetMetersPerUnit(LinearUnits lu)
 {
 	switch (lu)
 	{
-	case LU_DEGREES:
-	case LU_UNITEDGE:
-		return 1.0;		// actually no definition for degrees -> meters
-	case LU_METERS:
-		return 1.0;		// meters per meter
-	case LU_FEET_INT:
-		return 0.3048;		// international foot
-	case LU_FEET_US:
-		return (1200.0/3937.0);	// U.S. survey foot
-	case LU_UNKNOWN:
-		// keep picky compilers quiet.
-		break;
+		case LU_DEGREES:
+		case LU_UNITEDGE:
+			return 1.0;		// actually no definition for degrees -> meters
+		case LU_METERS:
+			return 1.0;		// meters per meter
+		case LU_FEET_INT:
+			return 0.3048;		// international foot
+		case LU_FEET_US:
+			return (1200.0/3937.0);	// U.S. survey foot
 	}
 	return 1.0;
 };
@@ -1159,9 +1145,6 @@ const char *GetLinearUnitName(LinearUnits lu)
 	case LU_FEET_INT: return "Feet";
 	case LU_FEET_US:  return "Feet (US)";
 	case LU_UNITEDGE:  return "UnitEdge";
-	case LU_UNKNOWN:
-		// keep picky compilers quiet.
-		break;
 	}
 	return "Unknown";
 }
@@ -1239,7 +1222,12 @@ static void MassageDatumFromWKT(vtString &strDatum )
 			break;
 		}
 	}
-	strDatum.Replace('_', ' ');
+	int len = strDatum.GetLength();
+	for (i = 0; i < len; i++)
+	{
+		if (strDatum.GetAt(i) == '_')
+			strDatum.SetAt(i, ' ');
+	}
 }
 
 

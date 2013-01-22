@@ -1,7 +1,7 @@
 //
 // vtElevationGrid.h
 //
-// Copyright (c) 2001-2012 Virtual Terrain Project.
+// Copyright (c) 2001-2011 Virtual Terrain Project.
 // Free for all uses, see license.txt for details.
 //
 
@@ -44,7 +44,7 @@ class vtElevationGrid : public vtHeightFieldGrid3d
 public:
 	vtElevationGrid();
 	vtElevationGrid(const vtElevationGrid &rhs);
-	vtElevationGrid(const DRECT &area, const IPoint2 &size, bool bFloat,
+	vtElevationGrid(const DRECT &area, int iColumns, int iRows, bool bFloat,
 		const vtProjection &proj);
 	virtual ~vtElevationGrid();
 
@@ -54,7 +54,7 @@ public:
 	bool CopyHeaderFrom(const vtElevationGrid &rhs);
 	bool CopyDataFrom(const vtElevationGrid &rhs);
 
-	bool Create(const DRECT &area, const IPoint2 &size, bool bFloat,
+	bool Create(const DRECT &area, int iColumns, int iRows, bool bFloat,
 		const vtProjection &proj);
 	void FreeData();
 
@@ -112,7 +112,7 @@ public:
 	vtString GetErrorMsg() { return m_strError; }
 
 	// Save
-	bool SaveTo3TX(const char *szFileName, bool progress_callback(int) = NULL) const;
+	bool SaveTo3TX(const char *szFileName, bool progress_callback(int) = NULL);
 	bool SaveToGeoTIFF(const char *szFileName) const;
 	bool SaveToBMP(const char *szFileName) const;
 	bool SaveToTerragen(const char *szFileName) const;
@@ -168,9 +168,9 @@ public:
 	float GetScale() const { return m_fVMeters; }
 
 	bool HasData() const { return (m_pData != NULL || m_pFData != NULL); }
-	int MemoryNeededToLoad() const { return m_iSize.x * m_iSize.x * (m_bFloatMode ? 4 : 2); }
-	int MemoryUsed() const { if (m_pData) return m_iSize.x * m_iSize.x * 2;
-						 else if (m_pFData) return m_iSize.x * m_iSize.x * 4;
+	int MemoryNeededToLoad() const { return m_iColumns * m_iRows * (m_bFloatMode ? 4 : 2); }
+	int MemoryUsed() const { if (m_pData) return m_iColumns * m_iRows * 2;
+						 else if (m_pFData) return m_iColumns * m_iRows * 4;
 						 else return 0; }
 
 	// Implement vtHeightField methods
@@ -199,10 +199,10 @@ protected:
 	void ComputeCornersFromExtents();
 	bool ParseNTF5(OGRDataSource *pDatasource, vtString &msg, bool progress_callback(int));
 	bool GetXYZLine(const char *buf, const char *pattern, const char *format,
-					int components, double *x, double *y, double *z);
+								 int components, double *x, double *y, double *z);
 
 	DPoint2		m_Corners[4];	// data corners, in the CRS of this terrain
-	vtProjection	m_proj;		// a grid always has some CRS
+	vtProjection	m_proj;		// a grid always has some projection
 
 	bool	_AllocateArray();
 	vtString	m_strOriginalDEMName;

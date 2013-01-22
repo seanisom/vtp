@@ -111,7 +111,7 @@ int VTPWindow::handle(int event)
 {
 	vtMouseEvent vtp_event;
 	int x, y;
-	uchar key;
+	unsigned char key;
 
 	switch (event)
 	{

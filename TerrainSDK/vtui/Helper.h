@@ -1,11 +1,10 @@
 //
 // vtui Helper.h
-//  Some useful standalone functions for use with wxWidgets.
+//  Some useful standalone functions for use with wxWindows.
 //
 // Copyright (c) 2002-2009 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
-/** \file Helper.h */
 
 #include "vtdata/vtString.h"
 #include "vtdata/MathTypes.h"
@@ -112,7 +111,6 @@ void CheckForGDALAndWarn();
 // Display a message to the user, and also send it to the log file.
 void DisplayAndLog(const char *pFormat, ...);
 void DisplayAndLog(const wchar_t *pFormat, ...);
-void DisplayAndLog(const wxString &msg);	// Non-variable-argument
 
 void LaunchAppDocumentation(const vtString &appname,
 							const vtString &local_lang_code);

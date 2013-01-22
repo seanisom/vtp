@@ -1,7 +1,7 @@
 //
 // InstanceDlg.h
 //
-// Copyright (c) 2003-2012 Virtual Terrain Project
+// Copyright (c) 2003-2011 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -28,7 +28,6 @@ public:
 		const wxSize& size = wxDefaultSize,
 		long style = wxDEFAULT_DIALOG_STYLE );
 
-	virtual void OnCreate() {}
 	void ClearContent();
 	void AddContent(vtContentManager *mng);
 
@@ -47,7 +46,7 @@ public:
 	wxRadioButton* GetRadioModel()  { return (wxRadioButton*) FindWindow( ID_RADIO_MODEL ); }
 	wxRadioButton* GetRadioContent()  { return (wxRadioButton*) FindWindow( ID_RADIO_CONTENT ); }
 
-protected:
+private:
 	// WDR: member variable declarations for InstanceDlg
 	DPoint2			m_pos;
 	vtProjection	m_proj;
@@ -55,11 +54,9 @@ protected:
 	int				m_iManager;
 	int				m_iItem;
 	vtTagArray		m_dummy;
-	bool			m_bSetting;
 
 private:
 	// WDR: handler declarations for InstanceDlg
-	void OnButtonCreate( wxCommandEvent &event );
 	void OnLocationText( wxCommandEvent &event );
 	void OnBrowseModelFile( wxCommandEvent &event );
 	void OnChoice( wxCommandEvent &event );

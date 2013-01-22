@@ -25,26 +25,26 @@ public:
 	vtBytes() { m_data = NULL; m_len = 0; }
 	~vtBytes() { if (m_data) free(m_data); }
 
-	void Set(uchar *data, size_t len)
+	void Set(unsigned char *data, size_t len)
 	{
-		m_data = (uchar *) malloc(len);
+		m_data = (unsigned char *) malloc(len);
 		memcpy(m_data, data, len);
 		m_len = len;
 	}
-	void Append(uchar *data, size_t len)
+	void Append(unsigned char *data, size_t len)
 	{
 		if (m_data)
-			m_data = (uchar *) realloc(m_data, m_len + len);
+			m_data = (unsigned char *) realloc(m_data, m_len + len);
 		else
-			m_data = (uchar *) malloc(len);
+			m_data = (unsigned char *) malloc(len);
 		memcpy(m_data + m_len, data, len);
 		m_len += len;
 	}
-	uchar *Get() { return m_data; }
+	unsigned char *Get() { return m_data; }
 	size_t Len() { return m_len; }
 
 protected:
-	uchar *m_data;
+	unsigned char *m_data;
 	size_t m_len;
 };
 

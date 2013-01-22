@@ -32,8 +32,7 @@ void TerrainPicker::OnMouse(vtMouseEvent &event)
 
 void TerrainPicker::FindGroundPoint()
 {
-	if (!m_pHeightField)
-		return;
+	if (!m_pHeightField) return;
 
 	FPoint3 pos, dir, result;
 
@@ -44,7 +43,7 @@ void TerrainPicker::FindGroundPoint()
 	if (!m_bOnTerrain)
 		return;
 
-	for (uint i = 0; i < NumTargets(); i++)
+	for (unsigned int i = 0; i < NumTargets(); i++)
 	{
 		vtTransform *pTarget = (vtTransform *) GetTarget(i);
 		pTarget->SetTrans(result);
@@ -54,7 +53,7 @@ void TerrainPicker::FindGroundPoint()
 	m_GroundPoint = result;
 
 	// Find corresponding earth coordinates
-	m_pHeightField->m_Conversion.ConvertToEarth(m_GroundPoint, m_EarthPos);
+	g_Conv.ConvertToEarth(m_GroundPoint, m_EarthPos);
 }
 
 void TerrainPicker::Eval()
@@ -121,7 +120,7 @@ void GlobePicker::Eval()
 			// rotate to find position relative to globe's rotation
 			vtTransform *xform = m_pGlobe->GetTop();
 			FMatrix4 rot;
-			xform->GetTransform(rot);
+			xform->GetTransform1(rot);
 			FMatrix4 inverse;
 			inverse.Invert(rot);
 			FPoint3 newpoint;

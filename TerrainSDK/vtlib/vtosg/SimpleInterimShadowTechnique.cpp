@@ -11,7 +11,6 @@
 #include "core/PagedLodGrid.h"
 #include "vtdata/LocalConversion.h"
 #include "vtdata/HeightField.h"
-#include "vtdata/vtLog.h"
 #include "SimpleInterimShadowTechnique.h"
 
 #include <osgShadow/ShadowTexture>
@@ -33,8 +32,7 @@ CSimpleInterimShadowTechnique::CSimpleInterimShadowTechnique():
 	m_ShadowDarkness(1.0f),
 	m_ShadowSphereRadius(0.0f),
 	m_RecalculateEveryFrame(false),
-	m_pHeightField3d(NULL),
-	m_UsingFrameBuffer(false)
+	m_pHeightField3d(NULL)
 {
 	m_MainSceneTextureUnits[0] = GL_MODULATE;
 }
@@ -45,12 +43,12 @@ CSimpleInterimShadowTechnique::CSimpleInterimShadowTechnique(const CSimpleInteri
 {
 }
 
-void CSimpleInterimShadowTechnique::SetLightNumber(const uint Light)
+void CSimpleInterimShadowTechnique::SetLightNumber(const unsigned int Light)
 {
     m_LightNumber = Light;
 }
 
-void CSimpleInterimShadowTechnique::SetShadowTextureUnit(const uint Unit)
+void CSimpleInterimShadowTechnique::SetShadowTextureUnit(const unsigned int Unit)
 {
     m_ShadowTextureUnit = Unit;
 }
@@ -72,12 +70,12 @@ void CSimpleInterimShadowTechnique::SetShadowDarkness(const float Darkness)
 	}
 }
 
-void CSimpleInterimShadowTechnique::AddMainSceneTextureUnit(const uint Unit, const uint Mode)
+void CSimpleInterimShadowTechnique::AddMainSceneTextureUnit(const unsigned int Unit, const unsigned int Mode)
 {
 	m_MainSceneTextureUnits[Unit] = Mode;
 }
 
-void CSimpleInterimShadowTechnique::RemoveMainSceneTextureUnit(const uint Unit)
+void CSimpleInterimShadowTechnique::RemoveMainSceneTextureUnit(const unsigned int Unit)
 {
 	m_MainSceneTextureUnits.erase(Unit);
 }
@@ -116,22 +114,7 @@ void CSimpleInterimShadowTechnique::init()
 		m_pCamera->setComputeNearFarMode(osg::Camera::DO_NOT_COMPUTE_NEAR_FAR);
 		m_pCamera->setViewport(0, 0, m_ShadowTextureResolution, m_ShadowTextureResolution);
         m_pCamera->setRenderOrder(osg::Camera::PRE_RENDER);
-		// Defeat OSG fall back options to avoid problems with osg's graphics contexts
-#if OSG_VERSION_MAJOR == 1 && OSG_VERSION_MINOR > 0 || OSG_VERSION_MAJOR > 1
-		// We are probably OSG 1.1 or newer
-		osg::FBOExtensions* fbo_ext = osg::FBOExtensions::instance(0, true);
-#else
-		osg::FBOExtensions* fbo_ext = osg::FBOExtensions::instance(0);
-#endif
-		if (fbo_ext && fbo_ext->isSupported())
-			m_pCamera->setRenderTargetImplementation(osg::Camera::FRAME_BUFFER_OBJECT, osg::Camera::FRAME_BUFFER_OBJECT);
-		else
-		{
-			VTLOG("SimpleInterimShadowTechnique - Frame buffer objects not available, using the live frame buffer\n");
-			m_UsingFrameBuffer = true;
-			m_pCamera->setRenderTargetImplementation(osg::Camera::FRAME_BUFFER, osg::Camera::FRAME_BUFFER);
-		}
-
+        m_pCamera->setRenderTargetImplementation(osg::Camera::FRAME_BUFFER_OBJECT);
         m_pCamera->attach(osg::Camera::DEPTH_BUFFER, m_pTexture.get());
 
 		// Create the camera's stateset
@@ -181,9 +164,9 @@ void CSimpleInterimShadowTechnique::init()
 			pFakeTex->setImage(pImage);
 
 			osg::ref_ptr<osg::IntArray> UnitArray = new osg::IntArray;
-			for (std::map<uint, uint>::iterator iTr = m_MainSceneTextureUnits.begin(); iTr != m_MainSceneTextureUnits.end(); iTr++)
+			for (std::map<unsigned int, unsigned int>::iterator iTr = m_MainSceneTextureUnits.begin(); iTr != m_MainSceneTextureUnits.end(); iTr++)
 			{
-				uint Unit = (*iTr).first;
+				unsigned int Unit = (*iTr).first;
 				UnitArray->push_back(Unit);
 				m_pStateset->setTextureAttribute(Unit, pFakeTex, osg::StateAttribute::ON);
 				m_pStateset->setTextureMode(Unit,GL_TEXTURE_1D, osg::StateAttribute::OFF);
@@ -344,9 +327,6 @@ void CSimpleInterimShadowTechnique::cull(osgUtil::CullVisitor& cv)
 			float top   = bb.radius();
 			float right = top;
 
-			if (m_UsingFrameBuffer)
-				m_pCamera->setViewport(orig_rs->getViewport());
-
 			m_pCamera->setReferenceFrame(osg::Camera::ABSOLUTE_RF);
 			m_pCamera->setProjectionMatrixAsOrtho(-right, right, -top, top, znear, zfar);
 			m_pCamera->setViewMatrixAsLookAt(position, bb.center(), osg::Vec3(0.0f,1.0f,0.0f));
@@ -378,7 +358,7 @@ void CSimpleInterimShadowTechnique::cull(osgUtil::CullVisitor& cv)
 			}
 
 
-			uint traversalMask = cv.getTraversalMask();
+			unsigned int traversalMask = cv.getTraversalMask();
 
 			cv.setTraversalMask( traversalMask &
 								 getShadowedScene()->getCastsShadowTraversalMask() );
@@ -425,7 +405,7 @@ std::string CSimpleInterimShadowTechnique::GenerateFragmentShaderSource()
 		<< "{" << std::endl
 		<< "    vec4 Colour = gl_Color;" << std::endl
 		<< "    vec4 TexColour;" << std::endl;
-	for (std::map<uint, uint>::iterator iTr = m_MainSceneTextureUnits.begin(); iTr != m_MainSceneTextureUnits.end(); iTr++)
+	for (std::map<unsigned int, unsigned int>::iterator iTr = m_MainSceneTextureUnits.begin(); iTr != m_MainSceneTextureUnits.end(); iTr++)
 	{
 		int Unit = (*iTr).first;
 		int Mode = (*iTr).second;
@@ -475,26 +455,24 @@ std::string CSimpleInterimShadowTechnique::GenerateFragmentShaderSource()
 	return ShaderSource.str();
 }
 
-
-////////////////////////////////////////////////////////////////////////////////
-osg::ref_ptr<osg::Camera> CSimpleInterimShadowTechnique::makeDebugHUD()
+class DrawableDrawWithDepthShadowComparisonOffCallback: public osg::Drawable::DrawCallback
 {
-	class DrawableDrawWithDepthShadowComparisonOffCallback: public osg::Drawable::DrawCallback
-	{
-	public:
-	//
+public:
+//
 	DrawableDrawWithDepthShadowComparisonOffCallback(osg::Texture2D * texture, unsigned stage = 0)
-														: _texture(texture), _stage(stage) {}
+														: _texture(texture), _stage(stage)
+{
+}
 
-	virtual void drawImplementation(osg::RenderInfo & ri,const osg::Drawable* drawable ) const
+virtual void drawImplementation(osg::RenderInfo & ri,const osg::Drawable* drawable ) const
+{
+	if(_texture.valid())
 	{
-		if(_texture.valid())
-		{
-			// make sure proper texture is currently applied
-			ri.getState()->applyTextureAttribute( _stage, _texture.get() );
+		// make sure proper texture is currently applied
+		ri.getState()->applyTextureAttribute( _stage, _texture.get() );
 
-			// Turn off depth comparison mode
-			glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE_ARB, GL_NONE );
+		// Turn off depth comparison mode
+		glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE_ARB, GL_NONE );
 		}
 
 		drawable->drawImplementation(ri);
@@ -509,8 +487,11 @@ osg::ref_ptr<osg::Camera> CSimpleInterimShadowTechnique::makeDebugHUD()
 
 	unsigned _stage;
 	osg::ref_ptr< osg::Texture2D > _texture;
-	};
+};
 
+////////////////////////////////////////////////////////////////////////////////
+osg::ref_ptr<osg::Camera> CSimpleInterimShadowTechnique::makeDebugHUD()
+{
 	std::stringstream ShaderSource;
 	ShaderSource
 		<< "uniform sampler2D osgShadow_shadowTexture;" << std::endl

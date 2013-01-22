@@ -1,7 +1,7 @@
 //
 // SceneOSG.h
 //
-// Copyright (c) 2001-2012 Virtual Terrain Project
+// Copyright (c) 2001-2011 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -14,7 +14,9 @@
 
 #include "../core/Engine.h"
 
-#include "VisualImpactCalculatorOSG.h"
+#if OLD_OSG_SHADOWS
+class CStructureShadowsOSG;
+#endif
 
 /** \defgroup sg Scene graph
  * These classes define the node of a scene graph and the Scene class which
@@ -70,9 +72,8 @@ public:
 
 	/// Call this method once before calling any other vtlib methods.
 	bool Init(int argc, char** argv, bool bStereo = false, int iStereoMode = 0);
-	void SetGraphicsContext(osg::GraphicsContext *pGraphicsContext);
-	osg::GraphicsContext *GetGraphicsContext();
-	osgViewer::GraphicsWindow *GetGraphicsWindow();
+	void SetGraphicsContext(osg::GraphicsContext* pGraphicsContext);
+	osg::GraphicsContext* GetGraphicsContext();
 
 	/// Call this method after all other vtlib methods, to free memory.
 	void Shutdown();
@@ -106,6 +107,7 @@ public:
 	// View methods
 	bool CameraRay(const IPoint2 &win, FPoint3 &pos, FPoint3 &dir, vtWindow *pWindow = NULL);
 	void WorldToScreen(const FPoint3 &point, IPoint2 &result);
+	FPlane *GetCullPlanes() { return m_cullPlanes; }
 
 	/// Set the top engine in the Engine graph
 	void SetRootEngine(vtEngine *ptr) { m_pRootEngine = ptr; }
@@ -151,12 +153,27 @@ public:
 	void AddWindow(vtWindow *pWindow) {
 		m_Windows.Append(pWindow);
 	}
-	vtWindow *GetWindow(uint i) {
+	vtWindow *GetWindow(unsigned int i) {
 		if (m_Windows.GetSize() > i)
 			return m_Windows[i];
 		else
 			return NULL;
 	}
+
+#if OLD_OSG_SHADOWS
+	// Experimental:
+	// Object-terrain shadow casting, only for OSG
+	void SetShadowedNode(vtTransform *pLight, osg::Node *pShadowerNode,
+		osg::Node *pShadowed, int iRez, float fDarkness, int iTextureUnit,
+		const FSphere &ShadowSphere);
+	void UnsetShadowedNode(vtTransform *pTransform);
+	void UpdateShadowLightDirection(vtTransform *pLight);
+	void SetShadowDarkness(float fDarkness);
+	void SetShadowSphere(const FSphere &ShadowSphere, bool bForceRedraw);
+	void ShadowVisibleNode(osg::Node *node, bool bVis);
+	bool IsShadowVisibleNode(osg::Node *node);
+	void ComputeShadows();
+#endif
 
 	void SetHUD(vtHUD *hud) { m_pHUD = hud; }
 	vtHUD *GetHUD() { return m_pHUD; }
@@ -178,10 +195,8 @@ public:
 	// OSG access
 	osgViewer::Viewer *getViewer() { return m_pOsgViewer.get(); }
 
-#if VISUAL_IMPACT_CALCULATOR
-    // Visual Impact Calculation
-	virtual CVisualImpactCalculatorOSG& GetVisualImpactCalculator() { return m_VisualImpactCalculator; }
-#endif
+	// for culling
+	void CalcCullPlanes();
 
 protected:
 	void DoEngines(vtEngine *eng);
@@ -200,6 +215,9 @@ protected:
 	osg::ref_ptr<osgViewer::Viewer>	m_pOsgViewer;
 	osg::ref_ptr<osg::GraphicsContext>	m_pGraphicsContext;
 
+	// for culling
+	FPlane		m_cullPlanes[6];
+
 	osg::ref_ptr<osg::Group>	m_StateRoot;
 
 	osg::Timer   _timer;
@@ -212,9 +230,8 @@ protected:
 	bool	m_bWinInfo;
 	bool	m_bInitialized;
 	bool	m_bWireframe;
-
-#if VISUAL_IMPACT_CALCULATOR
-	CVisualImpactCalculatorOSG m_VisualImpactCalculator;
+#if OLD_OSG_SHADOWS
+	osg::ref_ptr<CStructureShadowsOSG> m_pStructureShadowsOSG;
 #endif
 };
 

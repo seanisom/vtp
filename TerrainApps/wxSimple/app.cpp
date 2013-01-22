@@ -1,8 +1,8 @@
 //
 // Name:     app.cpp
-// Purpose:  The application class for a wxWidgets application.
+// Purpose:  The application class for a wxWindows application.
 //
-// Copyright (c) 2001-2012 Virtual Terrain Project
+// Copyright (c) 2001-2006 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -25,52 +25,16 @@
 #include "frame.h"
 
 #include "vtui/Helper.h"
+#include "wxosg/GraphicsWindowWX.h"
 #include "canvas.h"
 
-/* wxGTK and X11 multihtreading issues
-   ===================================
-   Although they have probably always been present, I have
-   recently (08/2011) come across a number of X11 related multithreading
-   issues when running on more recent versions of GTK+ (wxGTK)
-   and X11 (XOrg) on multiprocessor systems. These all seem to
-   relate to the use of modeless top level windows such as
-   wxProgressDialog and multithreading OpenGL rendering, either
-   individually or together. These issues can all be resolved by
-   calling the X11 function XinitThreads before any other X
-   related calls have been made. The following code is conditional
-   on the use of wxGTK, but be aware these issues can occur
-   whenever the X windowing system is used. In my view the making
-   of such a low level windowing system call should be the responsibility
-   of wxWidgets (and GTK+ if that is used) but that is not happening with
-   current releases (08/2011). */
-#if defined(__WXGTK__) && !defined(NO_XINITTHREADS)
-IMPLEMENT_APP_NO_MAIN(vtApp)
-
-int main(int argc, char *argv[])
-{
-    // I have decided to only call XInitThreads on multi processor systems.
-    // However I believe that the same multithreading issues can arise on single
-    // processor systems due to pre-emptive multi-tasking, albeit much more
-    // rarely. The classic symptom of a X multithreading problem is the assert
-    // xcb_io.c:140: dequeue_pending_request: Assertion `req == dpy->xcb->pending_requests' failed
-    // or xcb_io.c .... Unknown request in queue while dequeuing
-    // If you see anyhting like this on a single processor system then try commenting out this test.
-    if (sysconf (_SC_NPROCESSORS_ONLN) > 1)
-        XInitThreads();
-    return wxEntry(argc, argv);
-
-}
-#else
-IMPLEMENT_APP(vtApp)
-#endif
+IMPLEMENT_APP(vtApp);
 
 //
 // Initialize the app object
 //
 bool vtApp::OnInit(void)
 {
-	VTSTARTLOG("debug.txt");
-
 	m_pTerrainScene = NULL;
 
 	// Create the main frame window
@@ -81,7 +45,7 @@ bool vtApp::OnInit(void)
 	ConvertArgcArgv(wxApp::argc, wxApp::argv, &MyArgc, &MyArgv);
 	vtGetScene()->Init(MyArgc, MyArgv);
 
-	m_pFrame->m_canvas->InitGraphicsWindowWX();
+	vtGetScene()->SetGraphicsContext(new GraphicsWindowWX(m_pFrame->m_canvas));
 
 	// Make sure the scene knows the size of the canvas
 	//  (on wxGTK, the first size events arrive too early before the Scene exists)
@@ -96,6 +60,8 @@ bool vtApp::OnInit(void)
 //
 bool vtApp::CreateScene()
 {
+	VTSTARTLOG("debug.txt");
+
 	// Get a handle to the vtScene - one is already created for you
 	vtScene *pScene = vtGetScene();
 
@@ -148,13 +114,13 @@ bool vtApp::CreateScene()
 	float fSpeed = pTerr->GetParams().GetValueFloat(STR_NAVSPEED);
 
 	vtTerrainFlyer *pFlyer = new vtTerrainFlyer(fSpeed);
-	pFlyer->AddTarget(pCamera);
+	pFlyer->SetTarget(pCamera);
 	pFlyer->SetHeightField(pTerr->GetHeightField());
 	pScene->AddEngine(pFlyer);
 
 	// Minimum height over terrain is 100 m
 	vtHeightConstrain *pConstrain = new vtHeightConstrain(100);
-	pConstrain->AddTarget(pCamera);
+	pConstrain->SetTarget(pCamera);
 	pConstrain->SetHeightField(pTerr->GetHeightField());
 	pScene->AddEngine(pConstrain);
 

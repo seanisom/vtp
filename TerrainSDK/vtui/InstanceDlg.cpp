@@ -1,7 +1,7 @@
 //
 // InstanceDlg.cpp
 //
-// Copyright (c) 2003-2013 Virtual Terrain Project
+// Copyright (c) 2003-2011 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -15,10 +15,8 @@
 #include <wx/filename.h>
 
 #include "InstanceDlg.h"
-
 #include "vtdata/Content.h"
 #include "vtdata/DataPath.h"
-#include "vtdata/FileFilters.h"
 #include "vtdata/FilePath.h"
 #include "vtdata/vtLog.h"
 #include "vtui/Helper.h"
@@ -40,7 +38,6 @@ BEGIN_EVENT_TABLE(InstanceDlg, InstanceDlgBase)
 	EVT_CHOICE( ID_CHOICE_ITEM, InstanceDlg::OnChoiceItem )
 	EVT_BUTTON( ID_BROWSE_MODEL_FILE, InstanceDlg::OnBrowseModelFile )
 	EVT_TEXT( ID_LOCATION, InstanceDlg::OnLocationText )
-	EVT_BUTTON( ID_CREATE, InstanceDlg::OnButtonCreate )
 END_EVENT_TABLE()
 
 InstanceDlg::InstanceDlg( wxWindow *parent, wxWindowID id, const wxString &title,
@@ -50,7 +47,6 @@ InstanceDlg::InstanceDlg( wxWindow *parent, wxWindowID id, const wxString &title
 	m_bContent = true;
 	m_iManager = 0;
 	m_iItem = 0;
-	m_bSetting = false;
 
 	// Work around wxFormDesigner's lack of support for limiting to smallest size
 	GetSizer()->SetSizeHints(this);
@@ -69,9 +65,7 @@ void InstanceDlg::UpdateLoc()
 		str.Printf(_T("%lf, %lf"), m_pos.x, m_pos.y);
 	else
 		str.Printf(_T("%.2lf, %.2lf"), m_pos.x, m_pos.y);
-	m_bSetting = true;
 	GetLocation()->SetValue(str);
-	m_bSetting = false;
 }
 
 void InstanceDlg::SetLocation(const DPoint2 &pos)
@@ -129,7 +123,7 @@ void InstanceDlg::UpdateContentItems()
 			return;
 
 		wxString str;
-		for (uint j = 0; j < mng->NumItems(); j++)
+		for (unsigned int j = 0; j < mng->NumItems(); j++)
 		{
 			vtItem *item = mng->GetItem(j);
 			str = wxString(item->m_name, wxConvUTF8);
@@ -158,7 +152,7 @@ void InstanceDlg::AddContent(vtContentManager *mng)
 void InstanceDlg::OnInitDialog(wxInitDialogEvent& event)
 {
 	GetChoiceFile()->Clear();
-	for (uint i = 0; i < m_contents.size(); i++)
+	for (unsigned int i = 0; i < m_contents.size(); i++)
 	{
 		vtContentManager *mng = m_contents[i];
 		vtString str = mng->GetFilename();
@@ -180,30 +174,16 @@ void InstanceDlg::OnInitDialog(wxInitDialogEvent& event)
 
 void InstanceDlg::OnLocationText( wxCommandEvent &event )
 {
-	if (m_bSetting)
-		return;
-
-	wxString str = GetLocation()->GetValue();
-
-	double x, y;
-	int num = sscanf((const char *) str.ToAscii(), "%lf, %lf", &x, &y);
-	if (num == 2)
-		m_pos.Set(x, y);
+	// todo? only for edit
 }
 
 void InstanceDlg::OnBrowseModelFile( wxCommandEvent &event )
 {
-	wxString filter = _("3D Model files");
-	filter += _T("|");
-	AddType(filter, FSTRING_3DS);
-	AddType(filter, FSTRING_DAE);
-	AddType(filter, FSTRING_OBJ);
-	AddType(filter, FSTRING_LWO);
-	AddType(filter, FSTRING_FLT);
-	AddType(filter, FSTRING_OSG);
-	AddType(filter, FSTRING_IVE);
-	filter += _T("|");
-	filter += FSTRING_ALL;
+	wxString filter;
+	filter += _("3D Model files");
+	filter += _T(" (*.3ds;*.dae;*.obj;*.lwo;*.flt;*.osg;*.ive)|*.3ds;*.dae;*.obj;*.lwo;*.flt;*.osg;*.ive|");
+	filter += _("All files");
+	filter += _T(" (*.*)|*.*");
 	wxFileDialog SelectFile(this, _("Choose model file"),
 							_T(""), _T(""), filter, wxFD_OPEN);
 	if (SelectFile.ShowModal() != wxID_OK)
@@ -229,11 +209,6 @@ void InstanceDlg::OnBrowseModelFile( wxCommandEvent &event )
 	}
 	// Otherwise, use the full absolute path
 	GetModelFile()->SetValue(SelectFile.GetPath());
-}
-
-void InstanceDlg::OnButtonCreate( wxCommandEvent &event )
-{
-	OnCreate();
 }
 
 void InstanceDlg::OnChoice( wxCommandEvent &event )

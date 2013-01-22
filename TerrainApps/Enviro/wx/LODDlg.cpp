@@ -12,8 +12,6 @@
 #include "wx/wx.h"
 #endif
 
-#include "wx/spinctrl.h"
-
 #include "vtlib/vtlib.h"
 #include "vtlib/core/TiledGeom.h"
 #include "vtlib/core/PagedLodGrid.h"
@@ -40,8 +38,8 @@
 
 BEGIN_EVENT_TABLE(LODDlg, PagingDlgBase)
 	EVT_INIT_DIALOG (LODDlg::OnInitDialog)
-	EVT_SPIN_UP( ID_SPIN, LODDlg::OnSpinTargetUp )
-	EVT_SPIN_DOWN( ID_SPIN, LODDlg::OnSpinTargetDown )
+	EVT_SPIN_UP( ID_TARGET, LODDlg::OnSpinTargetUp )
+	EVT_SPIN_DOWN( ID_TARGET, LODDlg::OnSpinTargetDown )
 	EVT_TEXT( ID_TARGET, LODDlg::OnTarget )
 	EVT_TEXT( ID_TEXT_PRANGE, LODDlg::OnText )
 	EVT_SLIDER( ID_SLIDER_PRANGE, LODDlg::OnRangeSlider )
@@ -60,9 +58,6 @@ LODDlg::LODDlg( wxWindow *parent, wxWindowID id, const wxString &title,
 	m_iCountMax = 0;
 	m_fPageout = 0.0f;
 	m_fRange = 0.0f;
-	m_bShowTilesetStatus = false;
-
-	m_pTerrain = NULL;
 
 	// Work around wxFormDesigner's lack of support for limiting to smallest size
 	GetSizer()->SetSizeHints(this);
@@ -105,13 +100,6 @@ void LODDlg::SetPagingRange(float fmin, float fmax)
 void LODDlg::Refresh(float res0, float res, float res1, int target,
 					 int count, float prange)
 {
-	bool bNeedRefresh = false;
-	if (target != m_iTarget)
-	{
-		m_iTarget = target;
-		bNeedRefresh = true;
-	}
-
 	// don't bother updating if window isn't shown
 	if (!IsShown())
 		return;
@@ -120,23 +108,12 @@ void LODDlg::Refresh(float res0, float res, float res1, int target,
 	if (GetNotebook()->GetSelection() != 0)
 		return;
 
-	// Hide the tileset status if our current terrain has no tileset.
-	bool bshow = (prange != -1);
-	GetTilesetBox()->GetContainingSizer()->Show(bshow);
-	if (bshow != m_bShowTilesetStatus)
-	{
-		Layout();
-		GetSizer()->Fit( this );
-		m_bShowTilesetStatus = bshow;
-	}
-
 	wxString str;
-	if (bNeedRefresh)
+	if (target != m_iTarget)
 	{
+		m_iTarget = target;
 		str.Printf(_T("%d"), m_iTarget);
-		m_bSet = true;
 		GetTarget()->SetValue(str);
-		m_bSet = false;
 	}
 
 	str.Printf(_T("%d"), count);
@@ -177,8 +154,9 @@ void LODDlg::OnText( wxCommandEvent &event )
 
 	if (m_bHaveRangeVal)
 		m_pFrame->ChangePagingRange(m_fRange);
-	if (m_pTerrain)
-		m_pTerrain->SetStructurePageOutDistance(m_fPageout);
+	vtTerrain *terr = GetCurrentTerrain();
+	if (terr)
+		terr->SetStructurePageOutDistance(m_fPageout);
 
 	m_bSet = true;
 	TransferDataToWindow();
@@ -194,8 +172,9 @@ void LODDlg::OnRangeSlider( wxCommandEvent &event )
 
 	if (m_bHaveRangeVal)
 		m_pFrame->ChangePagingRange(m_fRange);
-	if (m_pTerrain)
-		m_pTerrain->SetStructurePageOutDistance(m_fPageout);
+	vtTerrain *terr = GetCurrentTerrain();
+	if (terr)
+		terr->SetStructurePageOutDistance(m_fPageout);
 
 	m_bSet = true;
 	TransferDataToWindow();
@@ -371,14 +350,15 @@ void LODDlg::DrawStructureState(vtPagedStructureLodGrid *grid, float fPageOutDis
 		return;
 
 	//
-	if (m_pTerrain)
+	vtTerrain *pTerr = GetCurrentTerrain();
+	if (pTerr)
 	{
 		float prev1 = m_fPageout;
 		int prev2 = m_iCountCur;
 		int prev3 = m_iCountMax;
-		m_fPageout = m_pTerrain->GetStructurePageOutDistance();
+		m_fPageout = pTerr->GetStructurePageOutDistance();
 		m_iCountCur = grid->GetTotalConstructed();
-		m_iCountMax = m_pTerrain->GetStructurePageMax();
+		m_iCountMax = pTerr->GetStructurePageMax();
 		if (prev1 != m_fPageout || prev2 != m_iCountCur || prev3 != m_iCountMax)
 		{
 			ValuesToSliders();
@@ -553,9 +533,6 @@ void LODDlg::OnSpinTargetDown( wxSpinEvent &event )
 
 void LODDlg::OnTarget( wxCommandEvent &event )
 {
-	if (m_bSet)
-		return;
-
 	// User typed something into the Target control
 	TransferDataFromWindow();
 	m_pFrame->SetTerrainDetail(m_iTarget);

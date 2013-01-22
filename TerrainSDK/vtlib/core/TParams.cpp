@@ -44,7 +44,7 @@ ScenarioParams &ScenarioParams::operator = (const ScenarioParams &rhs)
 
 void ScenarioParams::WriteOverridesToXML(FILE *fp) const
 {
-	uint i;
+	unsigned int i;
 	for (i = 0; i < m_ActiveLayers.size(); i++)
 	{
 		const vtString &str = m_ActiveLayers[i];
@@ -64,7 +64,6 @@ TParams::TParams() : vtTagArray()
 	AddTag(STR_MINHEIGHT, "20");
 	AddTag(STR_NAVSTYLE, "0");
 	AddTag(STR_NAVSPEED, "100");
-	AddTag(STR_NAVDAMPING, "5");
 	AddTag(STR_LOCFILE, "");
 	AddTag(STR_INITLOCATION, "");
 	AddTag(STR_HITHER, "5");
@@ -74,27 +73,31 @@ TParams::TParams() : vtTagArray()
 	AddTag(STR_SURFACE_TYPE, "0");	// 0=grid, 1=TIN, 2=tiled grid
 	AddTag(STR_LODMETHOD, "0");
 	AddTag(STR_TRICOUNT, "10000");
+	AddTag(STR_TRISTRIPS, "true");
 	AddTag(STR_VERTCOUNT, "20000");
 	AddTag(STR_TILE_CACHE_SIZE, "80");	// 80 MB
 	AddTag(STR_TILE_THREADING, "false");
 
 	AddTag(STR_TIMEON, "false");
-	AddTag(STR_INITTIME, "104 3 21 10 0 0");	// 2004, spring equinox, 10am
+	AddTag(STR_INITTIME, "104 2 21 10 0 0");	// 2004, spring, 10am
 	AddTag(STR_TIMESPEED, "1");
 
-	AddTag(STR_TEXTURE, "3");		// 3 = Derived
+	AddTag(STR_TEXTURE, "0");
 	AddTag(STR_TEXTUREFILE, "");
-	AddTag(STR_COLOR_MAP, "");
 	AddTag(STR_TEXTURE_GRADUAL, "false");
 	AddTag(STR_TEXURE_LOD_FACTOR, "0.25");
-
+	AddTag(STR_MIPMAP, "false");
+	AddTag(STR_REQUEST16BIT, "true");
 	AddTag(STR_PRELIGHT, "true");
 	AddTag(STR_PRELIGHTFACTOR, "1.0");
 	AddTag(STR_CAST_SHADOWS, "false");
-	AddTag(STR_MIPMAP, "false");
-	AddTag(STR_REQUEST16BIT, "true");
-	AddTag(STR_SHOW_UNDERSIDE, "false");
-	AddTag(STR_OPACITY, "1.0");
+	AddTag(STR_COLOR_MAP, "");
+	AddTag(STR_TEXTURE_RETAIN, "true");
+
+	AddTag(STR_DETAILTEXTURE, "false");
+	AddTag(STR_DTEXTURE_NAME, "");
+	AddTag(STR_DTEXTURE_SCALE, "1");
+	AddTag(STR_DTEXTURE_DISTANCE, "1000");
 
 	AddTag(STR_ROADS, "false");
 	AddTag(STR_ROADFILE, "");
@@ -106,8 +109,9 @@ TParams::TParams() : vtTagArray()
 	AddTag(STR_TEXROADS, "true");
 	AddTag(STR_ROADCULTURE, "false");
 
-	AddTag(STR_VEGDISTANCE, "4000");	// 4 km
-	AddTag(STR_TREES_USE_SHADERS, "false");
+	AddTag(STR_TREES, "false");
+	AddTag(STR_TREEFILE, "2000");		// 2 km
+	AddTag(STR_VEGDISTANCE, "5000");	// 5 km
 
 	AddTag(STR_FOG, "false");
 	AddTag(STR_FOGDISTANCE, "50");		// 50 km
@@ -142,9 +146,11 @@ TParams::TParams() : vtTagArray()
 	AddTag(STR_OCEANPLANELEVEL, "-20");
 	AddTag(STR_DEPRESSOCEAN, "false");
 	AddTag(STR_DEPRESSOCEANLEVEL, "-40");
+	AddTag(STR_HORIZON, "false");
 	AddTag(STR_BGCOLOR, "0 0 0");	// black
 
-	AddTag(STR_UTILITY_FILE, "");
+	AddTag(STR_ROUTEENABLE, "false");	// not used yet
+	AddTag(STR_ROUTEFILE, "");			// not used yet
 
 	AddTag(STR_DIST_TOOL_HEIGHT, "5");
 	AddTag(STR_HUD_OVERLAY, "");
@@ -196,24 +202,70 @@ void TParams::ConvertOldTimeValue()
 	}
 }
 
-//////////////////////////////
-// Visitor class for XML parsing of TParams files.
-
-class TParamsVisitor : public TagVisitor
+bool TParams::LoadFromXML(const char *fname)
 {
-public:
-	TParamsVisitor(TParams *pParams) : TagVisitor(pParams), m_pParams(pParams), m_bInLayer(false), m_bInScenario(false) {}
-	void startElement(const char *name, const XMLAttributes &atts);
-	void endElement (const char *name);
+	LocaleWrap normal_numbers(LC_NUMERIC, "C");
 
-protected:
-	TParams *m_pParams;
-	vtTagArray m_layer;
-	bool m_bViz;
-	ScenarioParams m_Scenario;
-	bool m_bInLayer;
-	bool m_bInScenario;
-};
+	VTLOG("\tReading TParams from '%s'\n", fname);
+
+	TParamsVisitor visitor(this);
+	try
+	{
+		std::string fname2(fname);
+		readXML(fname2, visitor);
+	}
+	catch (xh_io_exception &ex)
+	{
+		const string msg = ex.getFormattedMessage();
+		VTLOG(" XML problem: %s\n", msg.c_str());
+		return false;
+	}
+
+	// Convert old time values to new values
+	ConvertOldTimeValue();
+
+	// Remove some obsolete stuff
+	RemoveTag("Labels");
+	RemoveTag("LabelFile");
+	RemoveTag("Label_Field");
+	RemoveTag("Label_Height");
+	RemoveTag("Label_Size");
+	RemoveTag("Overlay");
+	RemoveTag("Num_Tiles");
+	RemoveTag("Pixel_Error");
+	RemoveTag("Texture_Format");
+	RemoveTag("Tile_Size");
+	RemoveTag("Base_Texture");
+	RemoveTag("Texture_4by4");
+
+	// Is_TIN is obsolete, use Surface_Type=1 instead
+	bool bOldTin = GetValueBool("Is_TIN");
+	if (bOldTin)
+		SetValueInt(STR_SURFACE_TYPE, 1, true);
+	RemoveTag("Is_TIN");
+
+	// Filename is obsolete, use Elevation_Filename instead
+	vtTag *tag;
+	tag = FindTag("Filename");
+	if (tag)
+	{
+		SetValueString(STR_ELEVFILE, tag->value);
+		RemoveTag("Filename");
+	}
+
+	// Single_Texture is obsolete, use Texture_Filename instead
+	tag = FindTag("Single_Texture");
+	if (tag)
+	{
+		SetValueString(STR_TEXTUREFILE, tag->value);
+		RemoveTag("Single_Texture");
+	}
+
+	return true;
+}
+
+
+//////////////////////////////
 
 void TParamsVisitor::startElement(const char *name, const XMLAttributes &atts)
 {
@@ -255,13 +307,6 @@ void TParamsVisitor::endElement(const char *name)
 	}
 	else if (m_level == 2 && !strcmp(name, "Layer"))
 	{
-		if (m_layer.GetValueString("Type") ==  TERR_LTYPE_ABSTRACT)
-		{
-			// Older files without LabelOutline should default it to true
-			if (m_layer.FindTag("LabelOutline") == NULL)
-				m_layer.AddTag("LabelOutline", "true");
-		}
-
 		m_pParams->m_Layers.push_back(m_layer);
 		m_level--;
 		m_bInLayer = false;
@@ -296,86 +341,8 @@ void TParamsVisitor::endElement(const char *name)
 		TagVisitor::endElement(name);
 }
 
+
 //////////////////////////////
-
-bool TParams::LoadFromXML(const char *fname)
-{
-	LocaleWrap normal_numbers(LC_NUMERIC, "C");
-
-	VTLOG("\tReading TParams from '%s'\n", fname);
-
-	TParamsVisitor visitor(this);
-	try
-	{
-		std::string fname2(fname);
-		readXML(fname2, visitor);
-	}
-	catch (xh_io_exception &ex)
-	{
-		const string msg = ex.getFormattedMessage();
-		VTLOG(" XML problem: %s\n", msg.c_str());
-		return false;
-	}
-
-	// Convert old time values to new values
-	ConvertOldTimeValue();
-
-	// Remove some obsolete stuff
-	RemoveTag("Labels");
-	RemoveTag("LabelFile");
-	RemoveTag("Label_Field");
-	RemoveTag("Label_Height");
-	RemoveTag("Label_Size");
-	RemoveTag("Overlay");
-	RemoveTag("Num_Tiles");
-	RemoveTag("Pixel_Error");
-	RemoveTag("Texture_Format");
-	RemoveTag("Tile_Size");
-	RemoveTag("Base_Texture");
-	RemoveTag("Texture_4by4");
-	RemoveTag("Tristrips");
-
-	// Is_TIN is obsolete, use Surface_Type=1 instead
-	bool bOldTin = GetValueBool("Is_TIN");
-	if (bOldTin)
-		SetValueInt(STR_SURFACE_TYPE, 1, true);
-	RemoveTag("Is_TIN");
-
-	// Filename is obsolete, use Elevation_Filename instead
-	vtTag *tag;
-	tag = FindTag("Filename");
-	if (tag)
-	{
-		SetValueString(STR_ELEVFILE, tag->value);
-		RemoveTag("Filename");
-	}
-
-	// Single_Texture is obsolete, use Texture_Filename instead
-	tag = FindTag("Single_Texture");
-	if (tag)
-	{
-		SetValueString(STR_TEXTUREFILE, tag->value);
-		RemoveTag("Single_Texture");
-	}
-
-	// Trees/Tree_File is obsolete, make a vegetation layer instead
-	bool bOldTrees;
-	if (GetValueBool("Trees", bOldTrees))
-	{
-		tag = FindTag("Tree_File");
-		if (tag && bOldTrees)
-		{
-			vtTagArray layer;
-			layer.SetValueString("Type", TERR_LTYPE_VEGETATION, true);
-			layer.SetValueString("Filename", tag->value, true);
-			m_Layers.push_back(layer);
-
-		}
-		RemoveTag("Trees");
-		RemoveTag("Tree_File");
-	}
-	return true;
-}
 
 void TParams::SetLodMethod(LodMethodEnum method)
 {
@@ -421,37 +388,9 @@ bool TParams::GetOverlay(vtString &fname, int &x, int &y) const
 	return true;
 }
 
-int TParams::NumLayersOfType(const vtString &layer_type)
-{
-	int count = 0;
-	for (uint i = 0; i < m_Layers.size(); i++)
-	{
-		const vtTagArray &lay = m_Layers[i];
-		if (lay.GetValueString("Type") == layer_type)
-			count++;
-	}
-	return count;
-}
-
-LayerType TParams::LayerType(int iLayerNum)
-{
-	vtString ltype = m_Layers[iLayerNum].GetValueString("Type");
-	if (ltype == TERR_LTYPE_STRUCTURE)
-		return LT_STRUCTURE;
-	if (ltype == TERR_LTYPE_ABSTRACT)
-		return LT_RAW;
-	if (ltype == TERR_LTYPE_IMAGE)
-		return LT_IMAGE;
-	if (ltype == TERR_LTYPE_VEGETATION)
-		return LT_VEG;
-	if (ltype == TERR_LTYPE_ELEVATION)
-		return LT_ELEVATION;
-	return LT_UNKNOWN;
-}
-
 void TParams::WriteOverridesToXML(FILE *fp) const
 {
-	uint i;
+	unsigned int i;
 	for (i = 0; i < m_Layers.size(); i++)
 	{
 		const vtTagArray &lay = m_Layers[i];

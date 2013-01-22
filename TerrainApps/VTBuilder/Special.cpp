@@ -17,13 +17,13 @@
 #include "vtdata/vtDIB.h"
 #include "vtdata/vtLog.h"
 #include "vtdata/ElevationGrid.h"
-#include "vtdata/FileFilters.h"
 #include "vtdata/Icosa.h"
 #include "vtui/Helper.h"	// for ProgressDialog
 #include "vtui/SizeDlg.h"
-
+#include "Helper.h"			// for DisplayAndLog
 #include "Frame.h"
 #include "ElevLayer.h"
+#include "FileFilters.h"
 
 bool ProcessBillboardTexture(const char *fname_in, const char *fname_out,
 							 const RGBi &bg, bool progress_callback(int) = NULL)
@@ -35,16 +35,18 @@ bool ProcessBillboardTexture(const char *fname_in, const char *fname_out,
 		DisplayAndLog("Couldn't read input file.");
 		return false;
 	}
-	const IPoint2 size = dib1.GetSize();
+	int i, j, width, height, x, y;
+	width = dib1.GetWidth();
+	height = dib1.GetHeight();
 
 	// First pass: restore color of edge texels by guessing correct
 	//  non-background color.
 	RGBAi c, res, diff;
-	dib2.Create(size, 32);
-	for (int i = 0; i < size.x; i++)
+	dib2.Create(width, height, 32);
+	for (i = 0; i < width; i++)
 	{
-		progress_callback(i * 100 / size.x);
-		for (int j = 0; j < size.y; j++)
+		progress_callback(i*100/width);
+		for (j = 0; j < height; j++)
 		{
 			dib1.GetPixel32(i, j, c);
 			if (c.a == 0)
@@ -71,7 +73,7 @@ bool ProcessBillboardTexture(const char *fname_in, const char *fname_out,
 
 	// Now make many passes over the bitmap, filling in areas of alpha==0
 	//  with values from the nearest pixels.
-	dib3.Create(size, 24);
+	dib3.Create(width, height, 24);
 	int filled_in = 1;
 	int progress_target = -1;
 	while (filled_in)
@@ -81,9 +83,9 @@ bool ProcessBillboardTexture(const char *fname_in, const char *fname_out,
 
 		RGBi sum;
 		int surround;
-		for (int i = 0; i < size.x; i++)
+		for (i = 0; i < width; i++)
 		{
-			for (int j = 0; j < size.y; j++)
+			for (j = 0; j < height; j++)
 			{
 				dib2.GetPixel32(i, j, c);
 				if (c.a != 0)
@@ -92,14 +94,14 @@ bool ProcessBillboardTexture(const char *fname_in, const char *fname_out,
 				// collect surrounding values
 				sum.Set(0,0,0);
 				surround = 0;
-				for (int x = -1; x <= 1; x++)
-				for (int y = -1; y <= 1; y++)
+				for (x = -1; x <= 1; x++)
+				for (y = -1; y <= 1; y++)
 				{
 					if (x == 0 && y == 0) continue;
-					if (i + x < 0) continue;
-					if (i + x > size.x - 1) continue;
-					if (j + y < 0) continue;
-					if (j + y > size.y - 1) continue;
+					if (i+x < 0) continue;
+					if (i+x > width-1) continue;
+					if (j+y < 0) continue;
+					if (j+y > height-1) continue;
 					dib2.GetPixel32(i+x, j+y, c);
 					if (c.a != 0)
 					{
@@ -114,9 +116,9 @@ bool ProcessBillboardTexture(const char *fname_in, const char *fname_out,
 				}
 			}
 		}
-		for (int i = 0; i < size.x; i++)
+		for (i = 0; i < width; i++)
 		{
-			for (int j = 0; j < size.y; j++)
+			for (j = 0; j < height; j++)
 			{
 				dib2.GetPixel32(i, j, c);
 				if (c.a == 0)
@@ -138,10 +140,10 @@ bool ProcessBillboardTexture(const char *fname_in, const char *fname_out,
 	}
 	// One final pass: changed the regions with alpha==1 to 0
 	// (we were just using the value as a flag)
-	for (int i = 0; i < size.x; i++)
+	for (i = 0; i < width; i++)
 	{
-		progress_callback(i * 100 / size.x);
-		for (int j = 0; j < size.y; j++)
+		progress_callback(i*100/width);
+		for (j = 0; j < height; j++)
 		{
 			dib2.GetPixel32(i, j, c);
 			if (c.a == 1)
@@ -362,7 +364,7 @@ void Builder::ElevCopy()
 
 	// Void data.
 	if (bAlpha)
-		clipSize += clip.CalcBinaryTagStorage(cw * cb * sizeof(uchar));
+		clipSize += clip.CalcBinaryTagStorage(cw * cb * sizeof(unsigned char));
 
 	// Projection string.
 	char *wkt = NULL;
@@ -426,8 +428,8 @@ void Builder::ElevCopy()
 			clip.Write("geometry", (unsigned __int32)1, true);
 			clip.WriteParent("projection", true);
 				clip.Write("format", (unsigned __int32)0, true);
-				uchar *pstrproj =
-					(uchar*)clip.WriteBinary(
+				unsigned char *pstrproj =
+					(unsigned char*)clip.WriteBinary(
 						"data", false,
 					wkt_str.GetLength());
 				::memcpy(pstrproj, (const char *)wkt_str, wkt_str.GetLength());
@@ -459,11 +461,11 @@ void Builder::ElevCopy()
 			clip.WriteParent("alpha", false);
 
 			clip.WriteParent("format", true);
-			clip.Write("depth", (unsigned __int32)(sizeof(uchar)*8), false);
+			clip.Write("depth", (unsigned __int32)(sizeof(unsigned char)*8), false);
 
-			uchar *pa = (uchar*)
+			unsigned char *pa = (unsigned char*)
 				clip.WriteBinary("data", false,
-					cw * cb * sizeof(uchar));
+					cw * cb * sizeof(unsigned char));
 
 			for(z = 0; z < cb; z++)
 			{
@@ -587,7 +589,7 @@ void Builder::ElevPasteNew()
 	}
 
 	// Create new layer
-	vtElevLayer *pEL = new vtElevLayer(area, IPoint2(width, breadth), bFP, 1.0f, proj);
+	vtElevLayer *pEL = new vtElevLayer(area, width, breadth, bFP, 1.0f, proj);
 
 	// Copy the elevations.
 	// Require packed pixel storage.
@@ -609,7 +611,7 @@ void Builder::ElevPasteNew()
 
 void MainFrame::DoDymaxTexture()
 {
-	int face;
+	int i, x, y, face;
 	DPoint3 uvw;
 	uvw.z = 0.0f;
 	double u, v;
@@ -671,21 +673,21 @@ void MainFrame::DoDymaxTexture()
 
 	DymaxIcosa ico;
 
-	uchar value;
+	unsigned char value;
 	RGBi rgb;
 	RGBAi rgba;
-	for (int i = 0; i < 10; i++)
+	for (i = 0; i < 10; i++)
 	{
 		vtDIB out;
-		out.Create(IPoint2(output_size, output_size), depth);
+		out.Create(output_size, output_size, depth);
 
 		wxString msg;
 		msg.Printf(_("Creating tile %d ..."), i+1);
 		prog.Update((i+1)*10, msg);
 
-		for (int x = 0; x < output_size; x++)
+		for (x = 0; x < output_size; x++)
 		{
-			for (int y = 0; y < output_size; y++)
+			for (y = 0; y < output_size; y++)
 			{
 				if (y < output_size-1-x)
 				{
@@ -741,6 +743,7 @@ void MainFrame::DoDymaxMap()
 {
 	VTLOG1("DoDymaxMap\n");
 
+	int x, y;
 	DPoint3 uvw;
 	uvw.z = 0.0f;
 
@@ -804,7 +807,7 @@ void MainFrame::DoDymaxMap()
 	// Make output
 	vtDIB out;
 	VTLOG("output: size %d %d\n", output_x, output_y);
-	if (!out.Create(IPoint2(output_x, output_y), depth))
+	if (!out.Create(output_x, output_y, depth))
 	{
 		vtString msg;
 		msg.Format("Could not allocate DIB of size %d x %d (%.1f MB)", output_x, output_y,
@@ -817,13 +820,13 @@ void MainFrame::DoDymaxMap()
 
 	DPoint2 p;
 	DPoint2 dmp;
-	uchar value;
+	unsigned char value;
 	RGBi rgb;
 	RGBAi rgba;
 
 	prog.Update(1, _T(""));
 
-	for (int x = 0; x < input_x; x++)
+	for (x = 0; x < input_x; x++)
 	{
 		msg.Printf(_T("Projecting %d/%d"), x, input_x);
 		if (prog.Update(x * 99 / input_x, msg) == false)
@@ -834,7 +837,7 @@ void MainFrame::DoDymaxMap()
 		}
 
 		p.x = (((double)x / (input_x-1)) * 360.0) - 180.0;
-		for (int y = 0; y < input_y; y++)
+		for (y = 0; y < input_y; y++)
 		{
 			p.y = -((((double)y / (input_y-1)) * 180.0) - 90.0);
 

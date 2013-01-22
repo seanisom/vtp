@@ -65,12 +65,12 @@ void vtVegLayer::GetPropertyText(wxString &str)
 	{
 		vtPlantInstanceArray *pPIA = (vtPlantInstanceArray*) m_pSet;
 
-		int ent = m_pSet->NumEntities();
+		int ent = m_pSet->GetNumEntities();
 		s.Printf(_("Number of Instances: %d\n"), ent);
 		str += s;
 
-		vtSpeciesList *list = g_bld->GetSpeciesList();
-		for (uint i = 0; i < list->NumSpecies(); i++)
+		vtSpeciesList *list = g_bld->GetPlantList();
+		for (unsigned int i = 0; i < list->NumSpecies(); i++)
 		{
 			int num = pPIA->InstancesOfSpecies(i);
 			if (num != 0)
@@ -110,10 +110,10 @@ bool vtVegLayer::OnSave(bool progress_callback(int))
 
 bool vtVegLayer::OnLoad()
 {
-	vtSpeciesList *plants = g_bld->GetSpeciesList();
+	vtSpeciesList *plants = g_bld->GetPlantList();
 	if (plants->NumSpecies() == 0)
 	{
-		DisplayAndLog(_("You must specify a species file (plant list) to use when working with vegetation files."));
+		wxMessageBox(_("You must specify a species file (plant list) to use\n before working with vegetation files.\n"));
 		return false;
 	}
 
@@ -127,7 +127,7 @@ bool vtVegLayer::OnLoad()
 	{
 		// read VF file
 		SetVegType(VLT_Instances);
-		GetPIA()->SetSpeciesList(plants);
+		GetPIA()->SetPlantList(plants);
 		if (GetPIA()->ReadVF(fname.mb_str(wxConvUTF8)))
 		{
 			m_pSet->SetFilename((const char *)fname.mb_str(wxConvUTF8));
@@ -218,8 +218,8 @@ void vtVegLayer::AddElementsFromLULC(vtLULCFile *pLULC)
 	SetProjection(proj_new);
 
 	// figure out the number of polygons in file
-	uint size = 0;
-	for (uint sec = 0; sec < pLULC->NumSections(); sec++)
+	unsigned int size = 0;
+	for (unsigned int sec = 0; sec < pLULC->NumSections(); sec++)
 	{
 		section = pLULC->GetSection(sec);
 		size = size + section->m_iNumPolys;
@@ -230,7 +230,7 @@ void vtVegLayer::AddElementsFromLULC(vtLULCFile *pLULC)
 	m_pSet->SetNumEntities(size);
 
 	// get each poly from LULC file
-	uint i, s, p, count = 0;
+	unsigned int i, s, p, count = 0;
 	float density=0;
 	for (s = 0; s < pLULC->NumSections(); s++)
 	{
@@ -371,7 +371,7 @@ bool vtVegLayer::AddElementsFromSHP_Polys(const wxString &filename,
 
 	// Read fields
 	int biotype_id;
-	for (uint i = 0; i < (uint) nElem; i++)
+	for (unsigned int i = 0; i < (unsigned int) nElem; i++)
 	{
 		int record = m_pSet->AddRecord();
 		// Read DBF Attributes per poly
@@ -410,9 +410,9 @@ bool vtVegLayer::AddElementsFromSHP_Points(const wxString &filename,
 	// We will be creating plant instances
 	SetVegType(VLT_Instances);
 
-	vtSpeciesList *pSpeciesList = g_bld->GetSpeciesList();
+	vtSpeciesList *pPlantList = g_bld->GetPlantList();
 	vtBioRegion *pBioRegion = g_bld->GetBioRegion();
-	GetPIA()->SetSpeciesList(pSpeciesList);
+	GetPIA()->SetPlantList(pPlantList);
 
 	// SHPOpen doesn't yet support utf-8 or wide filenames, so convert
 	vtString fname_local = UTF8ToLocal(filename.mb_str(wxConvUTF8));
@@ -492,7 +492,7 @@ bool vtVegLayer::AddElementsFromSHP_Points(const wxString &filename,
 		// Read DBF Attributes per point
 		int species_id = -1;
 		if (opt.bFixedSpecies)
-			species_id = pSpeciesList->GetSpeciesIdByName(opt.strFixedSpeciesName.mb_str(wxConvUTF8));
+			species_id = pPlantList->GetSpeciesIdByName(opt.strFixedSpeciesName.mb_str(wxConvUTF8));
 		else
 		{
 			switch (opt.iInterpretSpeciesField)
@@ -502,13 +502,13 @@ bool vtVegLayer::AddElementsFromSHP_Points(const wxString &filename,
 				break;
 			case 1:
 				str = DBFReadStringAttribute(db, i, opt.iSpeciesFieldIndex);
-				species_id = pSpeciesList->GetSpeciesIdByName(str);
+				species_id = pPlantList->GetSpeciesIdByName(str);
 				if (species_id == -1)
 					unfound++;
 				break;
 			case 2:
 				str = DBFReadStringAttribute(db, i, opt.iSpeciesFieldIndex);
-				species_id = pSpeciesList->GetSpeciesIdByCommonName(str);
+				species_id = pPlantList->GetSpeciesIdByCommonName(str);
 				if (species_id == -1)
 					unfound++;
 				break;
@@ -531,7 +531,7 @@ bool vtVegLayer::AddElementsFromSHP_Points(const wxString &filename,
 		// Make sure we have a valid species
 		if (species_id == -1)
 			continue;
-		vtPlantSpecies *pSpecies = pSpeciesList->GetSpecies(species_id);
+		vtPlantSpecies *pSpecies = pPlantList->GetSpecies(species_id);
 		if (!pSpecies)
 			continue;
 
