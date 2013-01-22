@@ -13,7 +13,6 @@
 
 #include "vtdata/DLG.h"
 #include "vtdata/Fence.h"
-#include "vtdata/FileFilters.h"
 #include "vtdata/ElevationGrid.h"
 #include "vtdata/FilePath.h"
 #include "vtdata/Triangulate.h"
@@ -178,7 +177,7 @@ void vtStructureLayer::DrawBuilding(wxDC *pDC, vtScaledView *pView,
 	pDC->DrawLine(origin.x, origin.y-m_size, origin.x, origin.y+m_size+1);
 
 	// draw building footprint for all levels
-	int levs = bld->NumLevels();
+	int levs = bld->GetNumLevels();
 
 	// unless we're XORing, in which case multiple overlapping level would
 	// cancel each other out
@@ -267,7 +266,7 @@ void vtStructureLayer::CleanFootprints(double epsilon, int &degenerate, int &ove
 		vtBuilding *bld = pStructure->GetBuilding();
 		if (!bld)
 			continue;
-		for (uint j = 0; j < bld->NumLevels(); j++)
+		for (uint j = 0; j < bld->GetNumLevels(); j++)
 		{
 			vtLevel *lev = bld->GetLevel(j);
 			DPolygon2 &dp = lev->GetFootprint();
@@ -436,8 +435,9 @@ void vtStructureLayer::OnLeftDown(BuilderView *pView, UIContext &ui)
 	case LB_AddLinear:
 		if (ui.m_pCurLinear == NULL)
 		{
-			ui.m_pCurLinear = AddNewFence();
+			ui.m_pCurLinear = NewFence();
 			ui.m_pCurLinear->SetParams(g_bld->m_LSOptions);
+			push_back(ui.m_pCurLinear);
 			ui.m_bRubber = true;
 		}
 		ui.m_pCurLinear->AddPoint(ui.m_CurLocation);
@@ -599,7 +599,7 @@ void vtStructureLayer::OnLeftDownBldAddPoints(BuilderView *pView, UIContext &ui)
 	if (-1 == iLevel)
 	{
 		// Add in all levels
-		iNumLevels = pBuilding->NumLevels();
+		iNumLevels = pBuilding->GetNumLevels();
 		for (i = 0; i < iNumLevels; i++)
 		{
 			pLevel = pBuilding->GetLevel(i);
@@ -653,7 +653,7 @@ void vtStructureLayer::OnLeftDownBldDeletePoints(BuilderView *pView, UIContext &
 	if (-1 == iLevel)
 	{
 		// Remove in all levels
-		iNumLevels = pBuilding->NumLevels();
+		iNumLevels = pBuilding->GetNumLevels();
 		for (i = 0; i <iNumLevels; i++)
 		{
 			pLevel = pBuilding->GetLevel(i);
@@ -770,7 +770,7 @@ void vtStructureLayer::UpdateMove(UIContext &ui)
 	DPoint2 p;
 	DPoint2 moved_by = ui.m_CurLocation - ui.m_DownLocation;
 
-	int i, levs = ui.m_pCurBuilding->NumLevels();
+	int i, levs = ui.m_pCurBuilding->GetNumLevels();
 	for (i = 0; i < levs; i++)
 	{
 		DPolygon2 dl = ui.m_pCurBuilding->GetFootprint(i);
@@ -793,7 +793,7 @@ void vtStructureLayer::UpdateRotate(UIContext &ui)
 	double angle_diff = angle2 - angle1;
 
 	DPoint2 p;
-	uint i, j, r, levs = ui.m_pCurBuilding->NumLevels();
+	uint i, j, r, levs = ui.m_pCurBuilding->GetNumLevels();
 	for (i = 0; i < levs; i++)
 	{
 		DPolygon2 foot = ui.m_pCurBuilding->GetFootprint(i);
@@ -829,7 +829,7 @@ void vtStructureLayer::UpdateResizeScale(BuilderView *pView, UIContext &ui)
 	if (ui.m_bShift)
 	{
 		// Scale evenly
-		uint levs = ui.m_pCurBuilding->NumLevels();
+		uint levs = ui.m_pCurBuilding->GetNumLevels();
 		for (i = 0; i < levs; i++)
 		{
 			DPolygon2 foot = ui.m_pCurBuilding->GetFootprint(i);
@@ -888,7 +888,7 @@ void vtStructureLayer::UpdateResizeScale(BuilderView *pView, UIContext &ui)
 		// Changing only the lowest level is near useless.  For the great
 		//  majority of cases, the user will want the footprints for all
 		//  levels to remain in sync.
-		for (i = 0; i < ui.m_EditBuilding.NumLevels(); i++)
+		for (i = 0; i < ui.m_EditBuilding.GetNumLevels(); i++)
 			ui.m_EditBuilding.SetFootprint(i, footprint);
 
 		// A better guess might be to offset the footprint points of each
@@ -1105,8 +1105,10 @@ void vtStructureLayer::AddElementsFromDLG(vtDLGFile *pDlg)
 
 bool vtStructureLayer::AskForSaveFilename()
 {
-	wxString filter = FSTRING_VTST;
-	AddType(filter, FSTRING_VTSTGZ);
+	wxString filter;
+	filter += _("VTST File (.vtst)|*.vtst");
+	filter += _T("|");
+	filter += _("GZipped VTST File (.vtst.gz)|*.vtst.gz");
 
 	wxFileDialog saveFile(NULL, _("Save Layer"), _T(""), GetLayerFilename(),
 		filter, wxFD_SAVE | wxFD_OVERWRITE_PROMPT);

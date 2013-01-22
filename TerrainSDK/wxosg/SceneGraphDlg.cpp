@@ -261,7 +261,7 @@ void SceneGraphDlg::AddNodeItemsRecursively(wxTreeItemId hParentItem,
 	osg::Geode *geode = dynamic_cast<osg::Geode*>(pNode);
 	if (pGeode)
 	{
-		int num_mesh = pGeode->NumMeshes();
+		int num_mesh = pGeode->GetNumMeshes();
 		wxTreeItemId	hGeomItem;
 
 		for (int i = 0; i < num_mesh; i++)
@@ -273,8 +273,8 @@ void SceneGraphDlg::AddNodeItemsRecursively(wxTreeItemId hParentItem,
 
 			if (pMesh)
 			{
-				int iNumPrim = pMesh->NumPrims();
-				int iNumVert = pMesh->NumVertices();
+				int iNumPrim = pMesh->GetNumPrims();
+				int iNumVert = pMesh->GetNumVertices();
 
 				vtMesh::PrimType ptype = pMesh->getPrimType();
 				const char *mtype="";
@@ -289,8 +289,6 @@ void SceneGraphDlg::AddNodeItemsRecursively(wxTreeItemId hParentItem,
 				case osg::PrimitiveSet::QUADS: mtype = "Quads"; break;
 				case osg::PrimitiveSet::QUAD_STRIP: mtype = "QuadStrip"; break;
 				case osg::PrimitiveSet::POLYGON: mtype = "Polygon"; break;
-				default:	// Keep picky compilers quiet.
-					break;
 				}
 				str.Printf(_("%d: Mesh, %hs, %d verts, %d prims"), i, mtype, iNumVert, iNumPrim);
 				hGeomItem = m_pTree->AppendItem(hNewItem, str, 6, 6);

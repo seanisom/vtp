@@ -147,7 +147,7 @@ void vtRawLayer::DrawLayer(wxDC *pDC, vtScaledView *pView)
 	pDC->SetPen(DefPen);
 
 	wxPoint p;
-	uint i, j, entities = m_pSet->NumEntities();
+	uint i, j, entities = m_pSet->GetNumEntities();
 	OGRwkbGeometryType type = m_pSet->GetGeomType();
 	if (type == wkbPoint)
 	{
@@ -426,7 +426,7 @@ void vtRawLayer::GetPropertyText(wxString &strIn)
 	str.Printf(_("Entity type: %hs\n"), OGRGeometryTypeToName(type));
 	strIn += str;
 
-	str.Printf(_("Entities: %d\n"), m_pSet->NumEntities());
+	str.Printf(_("Entities: %d\n"), m_pSet->GetNumEntities());
 	strIn += str;
 
 	if (type == wkbPoint25D)
@@ -457,7 +457,7 @@ void vtRawLayer::GetPropertyText(wxString &strIn)
 		}
 	}
 
-	int num_fields = m_pSet->NumFields();
+	int num_fields = m_pSet->GetNumFields();
 	if (num_fields)
 	{
 		strIn += _("Fields:\n");
@@ -580,7 +580,7 @@ void vtRawLayer::ScaleHorizontally(double factor)
 	if (!m_pSet)
 		return;
 
-	uint i, j, entities = m_pSet->NumEntities();
+	uint i, j, entities = m_pSet->GetNumEntities();
 	OGRwkbGeometryType type = m_pSet->GetGeomType();
 	if (type == wkbPoint)
 	{
@@ -631,7 +631,7 @@ void vtRawLayer::ScaleVertically(double factor)
 	if (!m_pSet)
 		return;
 
-	uint i, j, entities = m_pSet->NumEntities();
+	uint i, j, entities = m_pSet->GetNumEntities();
 	OGRwkbGeometryType type = m_pSet->GetGeomType();
 	if (type == wkbPoint25D)
 	{
@@ -661,7 +661,7 @@ void vtRawLayer::OffsetVertically(double amount)
 	if (!m_pSet)
 		return;
 
-	uint i, j, entities = m_pSet->NumEntities();
+	uint i, j, entities = m_pSet->GetNumEntities();
 	OGRwkbGeometryType type = m_pSet->GetGeomType();
 	if (type == wkbPoint25D)
 	{

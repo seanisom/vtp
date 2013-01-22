@@ -20,12 +20,6 @@
 class LayerItemData : public wxTreeItemData
 {
 public:
-	LayerItemData(vtElevLayer *elay)
-	{
-		Defaults();
-		m_type = LT_ELEVATION;
-		m_layer = m_elay = elay;
-	}
 	LayerItemData(vtVegLayer *vlay)
 	{
 		Defaults();
@@ -81,7 +75,6 @@ public:
 	vtAbstractLayer *m_alay;
 	vtImageLayer *m_ilay;
 	vtVegLayer *m_vlay;
-	vtElevLayer *m_elay;
 	vtStructureLayer *m_slay;
 	vtFeatureSet *m_fset;
 	GlobeLayer *m_glay;
@@ -114,7 +107,6 @@ public:
 
 	void SetShowAll(bool bTrue);
 	void UpdateEnabling();
-	void SetTerrain(class vtTerrain *pTerr) { m_pTerrain = pTerr; }
 
 	// Public handler declarations for LayerDlg
 	void OnLayerCreate( wxCommandEvent &event );
@@ -132,7 +124,6 @@ private:
 	wxAuiManager m_mgr;
 	wxPanel *m_main;
 	wxToolBar *m_pToolbar;
-	class vtTerrain *m_pTerrain;
 
 	osg::Node *GetNodeFromItem(wxTreeItemId item, bool bContainer = false);
 	vtStructureLayer *GetStructureLayerFromItem(wxTreeItemId item);
@@ -152,7 +143,6 @@ private:
 	void OnShadowVisible( wxCommandEvent &event );
 	void OnShowAll( wxCommandEvent &event );
 	void OnSelChanged( wxTreeEvent &event );
-	void OnItemActived( wxTreeEvent &event );
 
 	void OnUpdateCreate(wxUpdateUIEvent& event);
 	void OnUpdateVisible(wxUpdateUIEvent& event);

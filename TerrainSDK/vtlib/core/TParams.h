@@ -12,7 +12,6 @@
 
 #include "vtdata/MathTypes.h"
 #include "vtdata/Content.h"
-#include "vtdata/LayerBase.h"
 
 /** \addtogroup terrain */
 /*@{*/
@@ -20,7 +19,7 @@
 enum TextureEnum {
 	TE_NONE,
 	TE_SINGLE,
-	TE_OBSOLETE,
+	TE_TILED,
 	TE_DERIVED,
 	TE_TILESET
 };
@@ -42,7 +41,6 @@ enum LodMethodEnum {
 #define TERR_LTYPE_ABSTRACT		"Abstract"
 #define TERR_LTYPE_IMAGE		"Image"
 #define TERR_LTYPE_VEGETATION	"Vegetation"
-#define TERR_LTYPE_ELEVATION	"Elevation"
 
 ////////////////////////////////////////////////////////////////////////
 // Class to encapsulate a scenarios parameters.
@@ -284,6 +282,8 @@ Color_Map
 Texture_Retain
 Detail_Texture
 DTexture_Name
+DTexture_Scale
+DTexture_Distance
 Roads
 Road_File
 Highway
@@ -352,10 +352,7 @@ public:
 	void SetOverlay(const vtString &fname, int x, int y);
 	bool GetOverlay(vtString &fname, int &x, int &y) const;
 
-	// COnvenience
-	uint NumLayers() { return m_Layers.size(); }
 	int NumLayersOfType(const vtString &layer_type);
-	LayerType LayerType(int iLayerNum);
 
 public:
 	// this must be a public member (currently..)
@@ -398,20 +395,25 @@ private:
 #define STR_TIMESPEED "Time_Speed"
 
 #define STR_TEXTURE "Texture"	// 0=none, 1=single, 3=derived, 4=tileset
+//#define STR_TILESIZE "Tile_Size"				// obsolete
 #define STR_TEXTUREFILE "Texture_Filename"
-#define STR_COLOR_MAP "Color_Map"
-#define STR_TEXTURE_GEOTYPICAL "Texture_Geotypical"
-#define STR_GEOTYPICAL_SCALE "Texture_Geotypical_Scale"
+//#define STR_TEXTUREBASE "Base_Texture"		// obsolete
+//#define STR_TEXTURE4BY4 "Texture_4by4"		// obsolete
+//#define STR_TEXTUREFORMAT "Texture_Format"	// 0=bmp, 1=jpg; obsolete
 #define STR_TEXTURE_GRADUAL "Texture_Gradual"
 #define STR_TEXURE_LOD_FACTOR "Texture_LOD_Factor"
-
+#define STR_MIPMAP "MIP_Map"
+#define STR_REQUEST16BIT "Request_16_Bit"
 #define STR_PRELIGHT "Pre-Light"
 #define STR_PRELIGHTFACTOR "PreLight_Factor"
 #define STR_CAST_SHADOWS "Cast_Shadows"
-#define STR_MIPMAP "MIP_Map"
-#define STR_REQUEST16BIT "Request_16_Bit"
-#define STR_SHOW_UNDERSIDE "Show_Underside"
-#define STR_OPACITY "Opacity"
+#define STR_COLOR_MAP "Color_Map"
+#define STR_TEXTURE_RETAIN "Texture_Retain"
+
+#define STR_DETAILTEXTURE "Detail_Texture"
+#define STR_DTEXTURE_NAME "DTexture_Name"
+#define STR_DTEXTURE_SCALE "DTexture_Scale"
+#define STR_DTEXTURE_DISTANCE "DTexture_Distance"
 
 #define STR_ROADS "Roads"
 #define STR_ROADFILE "Road_File"
@@ -466,7 +468,8 @@ private:
 #define STR_DEPRESSOCEANLEVEL "Depress_Ocean_Level"
 #define STR_BGCOLOR "Background_Color"
 
-#define STR_UTILITY_FILE "Utility_File"
+#define STR_ROUTEENABLE "Route_Enable"	// not used yet
+#define STR_ROUTEFILE "Route_File"		// not used yet
 
 #define STR_DIST_TOOL_HEIGHT "Distance_Tool_Height"
 #define STR_HUD_OVERLAY "HUD_Overlay"

@@ -10,8 +10,6 @@ a.bt:link, a.bt:visited, a.bt:active, a.bt:hover {
 
 body
 {
-	font-family: Georgia;
-	font-size: 95%;
 	background-color:#EEEEEC;
 }
 h1 {
@@ -55,12 +53,4 @@ h4 {
 .center {
 	margin-left: auto;
 	margin-right: auto;
-}
-.tcenter {
-	text-align: center;
-}
-.menuleft {
-	float: left; background-color: white;
-	padding: 10px 10px 10px 10px;
-	border: 2px gray solid;
 }

@@ -23,7 +23,7 @@ static bool g_bInitializedPens = false;
 
 vtUtilityLayer::vtUtilityLayer() : vtLayer(LT_UTILITY)
 {
-	SetLayerFilename(_T("Untitled.osm"));
+	SetLayerFilename(_T("Untitled.utl"));
 
 	if (!g_bInitializedPens)
 	{
@@ -35,10 +35,13 @@ vtUtilityLayer::vtUtilityLayer() : vtLayer(LT_UTILITY)
 
 bool vtUtilityLayer::GetExtent(DRECT &rect)
 {
-	if (m_Poles.empty())
+	if (m_Poles.IsEmpty())
 		return false;
 
 	GetPoleExtents(rect);
+
+	// expand by 2 meters
+	rect.Grow(2.0, 2.0);
 
 	return true;
 }
@@ -46,8 +49,8 @@ bool vtUtilityLayer::GetExtent(DRECT &rect)
 void vtUtilityLayer::DrawLayer(wxDC *pDC, vtScaledView *pView)
 {
 	uint i;
-	uint npoles = m_Poles.size();
-	uint nlines = m_Lines.size();
+	uint npoles = m_Poles.GetSize();
+	uint nlines = m_Lines.GetSize();
 
 	if (!npoles)
 		return;
@@ -84,14 +87,13 @@ void vtUtilityLayer::DrawLayer(wxDC *pDC, vtScaledView *pView)
 		DrawPole(pDC, pView, pole);
 	}
 	pDC->SetPen(greenPen);
-	DLine2 polyline;
 	for (i = 0; i < nlines; i++)
 	{
 		vtLine *line = m_Lines[i];
-		line->MakePolyline(polyline);
-		pView->DrawPolyLine(pDC, polyline, false);
+		pView->DrawPolyLine(pDC, *line, false);
 	}
 }
+
 
 void vtUtilityLayer::DrawPole(wxDC *pDC, vtScaledView *pView, vtPole *pole)
 {
@@ -106,8 +108,8 @@ bool vtUtilityLayer::OnSave(bool progress_callback(int))
 {
 	wxString strExt = GetLayerFilename().AfterLast('.');
 
-	if (!strExt.CmpNoCase("osm"))
-		return WriteOSM(GetLayerFilename().mb_str(wxConvUTF8));
+//	if (!strExt.CmpNoCase("utl"))
+//		return WriteUTL(m_strFilename);
 	return false;
 }
 
@@ -127,7 +129,7 @@ void vtUtilityLayer::GetProjection(vtProjection &proj)
 
 void vtUtilityLayer::SetProjection(const vtProjection &proj)
 {
-	vtUtilityMap::SetProjection(proj);
+	m_proj = proj;
 }
 
 bool vtUtilityLayer::TransformCoords(vtProjection &proj)
@@ -135,7 +137,28 @@ bool vtUtilityLayer::TransformCoords(vtProjection &proj)
 	if (proj == m_proj)
 		return true;
 
-	return vtUtilityMap::TransformTo(proj);
+	// Create conversion object
+	vtProjection Source;
+	GetProjection(Source);
+	OCT *trans = CreateCoordTransform(&Source, &proj);
+	if (!trans)
+		return false;		// inconvertible projections
+
+/*	vtTower *tower;
+	DPoint2 loc;
+	int i;
+	int count = GetSize();
+	for (i = 0; i < count; i++)
+	{
+		tower = GetAt(i);
+		trans->Transform(1, &loc.x, &loc.y);
+	}
+*/
+	delete trans;
+
+	m_proj = proj;
+
+	return false;
 }
 
 bool vtUtilityLayer::AppendDataFrom(vtLayer *pL)
@@ -145,7 +168,13 @@ bool vtUtilityLayer::AppendDataFrom(vtLayer *pL)
 		return false;
 
 //	vtUtilityLayer *pFrom = (vtUtilityLayer *)pL;
-	// TODO
+
+/*	int count = pFrom->GetSize();
+	for (int i = 0; i < count; i++)
+	{
+		vtTower *tower = pFrom->GetAt(i);
+		Append(tower);
+	} */
 	return true;
 }
 

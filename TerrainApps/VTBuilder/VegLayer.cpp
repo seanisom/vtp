@@ -65,7 +65,7 @@ void vtVegLayer::GetPropertyText(wxString &str)
 	{
 		vtPlantInstanceArray *pPIA = (vtPlantInstanceArray*) m_pSet;
 
-		int ent = m_pSet->NumEntities();
+		int ent = m_pSet->GetNumEntities();
 		s.Printf(_("Number of Instances: %d\n"), ent);
 		str += s;
 

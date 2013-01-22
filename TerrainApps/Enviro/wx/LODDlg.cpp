@@ -62,8 +62,6 @@ LODDlg::LODDlg( wxWindow *parent, wxWindowID id, const wxString &title,
 	m_fRange = 0.0f;
 	m_bShowTilesetStatus = false;
 
-	m_pTerrain = NULL;
-
 	// Work around wxFormDesigner's lack of support for limiting to smallest size
 	GetSizer()->SetSizeHints(this);
 
@@ -177,8 +175,9 @@ void LODDlg::OnText( wxCommandEvent &event )
 
 	if (m_bHaveRangeVal)
 		m_pFrame->ChangePagingRange(m_fRange);
-	if (m_pTerrain)
-		m_pTerrain->SetStructurePageOutDistance(m_fPageout);
+	vtTerrain *terr = GetCurrentTerrain();
+	if (terr)
+		terr->SetStructurePageOutDistance(m_fPageout);
 
 	m_bSet = true;
 	TransferDataToWindow();
@@ -194,8 +193,9 @@ void LODDlg::OnRangeSlider( wxCommandEvent &event )
 
 	if (m_bHaveRangeVal)
 		m_pFrame->ChangePagingRange(m_fRange);
-	if (m_pTerrain)
-		m_pTerrain->SetStructurePageOutDistance(m_fPageout);
+	vtTerrain *terr = GetCurrentTerrain();
+	if (terr)
+		terr->SetStructurePageOutDistance(m_fPageout);
 
 	m_bSet = true;
 	TransferDataToWindow();
@@ -371,14 +371,15 @@ void LODDlg::DrawStructureState(vtPagedStructureLodGrid *grid, float fPageOutDis
 		return;
 
 	//
-	if (m_pTerrain)
+	vtTerrain *pTerr = GetCurrentTerrain();
+	if (pTerr)
 	{
 		float prev1 = m_fPageout;
 		int prev2 = m_iCountCur;
 		int prev3 = m_iCountMax;
-		m_fPageout = m_pTerrain->GetStructurePageOutDistance();
+		m_fPageout = pTerr->GetStructurePageOutDistance();
 		m_iCountCur = grid->GetTotalConstructed();
-		m_iCountMax = m_pTerrain->GetStructurePageMax();
+		m_iCountMax = pTerr->GetStructurePageMax();
 		if (prev1 != m_fPageout || prev2 != m_iCountCur || prev3 != m_iCountMax)
 		{
 			ValuesToSliders();

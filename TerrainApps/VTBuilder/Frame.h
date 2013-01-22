@@ -14,6 +14,8 @@
 #include "vtdata/WFSClient.h"	// for OGCServerArray
 #include "StatusBar.h"
 
+#define APPNAME "VTBuilder"
+
 // some shortcuts
 #define ADD_TOOL(bar, id, bmp, label) \
 	bar->AddTool(id, label, bmp, wxNullBitmap, wxITEM_NORMAL, label, label)
@@ -70,7 +72,6 @@ protected:
 	void OnProjectOpen(wxCommandEvent& event);
 	void OnProjectSave(wxCommandEvent& event);
 	void OnProjectPrefs(wxCommandEvent& event);
-	void OnElevFlip(wxCommandEvent &event);
 	void OnBatchConvert(wxCommandEvent &event);
 	void OnDymaxTexture(wxCommandEvent &event);
 	void OnDymaxMap(wxCommandEvent &event);
@@ -101,6 +102,7 @@ protected:
 	void OnLayerImportTIGER(wxCommandEvent& event);
 	void OnLayerImportOSM(wxCommandEvent& event);
 	void OnLayerImportNTF(wxCommandEvent& event);
+	void OnLayerImportUtil(wxCommandEvent& event);
 	void OnLayerImportMapSource(wxCommandEvent& event);
 	void OnLayerImportPoint(wxCommandEvent& event);
 	void OnLayerImportXML(wxCommandEvent& event);
@@ -189,7 +191,6 @@ protected:
 	void OnElevExportBitmap(wxCommandEvent& event);
 	void OnElevToTin(wxCommandEvent& event);
 	void OnElevContours(wxCommandEvent& event);
-	void OnElevCarve(wxCommandEvent& event);
 	void OnElevExportTiles(wxCommandEvent& event);
 	void OnElevMergeTin(wxCommandEvent& event);
 	void OnElevTrimTin(wxCommandEvent& event);
@@ -265,7 +266,7 @@ protected:
 	void OnRawAddPointsGPS(wxCommandEvent& event);
 	void OnRawAddFeatureWKT(wxCommandEvent& event);
 	void OnRawSelectCondition(wxCommandEvent& event);
-	void OnRawGenerateTIN(wxCommandEvent& event);
+	void OnRawConvertToTIN(wxCommandEvent& event);
 	void OnRawConvertToPolygons(wxCommandEvent& event);
 	void OnRawExportImageMap(wxCommandEvent& event);
 	void OnRawExportKML(wxCommandEvent& event);
@@ -284,8 +285,6 @@ protected:
 	void OnUpdateRawIsActive(wxUpdateUIEvent& event);
 	void OnUpdateRawIsActive3D(wxUpdateUIEvent& event);
 	void OnUpdateRawIsPolygon(wxUpdateUIEvent& event);
-	void OnUpdateRawIsPoint(wxUpdateUIEvent& event);
-	void OnUpdateRawHasPolylines(wxUpdateUIEvent& event);
 	void OnUpdateRawGenElevation(wxUpdateUIEvent& event);
 
 	void OnAreaClear(wxCommandEvent& event);

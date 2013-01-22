@@ -2,7 +2,7 @@
 // Name:	 EnviroApp.cpp
 // Purpose:  The application class for our wxWidgets application.
 //
-// Copyright (c) 2001-2013 Virtual Terrain Project
+// Copyright (c) 2001-2011 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -108,6 +108,83 @@ void EnviroApp::Args(int argc, wxChar **argv)
 	}
 }
 
+
+void EnviroApp::SetupLocale()
+{
+	VTLOG1("SetupLocale:\n");
+
+	wxLog::SetVerbose(true);
+
+	// Enable this for very detailed locale troubleshooting (in debugger only)
+//	wxLog::AddTraceMask(_T("i18n"));
+
+	// Locale stuff
+	int lang = wxLANGUAGE_DEFAULT;
+	int default_lang = m_locale.GetSystemLanguage();
+
+	const wxLanguageInfo *info = wxLocale::GetLanguageInfo(default_lang);
+	VTLOG("Default language: %d (%s)\n",
+		default_lang, (const char *) info->Description.mb_str(wxConvUTF8));
+
+	// After wx2.4.2, wxWidgets looks in the application's directory for
+	//  locale catalogs, not the current directory.  Here we force it to
+	//  look in the current directory as well.
+	wxString cwd = wxGetCwd();
+	m_locale.AddCatalogLookupPathPrefix(cwd);
+
+#if VTDEBUG
+	m_locale.AddCatalogLookupPathPrefix("../../../i18n");
+#endif
+
+	bool bSuccess=false;
+	if (m_locale_name != "")
+	{
+		VTLOG("Looking up language: %s\n", (const char *) m_locale_name);
+		lang = GetLangFromName(wxString(m_locale_name, wxConvUTF8));
+		if (lang == wxLANGUAGE_UNKNOWN)
+		{
+			VTLOG(" Unknown, falling back on default language.\n");
+			lang = wxLANGUAGE_DEFAULT;
+		}
+		else
+		{
+			info = m_locale.GetLanguageInfo(lang);
+			VTLOG("Initializing locale to language %d, Canonical name '%s', Description: '%s':\n",
+				lang,
+				(const char *) info->CanonicalName.mb_str(wxConvUTF8),
+				(const char *) info->Description.mb_str(wxConvUTF8));
+			bSuccess = m_locale.Init(lang);
+		}
+	}
+	if (lang == wxLANGUAGE_DEFAULT)
+	{
+		VTLOG("Initializing locale to default language:\n");
+		bSuccess = m_locale.Init(wxLANGUAGE_DEFAULT);
+		if (bSuccess)
+			lang = default_lang;
+	}
+	if (bSuccess)
+		VTLOG(" succeeded.\n");
+	else
+		VTLOG(" failed.\n");
+
+	VTLOG("Attempting to load the 'Enviro.mo' catalog for the current locale.\n");
+	bSuccess = m_locale.AddCatalog(wxT("Enviro"));
+	if (bSuccess)
+		VTLOG(" succeeded.\n");
+	else
+		VTLOG(" not found.\n");
+	VTLOG("\n");
+
+	// Load any other catalogs which may be specific to this application.
+	LoadAppCatalog(m_locale);
+
+	// Test it
+//	wxString test = _("&File");
+
+	wxLog::SetVerbose(false);
+}
+
 //
 // Initialize the app object
 //
@@ -126,10 +203,7 @@ bool EnviroApp::OnInit()
 	wxLog::SetActiveTarget(logger);
 
 	Args(argc, argv);
-	SetupLocale("Enviro");
-
-	// Load any other catalogs which may be specific to this application.
-	LoadAppCatalog(m_locale);
+	SetupLocale();
 
 	// If gdal and proj are not set with environment variables, try to set them
 	const char *gdalenv = getenv("GDAL_DATA");
@@ -302,6 +376,13 @@ wxString EnviroApp::MakeFrameTitle(vtTerrain *terrain)
 {
 	wxString title(STRING_APPORG, wxConvUTF8);
 
+	// If we are building the standard VTP, instead of some other flavor, then
+	//  put the name of the scene graph library in the title.
+	if (!strcmp(STRING_ORGNAME, "VTP"))
+	{
+		title += _T(" OSG");
+	}
+
 	if (terrain)
 	{
 		title += _T(" - ");
@@ -355,23 +436,21 @@ EnviroFrame *EnviroApp::CreateMainFrame()
 
 	VTLOG("OSG threading model is: ");
 	osgViewer::Viewer *vw = vtGetScene()->getViewer();
-	switch (vw->getThreadingModel() == osgViewer::Viewer::AutomaticSelection ?
-			vw->suggestBestThreadingModel() : vw->getThreadingModel())
+	switch(vw->getThreadingModel() == osgViewer::Viewer::AutomaticSelection
+		? vw->suggestBestThreadingModel() : vw->getThreadingModel())
 	{
-	case osgViewer::Viewer::SingleThreaded:
-		VTLOG("singleThreaded\n");
-		break;
-	case osgViewer::Viewer::CullDrawThreadPerContext:
-		VTLOG("CullDrawThreadPerContext\n");
-		break;
-	case osgViewer::Viewer::DrawThreadPerContext:
-		VTLOG("DrawThreadPerContext\n");
-		break;
-	case osgViewer::Viewer::CullThreadPerCameraDrawThreadPerContext:
-		VTLOG("CullThreadPerCameraDrawThreadPerContext\n");
-		break;
-	default:	// Keep picky compilers quiet.
-		break;
+		case osgViewer::Viewer::SingleThreaded:
+			VTLOG("singleThreaded\n");
+			break;
+		case osgViewer::Viewer::CullDrawThreadPerContext:
+			VTLOG("CullDrawThreadPerContext\n");
+			break;
+		case osgViewer::Viewer::DrawThreadPerContext:
+			VTLOG("DrawThreadPerContext\n");
+			break;
+		case osgViewer::Viewer::CullThreadPerCameraDrawThreadPerContext:
+			VTLOG("CullThreadPerCameraDrawThreadPerContext\n");
+			break;
 	}
 
 	// Make sure the scene knows the size of the canvas

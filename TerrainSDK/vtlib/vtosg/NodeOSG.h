@@ -123,6 +123,17 @@ struct TransformExtension: public NodeExtension
 	osg::MatrixTransform *m_pTransform;
 };
 
+class vtMultiTexture
+{
+public:
+	int	m_iTextureUnit;
+#if VTLISPSM
+	int	m_iMode;
+#endif
+	osg::Node *m_pNode;
+	osg::ref_ptr<osg::Texture2D> m_pTexture;
+};
+
 
 ///////////////////////////////////////////////////////////////////////////////
 // Standalone methods which operate on a node
@@ -133,6 +144,11 @@ osg::Node *FindDescendent(osg::Group *node, const char *pName);
 
 void InsertNodeAbove(osg::Node *node, osg::Group *newnode);
 void InsertNodeBelow(osg::Group *group, osg::Group *newnode);
+
+vtMultiTexture *AddMultiTexture(osg::Node *onode, int iTextureUnit, vtImage *pImage,
+								int iTextureMode, const FPoint2 &scale, const FPoint2 &offset);
+void EnableMultiTexture(osg::Node *node, vtMultiTexture *mt, bool bEnable);
+bool MultiTextureIsEnabled(osg::Node *node, vtMultiTexture *mt);
 
 void LocalToWorld(osg::Node *node, FPoint3 &point);
 void GetBoundSphere(osg::Node *node, FSphere &sphere, bool bGlobal = false);
@@ -305,19 +321,14 @@ public:
 		currently contained. */
 	void RemoveMesh(vtMesh *pMesh);
 
-	/** Remove all meshes from the geomtry. They are refcounted so there is no
-		need to worry about freeing them. */
-	void RemoveAllMeshes();
-
 	/** Add a text mesh to this geometry.
 		\param pMesh The mesh to add
 		\param iMatIdx The material index for this mesh, which is an index
-			into the material array of the geometry.
-		\param bOutline true to put a dark outline around the text for contrast. */
-	void AddTextMesh(vtTextMesh *pMesh, int iMatIdx, bool bOutline = true);
+			into the material array of the geometry. */
+	void AddTextMesh(vtTextMesh *pMesh, int iMatIdx);
 
 	/** Return the number of contained meshes. */
-	uint NumMeshes() const;
+	uint GetNumMeshes() const;
 
 	/** Return a contained vtMesh by index. */
 	vtMesh *GetMesh(int i) const;
@@ -457,7 +468,7 @@ public:
 	virtual bool isSameKindAs(const osg::Object* obj) const { return dynamic_cast<const OsgDynMesh*>(obj)!=NULL; }
 	virtual const char* className() const { return "OsgDynMesh"; }
 
-	// Implement OSG::Drawable's computeBound.
+	// As of OSG 0.9.9, computeBound returns a BoundingBox
 	virtual osg::BoundingBox computeBound() const;
 	virtual void drawImplementation(osg::RenderInfo& renderInfo) const;
 
@@ -506,7 +517,7 @@ public:
 				  const FPoint3 &point1,
 				  const FPoint3 &point2,
 				  const float fTolerance = 0.0f) const;
-	int IsVisible(const FPoint3 &point, float radius) const;
+	int IsVisible(const FPoint3 &point, float radius);
 
 	// Tests a single point, returns true if in view
 	bool IsVisible(const FPoint3 &point) const;

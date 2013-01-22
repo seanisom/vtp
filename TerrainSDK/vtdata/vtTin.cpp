@@ -83,10 +83,10 @@ void vtTin::RemTri(int t)
 	m_tri.erase(m_tri.begin() + t*3, m_tri.begin() + t*3 + 3);
 }
 
-uint vtTin::AddSurfaceType(const vtString &surface_texture, float fTiling)
+uint vtTin::AddSurfaceType(const vtString &surface_texture, bool bTiled)
 {
 	m_surftypes.push_back(surface_texture);
-	m_surftype_tiling.push_back(fTiling);
+	m_surftype_tiled.push_back(bTiled);
 	return m_surftypes.size()-1;
 }
 
@@ -1314,13 +1314,6 @@ int vtTin::MemoryNeededToLoad() const
 
 bool vtTin::FindAltitudeOnEarth(const DPoint2 &p, float &fAltitude, bool bTrue) const
 {
-	int unused_triangle;
-	return FindTriangleOnEarth(p, fAltitude, unused_triangle, bTrue);
-}
-
-bool vtTin::FindTriangleOnEarth(const DPoint2 &p, float &fAltitude, int &iTriangle,
-	bool bTrue) const
-{
 	uint tris = NumTris();
 
 	// If we have some triangle bins, they can be used for a much faster test
@@ -1335,10 +1328,7 @@ bool vtTin::FindTriangleOnEarth(const DPoint2 &p, float &fAltitude, int &iTriang
 		for (uint i = 0; i < bin->size(); i++)
 		{
 			if (TestTriangle(bin->at(i), p, fAltitude))
-			{
-				iTriangle = bin->at(i);
 				return true;
-			}
 		}
 		// If it was not in any of these bins, then it did not hit anything
 		return false;
@@ -1347,10 +1337,7 @@ bool vtTin::FindTriangleOnEarth(const DPoint2 &p, float &fAltitude, int &iTriang
 	for (uint i = 0; i < tris; i++)
 	{
 		if (TestTriangle(i, p, fAltitude))
-		{
-			iTriangle = i;
 			return true;
-		}
 	}
 	return false;
 }
@@ -1362,31 +1349,7 @@ bool vtTin::FindAltitudeAtPoint(const FPoint3 &p3, float &fAltitude,
 	DPoint3 earth;
 	m_Conversion.ConvertToEarth(p3, earth);
 
-	// If we need to provide a normal, do a separate test that gets the triangle
-	if (vNormal != NULL)
-	{
-		int iTriangle;
-		const bool hit = FindTriangleOnEarth(DPoint2(earth.x, earth.y),
-			fAltitude, iTriangle, bTrue);
-		if (hit)
-		{
-			const int v0 = m_tri[iTriangle*3];
-			const int v1 = m_tri[iTriangle*3+1];
-			const int v2 = m_tri[iTriangle*3+2];
-			const DPoint2 &p1 = m_vert[v0];
-			const DPoint2 &p2 = m_vert[v1];
-			const DPoint2 &p3 = m_vert[v2];
-			FPoint3 wp0, wp1, wp2;
-			m_Conversion.ConvertFromEarth(DPoint3(p1.x, p1.y, m_z[v0]), wp0);
-			m_Conversion.ConvertFromEarth(DPoint3(p2.x, p2.y, m_z[v1]), wp1);
-			m_Conversion.ConvertFromEarth(DPoint3(p3.x, p3.y, m_z[v2]), wp2);
-			*vNormal = (wp1 - wp0).Cross(wp2 - wp0);
-			vNormal->Normalize();
-		}
-		return hit;
-	}
-	else
-		return FindAltitudeOnEarth(DPoint2(earth.x, earth.y), fAltitude, bTrue);
+	return FindAltitudeOnEarth(DPoint2(earth.x, earth.y), fAltitude, bTrue);
 }
 
 bool vtTin::ConvertProjection(const vtProjection &proj_new)
@@ -1484,10 +1447,10 @@ int vtTin::RemoveUnusedVertices()
  This is a simple join.  No attempt is made to share vertices or any other integration.
  It is further assumed that the two TINs have compatible coordinate systems.
  */
-void vtTin::AppendFrom(const vtTin *pTin)
+void vtTin::AppendFrom(vtTin *pTin)
 {
-	const size_t verts = pTin->NumVerts();
-	const size_t tris = pTin->NumTris();
+	size_t verts = pTin->NumVerts();
+	size_t tris = pTin->NumTris();
 
 	// Preallocate (for efficiency)
 	m_vert.SetMaxSize(m_vert.GetSize() + verts + 1);
@@ -1495,7 +1458,7 @@ void vtTin::AppendFrom(const vtTin *pTin)
 	m_tri.reserve(m_tri.size() + (tris*3) + 1);
 
 	// Remember the starting point for vertex indices
-	const int base = NumVerts();
+	int base = NumVerts();
 
 	// Simple, naive copy of vertices and triangles
 	DPoint2 p;

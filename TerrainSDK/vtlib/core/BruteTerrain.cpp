@@ -81,7 +81,24 @@ void BruteTerrain::DoCulling(const vtCamera *pCam)
 {
 	// Do your visibility testing here.
 	// (Compute which detail will actually gets drawn)
-	// There are handy IsVisible methods on the parent class.
+
+	// Here are some handy methods to test against the view frustum:
+#if 0
+	// Tests a sphere or triangle, and return one of:
+	//	0				- not in view
+	//  VT_Visible		- partly in view
+	//  VT_AllVisible	- entirely in view
+	//
+	int IsVisible(const FSphere &sphere) const;
+	int IsVisible(const FPoint3 &point0,
+				  const FPoint3 &point1,
+				  const FPoint3 &point2,
+				  const float fTolerance = 0.0f) const;
+	int IsVisible(FPoint3 point, float radius);
+
+	// Tests a single point, returns true if in view
+	bool IsVisible(const FPoint3 &point) const;
+#endif
 }
 
 
@@ -114,6 +131,23 @@ void BruteTerrain::RenderSurface()
 {
 	LoadSingleMaterial();
 	RenderPass();
+
+	// here is an example of how to do a second rendering pass
+	if (m_bDetailTexture)
+	{
+		// once again, with the detail texture material
+		ApplyMaterial(m_pDetailMat);
+
+		// the uv tiling is different (usually highly repetitive)
+		SetupTexGen(m_fDetailTiling);
+
+		// draw the second pass
+		glPolygonOffset(-1.0f, -1.0f);
+		glEnable(GL_POLYGON_OFFSET_FILL);
+		RenderPass();
+		glDisable(GL_POLYGON_OFFSET_FILL);
+	}
+	DisableTexGen();
 }
 
 

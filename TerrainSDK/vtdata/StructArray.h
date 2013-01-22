@@ -79,7 +79,7 @@ public:
 
 	int GetFirstSelected();
 	int GetNextSelected();
-	vtStructure *GetFirstSelectedStructure() const;
+	vtStructure *GetFirstSelectedStructure();
 	int DeleteSelected();
 	virtual void DestroyStructure(int i) {}
 
@@ -134,8 +134,8 @@ public:
 	int NumSelectedOfType(vtStructureType t);
 	void DeselectAll();
 
-	// Override these 'Factory' methods so that the vtStructureArray base
-	// methods can be capable of handling subclasses of vtBuilding etc.
+	// override these 'Factory' methods so that the vtStructureArray base
+	// methods can be capable of handling subclasses of vtBuilding
 	virtual vtBuilding *NewBuilding();
 	virtual vtFence *NewFence();
 	virtual vtStructInstance *NewInstance();

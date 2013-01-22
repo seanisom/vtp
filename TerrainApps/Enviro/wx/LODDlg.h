@@ -48,7 +48,6 @@ public:
 	void DrawStructureState(vtPagedStructureLodGrid *grid, float fPageOutDist);
 	void SetFrame(EnviroFrame *pFrame) { m_pFrame = pFrame; }
 	void SetPagingRange(float fmin, float fmax);
-	void SetTerrain(class vtTerrain *pTerr) { m_pTerrain = pTerr; }
 
 private:
 	// WDR: member variable declarations for LODDlg
@@ -64,8 +63,6 @@ private:
 	float m_fPageout;
 	int m_iCountCur;
 	int m_iCountMax;
-
-	class vtTerrain *m_pTerrain;
 
 	void SlidersToValues();
 	void ValuesToSliders();

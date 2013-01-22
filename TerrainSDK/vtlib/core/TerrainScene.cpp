@@ -71,8 +71,6 @@ vtTerrainScene::vtTerrainScene()
 	m_pAtmosphereGroup = NULL;
 
 	m_fCatenaryFactor = 140.0;	// a default value
-
-	vtSetGlobalContent(m_Content);	// Singleton
 }
 
 vtTerrainScene::~vtTerrainScene()
@@ -317,6 +315,9 @@ void vtTerrainScene::SetCurrentTerrain(vtTerrain *pTerrain)
 
 	TParams &param = m_pCurrentTerrain->GetParams();
 
+	// switch to the projection of this terrain
+	m_pCurrentTerrain->SetGlobalProjection();
+
 	// Set background color to match the ocean
 	vtGetScene()->SetBgColor(m_pCurrentTerrain->GetBgColor());
 
@@ -411,15 +412,18 @@ void vtTerrainScene::SetTime(const vtTime &time)
 
 vtUtilStruct *vtTerrainScene::LoadUtilStructure(const vtString &name)
 {
+	VTLOG("LoadUtilStructure '%s'\n", (const char *)name);
+
 	// Check to see if it's already loaded
 	uint i;
 	for (i = 0; i < m_StructObjs.GetSize(); i++)
 	{
 		if (m_StructObjs[i]->m_sStructName == name)
+		{
+			VTLOG("  already loaded.\n");
 			return m_StructObjs[i];
+		}
 	}
-
-	VTLOG("LoadUtilStructure '%s'\n", (const char *)name);
 
 	// If not, look for it in the global content manager
 	vtItem *item = m_Content.FindItemByName(name);
@@ -466,5 +470,10 @@ vtUtilStruct *vtTerrainScene::LoadUtilStructure(const vtString &name)
 vtTerrainScene *vtGetTS()
 {
 	return vtTerrainScene::s_pTerrainScene;
+}
+
+vtContentManager3d &vtGetContent()
+{
+	return vtTerrainScene::s_pTerrainScene->m_Content;
 }
 

@@ -32,8 +32,7 @@ void TerrainPicker::OnMouse(vtMouseEvent &event)
 
 void TerrainPicker::FindGroundPoint()
 {
-	if (!m_pHeightField)
-		return;
+	if (!m_pHeightField) return;
 
 	FPoint3 pos, dir, result;
 
@@ -54,7 +53,7 @@ void TerrainPicker::FindGroundPoint()
 	m_GroundPoint = result;
 
 	// Find corresponding earth coordinates
-	m_pHeightField->m_Conversion.ConvertToEarth(m_GroundPoint, m_EarthPos);
+	g_Conv.ConvertToEarth(m_GroundPoint, m_EarthPos);
 }
 
 void TerrainPicker::Eval()

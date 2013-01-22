@@ -18,7 +18,6 @@
 #include "vtdata/DLG.h"
 #include "vtdata/DxfParser.h"
 #include "vtdata/ElevationGrid.h"
-#include "vtdata/FileFilters.h"
 #include "vtdata/FilePath.h"
 #include "vtdata/LULC.h"
 #include "vtdata/Unarchive.h"
@@ -27,6 +26,7 @@
 #include "vtui/ProjectionDlg.h"
 
 #include "Builder.h"
+#include "FileFilters.h"
 #include "Tin2d.h"
 // Layers
 #include "StructLayer.h"
@@ -428,7 +428,7 @@ vtLayer *Builder::ImportLayerFromFile(LayerType ltype, const wxString &strFileNa
 	{
 		// Cannot Open File
 		VTLOG("Couldn't open file %s\n", (const char *) fname);
-		return NULL;
+		return false;
 	}
 	bool bIsDB = (strExt.Len() == 2 && !strExt.Left(2).CmpNoCase(_T("db")));
 	if (bIsDB)
@@ -636,8 +636,6 @@ vtLayer *Builder::ImportLayerFromFile(LayerType ltype, const wxString &strFileNa
 			pLayer = ImportRawFromOGR(strFileName);
 		}
 		break;
-	default:	// Keep picky compilers quiet.
-		break;
 	}
 	if (bIsDB)
 	{
@@ -786,8 +784,6 @@ wxString GetImportFilterString(LayerType ltype)
 		break;
 	case LT_UTILITY:
 		AddType(filter, FSTRING_SHP);
-		break;
-	default:	// Keep picky compilers quiet.
 		break;
 	}
 	return filter;
@@ -947,6 +943,12 @@ vtLayerPtr Builder::ImportFromSHP(const wxString &strFileName, LayerType ltype)
 		success = pSL->AddElementsFromSHP(strFileName, proj, m_area);
 		if (!success)
 			return NULL;
+	}
+
+	if (ltype == LT_UTILITY)
+	{
+		vtUtilityLayer *pUL = (vtUtilityLayer *)pLayer;
+		pUL->ImportFromSHP(strFileName.mb_str(wxConvUTF8), proj);
 	}
 
 	if (ltype == LT_RAW)
@@ -1184,7 +1186,7 @@ void Builder::ImportFromMapSource(const char *fname)
 			str.Printf(_T("zone %d, "), proj.GetUTMZone());
 			choices[i] += str;
 		}
-		str.Printf(_T("points %d"), layers[i]->GetFeatureSet()->NumEntities());
+		str.Printf(_T("points %d"), layers[i]->GetFeatureSet()->GetNumEntities());
 		choices[i] += str;
 		choices[i] += _T(")");
 	}
@@ -1629,7 +1631,7 @@ vtLayerPtr Builder::ImportVectorsWithOGR(const wxString &strFileName, LayerType 
 		ImportDialog.SetDatasource(datasource);
 
 		if (ImportDialog.ShowModal() != wxID_OK)
-			return NULL;
+			return false;
 
 		if (ImportDialog.m_iType == 0)
 			ImportDialog.m_opt.type = ST_BUILDING;
@@ -1988,10 +1990,10 @@ void Builder::ImportDataFromNTF(const wxString &strFileName, LayerArray &layers)
 					{
 						vtBuilding *pDefBld = GetClosestDefault(bld);
 						if (pDefBld)
-							bld->CopyStyleFrom(pDefBld, true);
+							bld->CopyFromDefault(pDefBld, true);
 						else
 						{
-							bld->SetNumStories(1);
+							bld->SetStories(1);
 							bld->SetRoofType(ROOF_FLAT);
 						}
 					}
@@ -2437,7 +2439,7 @@ bool Builder::ImportDataFromDXF(const char *filename)
 		}
 	}
 
-	if (fs_points->NumEntities() > 0)
+	if (fs_points->GetNumEntities() > 0)
 	{
 		vtRawLayer *pRL = new vtRawLayer;
 		pRL->SetFeatureSet(fs_points);
@@ -2451,7 +2453,7 @@ bool Builder::ImportDataFromDXF(const char *filename)
 	else
 		delete fs_points;
 
-	if (fs_polylines->NumEntities() > 0)
+	if (fs_polylines->GetNumEntities() > 0)
 	{
 		vtRawLayer *pRL = new vtRawLayer;
 		pRL->SetFeatureSet(fs_polylines);

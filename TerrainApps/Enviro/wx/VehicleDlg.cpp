@@ -15,6 +15,7 @@
 #include <wx/colordlg.h>
 
 #include "vtlib/vtlib.h"
+#include "vtlib/core/TerrainScene.h"	// for vtGetContent
 #include "vtui/Helper.h"				// for FillWithColor
 
 #include "VehicleDlg.h"

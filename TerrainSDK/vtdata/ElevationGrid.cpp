@@ -41,17 +41,18 @@ void vtElevationGrid::SetupMembers()
  * Constructor: Creates a grid of given size.
  *
  * \param area the coordinate extents of the grid (rectangular area)
- * \param size Number of columns and rows in the grid
+ * \param iColumns number of columns in the grid (east-west)
+ * \param iRows number of rows (north-south)
  * \param bFloat data size: \c true to use floating-point, \c false for shorts.
  * \param proj the geographical projection to use.
  *
  * The grid will initially have no data in it (all values are INVALID_ELEVATION).
  */
-vtElevationGrid::vtElevationGrid(const DRECT &area, const IPoint2 &size,
+vtElevationGrid::vtElevationGrid(const DRECT &area, int iColumns, int iRows,
 	bool bFloat, const vtProjection &proj)
 {
 	SetupMembers();
-	Create(area, size, bFloat, proj);
+	Create(area, iColumns, iRows, bFloat, proj);
 }
 
 /**
@@ -154,17 +155,18 @@ vtElevationGrid::~vtElevationGrid()
  * Create a grid of given size.
  *
  * \param area the coordinate extents of the grid (rectangular area)
- * \param size Number of columns and rows in the grid.
+ * \param iColumns number of columns in the grid (east-west)
+ * \param iRows number of rows (north-south)
  * \param bFloat data size: \c true to use floating-point, \c false for shorts.
  * \param proj the geographical projection to use.
  *
  * The grid will initially have no data in it (all values are INVALID_ELEVATION).
  */
-bool vtElevationGrid::Create(const DRECT &area, const IPoint2 &size,
+bool vtElevationGrid::Create(const DRECT &area, int iColumns, int iRows,
 	bool bFloat, const vtProjection &proj)
 {
 	vtHeightFieldGrid3d::Initialize(proj.GetUnits(), area, INVALID_ELEVATION,
-		INVALID_ELEVATION, size.x, size.y);
+		INVALID_ELEVATION, iColumns, iRows);
 
 	m_bFloatMode = bFloat;
 
@@ -553,8 +555,6 @@ int vtElevationGrid::ReplaceValue(float value1, float value2)
  */
 bool vtElevationGrid::FillGaps(DRECT *area, bool progress_callback(int))
 {
-	VTLOG1(" FillGaps (fast)\n");
-
 	int i, j, ix, jx, surrounding;
 	int gaps = 1;
 	float value, value2, sum;
@@ -747,8 +747,6 @@ bool vtElevationGrid::FillGaps(DRECT *area, bool progress_callback(int))
  */
 bool vtElevationGrid::FillGapsSmooth(DRECT *area, bool progress_callback(int))
 {
-	VTLOG1(" FillGapsSmooth\n");
-
 	int i, j, ix, jx;
 	int gaps = 1;
 	float value, value2, sum, surrounding;
@@ -775,7 +773,7 @@ bool vtElevationGrid::FillGapsSmooth(DRECT *area, bool progress_callback(int))
 		if (ymax > m_iSize.y) ymax = m_iSize.y;
 	}
 
-	vtElevationGrid delta(GetAreaExtents(), m_iSize, true, GetProjection());
+	vtElevationGrid delta(GetAreaExtents(), m_iSize.x, m_iSize.y, true, GetProjection());
 
 	// For speed, remember which lines already have no gaps, so we don't have
 	// to visit them again.
@@ -945,9 +943,9 @@ int vtElevationGrid::FillGapsByRegionGrowing(int radius, bool progress_callback(
 		return -1;
 
 	// allocate counting buffer
-	if (!cnt.Create(m_EarthExtents, m_iSize, false, m_proj))
+	if (!cnt.Create(m_EarthExtents, m_iSize.x, m_iSize.y, false, m_proj))
 		return -1;
-	if (!tmp.Create(m_EarthExtents, m_iSize, false, m_proj))
+	if (!tmp.Create(m_EarthExtents, m_iSize.x, m_iSize.y, false, m_proj))
 		return -1;
 
 	// calculate foot print size

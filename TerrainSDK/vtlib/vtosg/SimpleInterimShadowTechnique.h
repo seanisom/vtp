@@ -73,17 +73,17 @@ protected :
 	uint					m_LightNumber;// Must be set before init is called
 	uint					m_ShadowTextureUnit;// Must be set before init is called
 	uint					m_ShadowTextureResolution; // Must be set before init is called
-	bool					m_RecalculateEveryFrame; // Can be set any time
-	float					m_PolygonOffsetFactor; // Must be set before init is called
-	float					m_PolygonOffsetUnits; // Must be set before init is called
-	float					m_ShadowDarkness; // Must be set before init is called
-	float					m_ShadowSphereRadius; // Must be set before init is called
-	std::vector<vtLodGrid*>	m_LodGridsToIgnore; // Can be set any time
+	bool							m_RecalculateEveryFrame; // Can be set any time
+	float							m_PolygonOffsetFactor; // Must be set before init is called
+	float							m_PolygonOffsetUnits; // Must be set before init is called
+	float							m_ShadowDarkness; // Must be set before init is called
+	float							m_ShadowSphereRadius; // Must be set before init is called
+	std::vector<vtLodGrid*>			m_LodGridsToIgnore; // Can be set any time
 	std::map<uint, uint>	m_MainSceneTextureUnits;
-	vtHeightField3d			*m_pHeightField3d;
-	osg::Vec3				m_OldBoundingSphereCentre;
-	osg::Vec3				m_OldSunPos;
-	bool					m_UsingFrameBuffer;
+	vtHeightField3d					*m_pHeightField3d;
+	osg::Vec3						m_OldBoundingSphereCentre;
+	osg::Vec3						m_OldSunPos;
+	bool							m_UsingFrameBuffer;
 };
 
 #endif	// VTOSG_SIMPLEINTERIMSHADOWTECHNIQUEH

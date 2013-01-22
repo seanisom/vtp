@@ -1,20 +1,20 @@
 //
 // Features.h
 //
-// Copyright (c) 2002-2013 Virtual Terrain Project
+// Copyright (c) 2002-2012 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
 #ifndef VTDATA_FEATURES
 #define VTDATA_FEATURES
 
+#include "shapelib/shapefil.h"
+#include "ogrsf_frmts.h"
+
 #include "MathTypes.h"
 #include "vtString.h"
 #include "Projections.h"
 #include "Content.h"
-
-#include "shapelib/shapefil.h"
-#include "ogrsf_frmts.h"
 
 enum SelectionType
 {
@@ -122,7 +122,7 @@ public:
 	vtString GetFilename() const { return m_strFilename; }
 
 	// feature (entity) operations
-	virtual uint NumEntities() const = 0;
+	virtual uint GetNumEntities() const = 0;
 	void SetNumEntities(int iNum);
 	void AllocateFeatures();
 	OGRwkbGeometryType GetGeomType() const;
@@ -138,11 +138,10 @@ public:
 	virtual bool TransformCoords(OCT *pTransform, bool progress_callback(int)=0) = 0;
 	virtual bool AppendGeometryFrom(vtFeatureSet *pFromSet) = 0;
 	virtual int NumTotalVertices() const { return 0; }
-	virtual bool EarthExtents(DRECT &ext) const = 0;
 
 	// deletion
 	void SetToDelete(int iFeature);
-	int ApplyDeletion();
+	void ApplyDeletion();
 
 	// selection
 	void Select(uint iEnt, bool set = true)
@@ -182,7 +181,7 @@ public:
 	void DePickAll();
 
 	// attribute (field) operations
-	uint NumFields() const { return m_fields.GetSize(); }
+	uint GetNumFields() const { return m_fields.GetSize(); }
 	Field *GetField(int i) { return m_fields[i]; }
 	const Field *GetField(int i) const { return m_fields[i]; }
 	Field *GetField(const char *name);
@@ -242,7 +241,7 @@ class vtFeatureSetPoint2D : public vtFeatureSet
 public:
 	vtFeatureSetPoint2D();
 
-	uint NumEntities() const;
+	uint GetNumEntities() const;
 	void SetNumGeometries(int iNum);
 	void Reserve(int iNum);
 	bool ComputeExtent(DRECT &rect) const;
@@ -264,7 +263,6 @@ public:
 	virtual void CopyGeometry(uint from, uint to);
 	virtual void SaveGeomToSHP(SHPHandle hSHP, bool progress_callback(int)=0) const;
 	virtual void LoadGeomFromSHP(SHPHandle hSHP, bool progress_callback(int)=0);
-	virtual bool EarthExtents(DRECT &ext) const;
 
 protected:
 	DLine2	m_Point2;	// wkbPoint
@@ -278,7 +276,7 @@ class vtFeatureSetPoint3D : public vtFeatureSet
 public:
 	vtFeatureSetPoint3D();
 
-	uint NumEntities() const;
+	uint GetNumEntities() const;
 	void SetNumGeometries(int iNum);
 	void Reserve(int iNum);
 	bool ComputeExtent(DRECT &rect) const;
@@ -299,7 +297,6 @@ public:
 	virtual void CopyGeometry(uint from, uint to);
 	virtual void SaveGeomToSHP(SHPHandle hSHP, bool progress_callback(int)=0) const;
 	virtual void LoadGeomFromSHP(SHPHandle hSHP, bool progress_callback(int)=0);
-	virtual bool EarthExtents(DRECT &ext) const;
 
 protected:
 	DLine3	m_Point3;	// wkbPoint25D
@@ -314,7 +311,7 @@ class vtFeatureSetLineString : public vtFeatureSet
 public:
 	vtFeatureSetLineString();
 
-	uint NumEntities() const;
+	uint GetNumEntities() const;
 	void SetNumGeometries(int iNum);
 	void Reserve(int iNum);
 	bool ComputeExtent(DRECT &rect) const;
@@ -336,7 +333,6 @@ public:
 	virtual void CopyGeometry(uint from, uint to);
 	virtual void SaveGeomToSHP(SHPHandle hSHP, bool progress_callback(int)=0) const;
 	virtual void LoadGeomFromSHP(SHPHandle hSHP, bool progress_callback(int)=0);
-	virtual bool EarthExtents(DRECT &ext) const;
 
 protected:
 	DLine2Array	m_Line;		// wkbLineString
@@ -351,7 +347,7 @@ class vtFeatureSetLineString3D : public vtFeatureSet
 public:
 	vtFeatureSetLineString3D();
 
-	uint NumEntities() const;
+	uint GetNumEntities() const;
 	void SetNumGeometries(int iNum);
 	void Reserve(int iNum);
 	bool ComputeExtent(DRECT &rect) const;
@@ -371,7 +367,6 @@ public:
 	virtual void CopyGeometry(uint from, uint to);
 	virtual void SaveGeomToSHP(SHPHandle hSHP, bool progress_callback(int)=0) const;
 	virtual void LoadGeomFromSHP(SHPHandle hSHP, bool progress_callback(int)=0);
-	virtual bool EarthExtents(DRECT &ext) const;
 
 protected:
 	std::vector<DLine3>	m_Line;		// wkbLineString25D
@@ -410,7 +405,7 @@ class vtFeatureSetPolygon : public vtFeatureSet
 public:
 	vtFeatureSetPolygon();
 
-	uint NumEntities() const;
+	uint GetNumEntities() const;
 	void SetNumGeometries(int iNum);
 	void Reserve(int iNum);
 	bool ComputeExtent(DRECT &rect) const;
@@ -438,7 +433,6 @@ public:
 	virtual void CopyGeometry(uint from, uint to);
 	virtual void SaveGeomToSHP(SHPHandle hSHP, bool progress_callback(int)=0) const;
 	virtual void LoadGeomFromSHP(SHPHandle hSHP, bool progress_callback(int)=0);
-	virtual bool EarthExtents(DRECT &ext) const;
 
 protected:
 	DPolyArray	m_Poly;		// wkbPolygon

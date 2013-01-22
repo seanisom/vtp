@@ -82,19 +82,22 @@ TParams::TParams() : vtTagArray()
 	AddTag(STR_INITTIME, "104 3 21 10 0 0");	// 2004, spring equinox, 10am
 	AddTag(STR_TIMESPEED, "1");
 
-	AddTag(STR_TEXTURE, "3");		// 3 = Derived
+	AddTag(STR_TEXTURE, "0");
 	AddTag(STR_TEXTUREFILE, "");
-	AddTag(STR_COLOR_MAP, "");
 	AddTag(STR_TEXTURE_GRADUAL, "false");
 	AddTag(STR_TEXURE_LOD_FACTOR, "0.25");
-
+	AddTag(STR_MIPMAP, "false");
+	AddTag(STR_REQUEST16BIT, "true");
 	AddTag(STR_PRELIGHT, "true");
 	AddTag(STR_PRELIGHTFACTOR, "1.0");
 	AddTag(STR_CAST_SHADOWS, "false");
-	AddTag(STR_MIPMAP, "false");
-	AddTag(STR_REQUEST16BIT, "true");
-	AddTag(STR_SHOW_UNDERSIDE, "false");
-	AddTag(STR_OPACITY, "1.0");
+	AddTag(STR_COLOR_MAP, "");
+	AddTag(STR_TEXTURE_RETAIN, "true");
+
+	AddTag(STR_DETAILTEXTURE, "false");
+	AddTag(STR_DTEXTURE_NAME, "");
+	AddTag(STR_DTEXTURE_SCALE, "1");
+	AddTag(STR_DTEXTURE_DISTANCE, "1000");
 
 	AddTag(STR_ROADS, "false");
 	AddTag(STR_ROADFILE, "");
@@ -144,7 +147,8 @@ TParams::TParams() : vtTagArray()
 	AddTag(STR_DEPRESSOCEANLEVEL, "-40");
 	AddTag(STR_BGCOLOR, "0 0 0");	// black
 
-	AddTag(STR_UTILITY_FILE, "");
+	AddTag(STR_ROUTEENABLE, "false");	// not used yet
+	AddTag(STR_ROUTEFILE, "");			// not used yet
 
 	AddTag(STR_DIST_TOOL_HEIGHT, "5");
 	AddTag(STR_HUD_OVERLAY, "");
@@ -255,13 +259,6 @@ void TParamsVisitor::endElement(const char *name)
 	}
 	else if (m_level == 2 && !strcmp(name, "Layer"))
 	{
-		if (m_layer.GetValueString("Type") ==  TERR_LTYPE_ABSTRACT)
-		{
-			// Older files without LabelOutline should default it to true
-			if (m_layer.FindTag("LabelOutline") == NULL)
-				m_layer.AddTag("LabelOutline", "true");
-		}
-
 		m_pParams->m_Layers.push_back(m_layer);
 		m_level--;
 		m_bInLayer = false;
@@ -374,6 +371,7 @@ bool TParams::LoadFromXML(const char *fname)
 		RemoveTag("Trees");
 		RemoveTag("Tree_File");
 	}
+
 	return true;
 }
 
@@ -431,22 +429,6 @@ int TParams::NumLayersOfType(const vtString &layer_type)
 			count++;
 	}
 	return count;
-}
-
-LayerType TParams::LayerType(int iLayerNum)
-{
-	vtString ltype = m_Layers[iLayerNum].GetValueString("Type");
-	if (ltype == TERR_LTYPE_STRUCTURE)
-		return LT_STRUCTURE;
-	if (ltype == TERR_LTYPE_ABSTRACT)
-		return LT_RAW;
-	if (ltype == TERR_LTYPE_IMAGE)
-		return LT_IMAGE;
-	if (ltype == TERR_LTYPE_VEGETATION)
-		return LT_VEG;
-	if (ltype == TERR_LTYPE_ELEVATION)
-		return LT_ELEVATION;
-	return LT_UNKNOWN;
 }
 
 void TParams::WriteOverridesToXML(FILE *fp) const

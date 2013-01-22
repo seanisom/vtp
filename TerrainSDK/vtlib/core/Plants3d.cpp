@@ -22,7 +22,7 @@
 #include "vtdata/HeightField.h"
 #include "Plants3d.h"
 #include "Light.h"
-#include "GeomUtil.h"	// for CreateBoundSphereGeode
+#include "GeomUtil.h"	// for CreateBoundSphereGeom
 
 #define SHADOW_HEIGHT		0.1f	// distance above groundpoint in meters
 
@@ -443,9 +443,10 @@ vtSpeciesList3d &vtSpeciesList3d::operator=(const vtSpeciesList &v)
 
 vtPlantSpecies3d *vtSpeciesList3d::GetSpecies(uint i) const
 {
-	if (i >= m_Species.GetSize())
+	if (i >= 0 && i < m_Species.GetSize())
+		return (vtPlantSpecies3d *) m_Species[i];
+	else
 		return NULL;
-	return (vtPlantSpecies3d *) m_Species[i];
 }
 
 
@@ -546,7 +547,7 @@ void vtPlantInstance3d::ShowBounds(bool bShow)
 				FSphere sphere;
 				GetBoundSphere(contents, sphere);
 
-				m_pHighlight = CreateBoundSphereGeode(sphere);
+				m_pHighlight = CreateBoundSphereGeom(sphere);
 				m_pContainer->addChild(m_pHighlight);
 			}
 		}
@@ -739,14 +740,14 @@ vtPlantInstanceArray3d::~vtPlantInstanceArray3d()
 
 vtPlantInstance3d *vtPlantInstanceArray3d::GetInstance3d(uint i) const
 {
-	if (i >= m_Instances3d.GetSize())
+	if (i < 0 || i >= m_Instances3d.GetSize())
 		return NULL;
 	return m_Instances3d[i];
 }
 
 int vtPlantInstanceArray3d::CreatePlantNodes(bool progress_dialog(int))
 {
-	uint i, size = NumEntities();
+	uint i, size = GetNumEntities();
 	int created = 0;
 	m_iOffTerrain = 0;
 
@@ -905,7 +906,7 @@ int vtPlantInstanceArray3d::CreatePlantShaderNodes(bool progress_dialog(int))
 	VTLOG1(" Creating OpenGL shader based vegetation...\n");
 
 	FPoint3 p3;
-	uint num_plants = NumEntities();
+	uint num_plants = GetNumEntities();
 
 	// Create cell subdivision
 	osg::ref_ptr<PlantCell> cell = new PlantCell;
@@ -932,7 +933,7 @@ int vtPlantInstanceArray3d::CreatePlantShaderNodes(bool progress_dialog(int))
 	m_group->setName("VegGroup");
 	m_group->addChild(cell->m_group);
 
-	return NumEntities();
+	return GetNumEntities();
 }
 
 bool vtPlantInstanceArray3d::CreatePlantNode(uint i)
@@ -1045,7 +1046,7 @@ vtTransform *vtPlantInstanceArray3d::GetPlantNode(uint i) const
 
 void vtPlantInstanceArray3d::VisualDeselectAll()
 {
-	uint size = NumEntities();
+	uint size = GetNumEntities();
 
 	for (uint i = 0; i < size; i++)
 	{
@@ -1070,7 +1071,7 @@ void vtPlantInstanceArray3d::VisualSelect(uint i)
 
 void vtPlantInstanceArray3d::OffsetSelectedPlants(const DPoint2 &offset)
 {
-	uint size = NumEntities();
+	uint size = GetNumEntities();
 	for (uint i = 0; i < size; i++)
 	{
 		if (!IsSelected(i))
@@ -1102,7 +1103,7 @@ void vtPlantInstanceArray3d::DeletePlant(uint i)
 {
 	vtPlantInstance3d *inst3d = GetInstance3d(i);
 
-	// Get rid of the feature from the FeatureSet
+	// get rid of the instance
 	SetToDelete(i);
 	ApplyDeletion();
 

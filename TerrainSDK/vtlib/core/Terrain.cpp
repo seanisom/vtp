@@ -1,13 +1,12 @@
 //
 // Terrain.cpp
 //
-// Copyright (c) 2001-2013 Virtual Terrain Project
+// Copyright (c) 2001-2012 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
 #include "vtlib/vtlib.h"
 #include "vtlib/vtosg/GroupLOD.h"
-#include "vtlib/vtosg/MultiTexture.h"
 
 #include "vtdata/vtLog.h"
 #include "vtdata/CubicSpline.h"
@@ -22,6 +21,7 @@
 #include "PagedLodGrid.h"
 #include "vtTin3d.h"
 
+#include "TVTerrain.h"
 #include "SMTerrain.h"
 #include "BruteTerrain.h"
 #include "SRTerrain.h"
@@ -47,14 +47,18 @@ vtTerrain::vtTerrain()
 	m_pContainerGroup = NULL;
 	m_pTerrainGroup = NULL;
 	m_pUnshadowedGroup = NULL;
+	m_bTextureInitialized = false;
 	m_iShadowTextureUnit = -1;
 	m_pFog = NULL;
 	m_pShadow = NULL;
 	m_bFog = false;
 	m_bShadows = false;
 
+	m_pTerrMats = new vtMaterialArray;
+	m_pDetailMats = new vtMaterialArray;
 	m_pEphemMats = new vtMaterialArray;
 	m_idx_water = -1;
+	m_bBothSides = false;
 
 	m_pHeightField = NULL;
 	m_bPreserveInputGrid = false;
@@ -86,6 +90,8 @@ vtTerrain::vtTerrain()
 
 	m_pOverlay = NULL;
 	m_progress_callback = NULL;
+
+	m_pStructureExtension = NULL;
 
 	m_pExternalHeightField = NULL;
 }
@@ -282,6 +288,250 @@ void vtTerrain::_CreateRoads()
 }
 
 
+///////////////////
+
+void vtTerrain::_CreateTextures(const FPoint3 &light_dir, bool progress_callback(int))
+{
+	TextureEnum eTex = m_Params.GetTextureEnum();
+
+	bool bRetain = m_Params.GetValueBool(STR_TEXTURE_RETAIN);
+	bool bFirstTime = !m_bTextureInitialized;
+	bool bLoadSingle = (bFirstTime || !bRetain) && (eTex == TE_SINGLE);
+
+	VTLOG("_CreateTextures(%d, first %d, retain %d)\n", eTex,
+		bFirstTime, bRetain);
+
+	// measure total texture processing time
+	clock_t c1 = clock();
+
+	vtString texture_path;
+	if (bLoadSingle)	// look for texture
+	{
+		vtString texture_fname = "GeoSpecific/";
+		texture_fname += m_Params.GetValueString(STR_TEXTUREFILE);
+
+		VTLOG("  Looking for single texture: %s\n", (const char *) texture_fname);
+		texture_path = FindFileOnPaths(vtGetDataPath(), texture_fname);
+		if (texture_path == "")
+		{
+			// failed to find texture
+			VTLOG("  Failed to find texture.\n");
+			eTex = TE_NONE;
+			bLoadSingle = false;
+		}
+		else
+			VTLOG("  Found texture, path is: %s\n", (const char *) texture_path);
+	}
+	if (bLoadSingle)		// Load the whole single texture
+	{
+		clock_t r1 = clock();
+		m_pUnshadedImage = osgDB::readImageFile((const char *)texture_path);
+		if (m_pUnshadedImage.valid())
+		{
+			VTLOG("  Loaded texture: size %d x %d, depth %d, %.2f seconds.\n",
+				m_pUnshadedImage->s(), m_pUnshadedImage->t(),
+				m_pUnshadedImage->getPixelSizeInBits(),
+				(float)(clock() - r1) / CLOCKS_PER_SEC);
+		}
+		else
+		{
+			VTLOG("  Failed to load texture.\n");
+			m_pTerrMats->AddRGBMaterial(RGBf(1.0f, 1.0f, 1.0f),
+				RGBf(0.2f, 0.2f, 0.2f), true, false);
+			eTex = TE_NONE;
+			_SetErrorMessage("Failed to load texture.");
+		}
+	}
+
+	vtHeightFieldGrid3d *pHFGrid = GetHeightFieldGrid3d();
+
+	if (eTex == TE_DERIVED)
+	{
+		if (bFirstTime)
+		{
+			// Derive color from elevation.
+			// Determine the correct size for the derived texture: ideally as
+			// large as the input grid, but not larger than the hardware texture
+			// size limit.
+			int tmax = vtGetMaxTextureSize();
+
+			int cols, rows;
+			pHFGrid->GetDimensions(cols, rows);
+
+			int tsize = cols-1;
+			if ((tmax > 0) && (tsize > tmax))
+				tsize = tmax;
+			VTLOG("\t grid width is %d, texture max is %d, creating artificial texture of dimension %d\n",
+				cols, tmax, tsize);
+
+			vtImage *vti = new vtImage;
+			vti->Create(tsize, tsize, 24, false);
+			m_pUnshadedImage = vti;
+		}
+		if (bFirstTime || !bRetain)
+		{
+			clock_t r1 = clock();
+			// The PaintDib method is virtual to allow subclasses to customize
+			// the unshaded image.
+			PaintDib(progress_callback);
+			VTLOG("  PaintDib: %.2f seconds.\n", (float)(clock() - r1) / CLOCKS_PER_SEC);
+		}
+	}
+
+	if (bRetain)
+	{
+		// We need to copy from the retained image to a second image which will
+		//  be shaded and displayed.
+		if (eTex == TE_SINGLE || eTex == TE_DERIVED)
+			m_pSingleImage = new osg::Image(*m_pUnshadedImage);
+	}
+	else
+		// we can use the original image directly
+		m_pSingleImage = m_pUnshadedImage;
+
+	// If we get this far, we can consider the texture initialized
+	m_bTextureInitialized = true;
+
+	if (eTex == TE_NONE)	// none or failed to find texture
+	{
+		// no texture: create plain white material
+		m_pTerrMats->AddRGBMaterial(RGBf(1.0f, 1.0f, 1.0f),
+									RGBf(0.2f, 0.2f, 0.2f),
+									true, false);
+		return;
+	}
+	if (m_Params.GetValueBool(STR_PRELIGHT) && pHFGrid)
+	{
+		// apply pre-lighting (a.k.a. darkening, a.k.a. shading)
+		vtImageWrapper wrap(m_pSingleImage);
+		_ApplyPreLight(pHFGrid, &wrap, light_dir, progress_callback);
+	}
+
+	// If the user has asked for 16-bit textures to be sent down to the
+	//  card (internal memory format), then tell this Image
+	Set16BitInternal(m_pSingleImage, m_Params.GetValueBool(STR_REQUEST16BIT));
+
+	// single texture
+	if (bFirstTime)
+	{
+		// The terrain's base texture will always use unit 0
+		m_TextureUnits.ReserveTextureUnit();
+
+		bool bTransp = (GetDepth(m_pSingleImage) == 32);
+		bool bMipmap = m_Params.GetValueBool(STR_MIPMAP);
+		float ambient = 0.0f, diffuse = 1.0f, emmisive = 0.0f;
+
+		m_pTerrMats->AddTextureMaterial(m_pSingleImage,
+			!m_bBothSides,	// culling
+			false,			// lighting
+			bTransp,		// transparency blending
+			false,			// additive
+			ambient, diffuse,
+			1.0f,			// alpha
+			0.0f,			// emmisive,
+			true,			// texgen
+			false,			// clamp
+			bMipmap);
+	}
+	else
+	{
+		// Make sure OSG knows that the texture may have changed
+		vtMaterial *mat = m_pTerrMats->at(0);
+		mat->SetTexture(m_pSingleImage);
+		mat->ModifiedTexture();
+	}
+
+	VTLOG("  Total CreateTextures: %.2f seconds.\n", (float)(clock() - c1) / CLOCKS_PER_SEC);
+}
+
+//
+// prepare detail texture
+//
+void vtTerrain::_CreateDetailTexture()
+{
+	// We only support detail texture on certain dynamic LOD algorithms
+	if (!m_pDynGeom)
+		return;
+
+	// for GetValueFloat below
+	LocaleWrap normal_numbers(LC_NUMERIC, "C");
+
+	vtString fname = m_Params.GetValueString(STR_DTEXTURE_NAME);
+	vtString path = FindFileOnPaths(vtGetDataPath(), fname);
+	if (path == "")
+	{
+		vtString prefix = "GeoTypical/";
+		path = FindFileOnPaths(vtGetDataPath(), prefix+fname);
+		if (path == "")
+			return;
+	}
+	vtDIB dib;
+	if (!dib.Read(path))
+		return;
+
+	vtImagePtr pDetailTexture = new vtImage(&dib);
+
+	int index = m_pDetailMats->AddTextureMaterial(pDetailTexture,
+					 true,	// culling
+					 false,	// lighting
+					 true,	// transp: blend
+					 false,	// additive
+					 0.0f, 1.0f,	// ambient, diffuse
+					 0.5f, 0.0f,	// alpha, emmisive
+					 true, false,	// texgen, clamp
+					 true);			// mipmap
+	vtMaterial *pDetailMat = m_pDetailMats->at(index);
+
+	float scale = m_Params.GetValueFloat(STR_DTEXTURE_SCALE);
+	float dist = m_Params.GetValueFloat(STR_DTEXTURE_DISTANCE);
+
+	FRECT r = m_pHeightField->m_WorldExtents;
+	float width_meters = r.Width();
+	m_pDynGeom->SetDetailMaterial(pDetailMat, width_meters / scale, dist);
+}
+
+//
+// This is the default implementation for PaintDib.  It colors from elevation.
+// Developer can override it.
+//
+void vtTerrain::PaintDib(bool progress_callback(int))
+{
+	m_pTextureColors.reset(new ColorMap);
+
+	// If this member hasn't been set by a subclass, then we can go ahead
+	//  and use the info from the terrain parameters
+	vtString name = m_Params.GetValueString(STR_COLOR_MAP);
+	if (name != "")
+	{
+		if (!m_pTextureColors->Load(name))
+		{
+			// Look on data paths
+			vtString name2 = "GeoTypical/";
+			name2 += name;
+			name2 = FindFileOnPaths(vtGetDataPath(), name2);
+			if (name2 != "")
+				m_pTextureColors->Load(name2);
+		}
+	}
+	// If the colors weren't provided by a subclass, and couldn't be
+	//  loaded either, then make up some default colors.
+	if (m_pTextureColors->Num() == 0)
+	{
+		m_pTextureColors->m_bRelative = true;
+		m_pTextureColors->Add(0, RGBi(0x20, 0x90, 0x20));	// medium green
+		m_pTextureColors->Add(1, RGBi(0x40, 0xE0, 0x40));	// light green
+		m_pTextureColors->Add(2, RGBi(0xE0, 0xD0, 0xC0));	// tan
+		m_pTextureColors->Add(3, RGBi(0xE0, 0x80, 0x10));	// orange
+		m_pTextureColors->Add(4, RGBi(0xE0, 0xE0, 0xE0));	// light grey
+	}
+
+	vtHeightFieldGrid3d *pHFGrid = GetHeightFieldGrid3d();
+
+	vtImageWrapper wrap(m_pUnshadedImage);
+	pHFGrid->ColorDibFromElevation(&wrap, m_pTextureColors.get(), 4000,
+		RGBi(255,0,0), progress_callback);
+}
+
 /**
  * Set the array of colors to be used when automatically generating the
  * terrain texture from the elevation values.  This is the color map which
@@ -298,12 +548,12 @@ void vtTerrain::_CreateRoads()
 	colors->m_bRelative = false;
 	colors->Add(100, RGBi(0,255,0));
 	colors->Add(200, RGBi(255,200,150));
-	pTerr->SetTextureColorMap(colors);
+	pTerr->SetTextureColors(colors);
 	\endcode
  */
-void vtTerrain::SetTextureColorMap(ColorMap *colors)
+void vtTerrain::SetTextureColors(ColorMap *colors)
 {
-	m_Texture.m_pColorMap.reset(colors);
+	m_pTextureColors.reset(colors);
 }
 
 /**
@@ -318,7 +568,7 @@ void vtTerrain::SetTextureColorMap(ColorMap *colors)
  * \par Example:
 	\code
 	vtTerrain *pTerr = new vtTerrain;
-	pTerr->SetTextureContours(100, 4);
+	pTerr->SetTextureColors(100, 4);
 	\endcode
  *
  * \param fInterval  The vertical spacing between the contours.  For example,
@@ -354,23 +604,17 @@ void vtTerrain::SetTextureContours(float fInterval, float fSize)
 	}
 
 	// Set these as the desired color bands for the next PainDib
-	m_Texture.m_pColorMap.reset(cmap);
+	m_pTextureColors.reset(cmap);
 }
 
 
 /**
- * Re-create the ground texture.  This is useful if you have changed the
+ * Re-create the ground texture.  This is useful if you ahve changed the
  * time of day, and want to see the lighting/shading of the terrain updated.
  */
-void vtTerrain::ReshadeTexture(vtTransform *pSunLight, bool progress_callback(int))
+void vtTerrain::RecreateTextures(vtTransform *pSunLight, bool progress_callback(int))
 {
-	m_Texture.CopyFromUnshaded(m_Params);
-	m_Texture.ShadeTexture(m_Params, GetHeightFieldGrid3d(), pSunLight->GetDirection(), progress_callback);
-
-	// Make sure OSG knows that the texture has changed
-	vtMaterial *mat = m_Texture.m_pMaterials->at(0);
-	mat->SetTexture2D(m_Texture.m_pTextureImage);
-	mat->ModifiedTexture();
+	_CreateTextures(pSunLight->GetDirection(), progress_callback);
 }
 
 /**
@@ -379,7 +623,7 @@ void vtTerrain::ReshadeTexture(vtTransform *pSunLight, bool progress_callback(in
  */
 osg::Image *vtTerrain::GetTextureImage()
 {
-	return m_Texture.m_pTextureImage.get();
+	return m_pSingleImage.get();
 }
 
 
@@ -392,7 +636,8 @@ bool vtTerrain::_CreateDynamicTerrain()
 
 	if (method == LM_TOPOVISTA)
 	{
-		// Obsolete, removed.
+		m_pDynGeom = new TVTerrain;
+		m_pDynGeom->setName("TV Geom");
 	}
 	else if (method == LM_MCNALLY)
 	{
@@ -401,7 +646,6 @@ bool vtTerrain::_CreateDynamicTerrain()
 	}
 	else if (method == LM_DEMETER)
 	{
-		// Obsolete, removed.
 	}
 	else if (method == LM_BRUTE)
 	{
@@ -442,7 +686,7 @@ bool vtTerrain::_CreateDynamicTerrain()
 	//
 	if (m_Params.GetTextureEnum() == TE_SINGLE)
 	{
-		vtMaterial *mat = m_Texture.m_pMaterials->at(0);
+		vtMaterial *mat = m_pTerrMats->at(0);
 		if (mat->GetTransparent())
 		{
 			osg::StateSet *sset = m_pDynGeom->getOrCreateStateSet();
@@ -451,7 +695,7 @@ bool vtTerrain::_CreateDynamicTerrain()
 	}
 
 	m_pDynGeom->SetPolygonTarget(m_Params.GetValueInt(STR_TRICOUNT));
-	m_pDynGeom->SetMaterials(m_Texture.m_pMaterials);
+	m_pDynGeom->SetMaterials(m_pTerrMats);
 
 	// build heirarchy (add terrain to scene graph)
 	m_pDynGeomScale = new vtTransform;
@@ -496,7 +740,8 @@ void vtTerrain::SetVerticalExag(float fExag)
 
 void vtTerrain::_CreateErrorMessage(DTErr error, vtElevationGrid *pGrid)
 {
-	const IPoint2 &size = pGrid->GetDimensions();
+	int x, y;
+	pGrid->GetDimensions(x, y);
 	switch (error)
 	{
 	case DTErr_OK:
@@ -506,11 +751,11 @@ void vtTerrain::_CreateErrorMessage(DTErr error, vtElevationGrid *pGrid)
 		m_strErrorMsg.Format("The elevation has empty extents.");
 		break;
 	case DTErr_NOTSQUARE:
-		m_strErrorMsg.Format("The elevation grid (%d x %d) is not square.", size.x, size.y);
+		m_strErrorMsg.Format("The elevation grid (%d x %d) is not square.", x, y);
 		break;
 	case DTErr_NOTPOWER2:
 		m_strErrorMsg.Format("The elevation grid (%d x %d) is of an unsupported size.",
-			size.x, size.y);
+			x, y);
 		break;
 	case DTErr_NOMEM:
 		m_strErrorMsg = "Not enough memory for CLOD.";
@@ -528,34 +773,31 @@ void vtTerrain::_SetErrorMessage(const vtString &msg)
 
 
 /////////////////////////////////////////////////////////////////////////////
-// Utilities
+// Routes
 //
-vtPole3d *vtTerrain::NewPole()
+void vtTerrain::AddRoute(vtRoute *f)
 {
-	return (vtPole3d *) m_UtilityMap.AddNewPole();
+	m_Routes.Append(f);
+
+	// Add directly
+	m_pTerrainGroup->addChild(f->GetGeom());
 }
 
-vtLine3d *vtTerrain::NewLine()
+void vtTerrain::add_routepoint_earth(vtRoute *route, const DPoint2 &epos,
+									 const char *structname)
 {
-	return m_UtilityMap.AddLine();
+	VTLOG("Route AddPoint %.1lf %.1lf\n", epos.x, epos.y);
+	route->AddPoint(epos, structname);
+	route->BuildGeometry(m_pHeightField);
 }
 
-void vtTerrain::AddPoleToLine(vtLine3d *line, const DPoint2 &epos,
-	const char *structname)
+void vtTerrain::RedrawRoute(vtRoute *route)
 {
-	VTLOG("AddPoleToLine %.1lf %.1lf\n", epos.x, epos.y);
-
-	vtPole3d *pole = m_UtilityMap.AddPole(epos, structname);
-	line->AddPole(pole);
-
-	line->ComputePoleRotations();
-	m_UtilityMap.BuildGeometry(m_pStructGrid, m_pHeightField);
+	route->BuildGeometry(m_pHeightField);
 }
 
-void vtTerrain::RebuildUtilityGeometry()
+void vtTerrain::SaveRoute()
 {
-	m_UtilityMap.ComputePoleRotations();
-	m_UtilityMap.BuildGeometry(m_pStructGrid, m_pHeightField);
 }
 
 /**
@@ -625,6 +867,7 @@ void vtTerrain::MakeWaterMaterial()
 			1.0f,				// diffuse
 			0.5,				// alpha
 			TERRAIN_EMISSIVE,	// emissive
+			false,				// texgen
 			false,				// clamp
 			false);				// don't mipmap: allowing texture aliasing to
 								// occur, it actually looks more water-like
@@ -643,8 +886,8 @@ void vtTerrain::CreateWaterHeightfield(const vtString &fname)
 	}
 
 	MakeWaterMaterial();
-	m_pWaterTin3d->SetMaterial(m_pEphemMats, m_idx_water);
-	vtGeode *wsgeom = m_pWaterTin3d->CreateGeometry(false);	// No shadow mesh.
+	m_pWaterTin3d->SetTextureMaterials(m_pEphemMats);
+	vtGeode *wsgeom = m_pWaterTin3d->CreateGeometry(false, m_idx_water);
 	wsgeom->setName("Water surface");
 	wsgeom->SetCastShadow(false);
 
@@ -655,12 +898,21 @@ void vtTerrain::CreateWaterHeightfield(const vtString &fname)
 	DRECT ext2 = m_pWaterTin3d->GetEarthExtents();
 	DPoint2 offset = ext2.LowerLeft() - ext1.LowerLeft();
 	float x, z;
-	GetLocalConversion().ConvertVectorFromEarth(offset, x, z);
+	g_Conv.ConvertVectorFromEarth(offset, x, z);
 	vtTransform *xform = new vtTransform;
 	xform->Translate(FPoint3(x, 0, z));
 
 	xform->addChild(wsgeom);
 	m_pTerrainGroup->addChild(xform);
+}
+
+//
+// set global projection based on this terrain's heightfield
+//
+void vtTerrain::SetGlobalProjection()
+{
+	if (m_pHeightField)
+		g_Conv = m_pHeightField->m_Conversion;
 }
 
 /**
@@ -740,8 +992,8 @@ vtStructureLayer *vtTerrain::LoadStructuresFromXML(const vtString &strFilename)
 	if (!st_layer->ReadXML(strFilename, m_progress_callback))
 	{
 		VTLOG("\tCouldn't load file.\n");
-		// Removing the layer deletes it, by dereference.
 		m_Layers.Remove(st_layer);
+		delete st_layer;
 		return NULL;
 	}
 	SetActiveLayer(st_layer);
@@ -817,15 +1069,13 @@ bool vtTerrain::CreateStructure(vtStructureArray3d *structures, int index)
 		str3d->SetCastShadow(bShow);
 	}
 
-	OnCreateBehavior(str);
-
 	return bSuccess;
 }
 
 /**
  * Get the currently active structure layer for this terrain.
  */
-vtStructureLayer *vtTerrain::GetStructureLayer() const
+vtStructureLayer *vtTerrain::GetStructureLayer()
 {
 	return dynamic_cast<vtStructureLayer *>(m_pActiveLayer);
 }
@@ -845,6 +1095,36 @@ vtStructureLayer *vtTerrain::NewStructureLayer()
 	return slay;
 }
 
+vtLayer *vtTerrain::GetOrCreateLayerOfType(LayerType type)
+{
+	vtLayer *layer = GetActiveLayer();
+	if (layer->GetType() == type)
+		return layer;		// We already have one active.
+
+	// Look for one
+	for (uint i = 0; i < m_Layers.size(); i++)
+	{
+		if (m_Layers[i]->GetType() == type)
+			return m_Layers[i];
+	}
+	// else, create one.
+	switch (type)
+	{
+	case LT_IMAGE:
+		// TODO maybe
+		break;
+	case LT_STRUCTURE:
+		layer = NewStructureLayer();
+		layer->SetLayerName("Untitled.vtst");
+		break;
+	case LT_VEG:
+		layer = NewVegLayer();
+		layer->SetLayerName("Untitled.vf");
+		break;
+	}
+	return layer;
+}
+
 /**
  * Delete all the selected structures in the terrain's active structure array.
  *
@@ -855,33 +1135,31 @@ int vtTerrain::DeleteSelectedStructures(vtStructureLayer *st_layer)
 	// first remove them from the terrain
 	for (uint i = 0; i < st_layer->size(); i++)
 	{
-		if (st_layer->at(i)->IsSelected())
-			DeleteStructureFromTerrain(st_layer, i);
+		vtStructure *str = st_layer->at(i);
+		if (str->IsSelected())
+		{
+			// notify any structure-handling extension
+			if (m_pStructureExtension)
+				m_pStructureExtension->OnDelete(this, str);
+
+			// Remove it from the paging grid
+			if (m_pPagedStructGrid)
+				m_pPagedStructGrid->RemoveFromGrid(st_layer, i);
+
+			vtStructure3d *str3d = st_layer->GetStructure3d(i);
+			osg::Node *node = str3d->GetContainer();
+			if (!node)
+				node = str3d->GetGeom();
+
+			RemoveNodeFromStructGrid(node);
+
+			// if there are any engines pointing to this node, inform them
+			vtGetScene()->TargetRemoved(node);
+		}
 	}
+
 	// then do a normal delete-selected
 	return st_layer->DeleteSelected();
-}
-
-void vtTerrain::DeleteStructureFromTerrain(vtStructureLayer *st_layer, int index)
-{
-	// notify any structure-handling extension
-	vtStructure *str = st_layer->at(index);
-	OnDeleteBehavior(str);
-
-	// Remove it from the paging grid
-	if (m_pPagedStructGrid)
-		m_pPagedStructGrid->RemoveFromGrid(st_layer, index);
-
-	vtStructure3d *str3d = st_layer->GetStructure3d(index);
-	osg::Node *node = str3d->GetContainer();
-	if (!node)
-		node = str3d->GetGeom();
-
-	RemoveNodeFromStructGrid(node);
-	str3d->DeleteNode();
-
-	// if there are any engines pointing to this node, inform them
-	vtGetScene()->TargetRemoved(node);
 }
 
 bool vtTerrain::FindClosestStructure(const DPoint2 &point, double epsilon,
@@ -1013,22 +1291,17 @@ void vtTerrain::PlantModelAtPoint(vtTransform *model, const DPoint2 &pos)
 
 void vtTerrain::_CreateOtherCulture()
 {
-	m_pTerrainGroup->addChild(m_UtilityMap.Setup());
-
 	// create utility structures (routes = towers and wires)
-	vtString util_file = m_Params.GetValueString(STR_UTILITY_FILE);
-	if (util_file != "")
+	if (m_Params.GetValueBool(STR_ROUTEENABLE))
 	{
-		if (m_UtilityMap.ReadOSM(util_file))
-		{
-			m_UtilityMap.TransformTo(m_proj);
-		}
+		// TODO
 	}
 
-	// create any utility geometry
-	m_UtilityMap.ComputePoleStructures();
-	m_UtilityMap.ComputePoleRotations();
-	m_UtilityMap.BuildGeometry(m_pStructGrid, m_pHeightField);
+	// create any route geometry
+	for (uint i = 0; i < m_Routes.GetSize(); i++)
+	{
+		m_Routes[i]->BuildGeometry(m_pHeightField);
+	}
 
 	// create HUD overlay geometry
 	vtString fname;
@@ -1086,13 +1359,15 @@ void vtTerrain::_CreateVegetation()
 
 	clock_t r1 = clock();	// start timing
 
-	for (uint i = 0; i < m_Params.NumLayers(); i++)
+	uint i, num = m_Params.m_Layers.size();
+	for (i = 0; i < num; i++)
 	{
-		// Look for veg layers
-		if (m_Params.LayerType(i) != LT_VEG)
-			continue;
-
 		const vtTagArray &tags = m_Params.m_Layers[i];
+
+		// Look for structure layers
+		vtString ltype = tags.GetValueString("Type");
+		if (ltype != TERR_LTYPE_VEGETATION)
+			continue;
 
 		VTLOG(" Layer %d: Vegetation\n", i);
 		vtString fname = tags.GetValueString("Filename");
@@ -1111,13 +1386,48 @@ void vtTerrain::_CreateVegetation()
 		}
 		VTLOG("\tFound: %s\n", (const char *) plants_path);
 
-		vtVegLayer *v_layer = LoadVegetation(plants_path);
-		if (v_layer)
+		vtVegLayer *v_layer = NewVegLayer();
+		bool success;
+		if (!fname.Right(3).CompareNoCase("shp"))
+			success = v_layer->ReadSHP(plants_path);
+		else
+			success = v_layer->ReadVF(plants_path);
+		if (success)
 		{
-			// If the user wants it to start hidden, hide it
-			bool bVisible;
-			if (tags.GetValueBool("visible", bVisible))
-				v_layer->SetEnabled(bVisible);
+			VTLOG("\tLoaded plants file, %d plants.\n", v_layer->GetNumEntities());
+			v_layer->SetFilename(plants_path);
+		}
+		else
+		{
+			VTLOG1("\tCouldn't load plants file.\n");
+			continue;
+		}
+
+		// Create the 3d plants
+		VTLOG1(" Creating Plant geometry..\n");
+		if (m_Params.GetValueBool(STR_TREES_USE_SHADERS))
+		{
+			osg::GroupLOD::setGroupDistance(fVegDistance);
+			int created = v_layer->CreatePlantShaderNodes(m_progress_callback);
+			m_pVegGroup = v_layer->m_group;
+			m_pTerrainGroup->addChild(m_pVegGroup);
+		}
+		else
+		{
+			int created = v_layer->CreatePlantNodes(m_progress_callback);
+			VTLOG("\tCreated: %d of %d plants\n", created, v_layer->GetNumEntities());
+			if (v_layer->NumOffTerrain())
+				VTLOG("\t%d were off the terrain.\n", v_layer->NumOffTerrain());
+
+			int i, size = v_layer->GetNumEntities();
+			for (i = 0; i < size; i++)
+			{
+				vtTransform *pTrans = v_layer->GetPlantNode(i);
+
+				// add tree to scene graph
+				if (pTrans)
+					AddNodeToVegGrid(pTrans);
+			}
 		}
 	}
 	VTLOG(" Vegetation: %.3f seconds.\n", (float)(clock() - r1) / CLOCKS_PER_SEC);
@@ -1193,13 +1503,15 @@ void vtTerrain::_CreateStructures()
 	vtStructure3d::InitializeMaterialArrays();
 
 	// Create built structures
-	for (uint i = 0; i < m_Params.NumLayers(); i++)
+	uint i, num = m_Params.m_Layers.size();
+	for (i = 0; i < num; i++)
 	{
-		// Look for structure layers
-		if (m_Params.LayerType(i) != LT_STRUCTURE)
-			continue;
-
 		const vtTagArray &lay = m_Params.m_Layers[i];
+
+		// Look for structure layers
+		vtString ltype = lay.GetValueString("Type");
+		if (ltype != TERR_LTYPE_STRUCTURE)
+			continue;
 
 		VTLOG(" Layer %d: Structure\n", i);
 		vtString building_fname = lay.GetValueString("Filename");
@@ -1220,7 +1532,7 @@ void vtTerrain::_CreateStructures()
 		else
 		{
 			VTLOG("\tFound: %s\n", (const char *) building_path);
-			vtStructureLayer *sa = LoadStructuresFromXML(building_path);
+			vtStructureArray3d *sa = LoadStructuresFromXML(building_path);
 			if (sa)
 			{
 				// If the user wants it to start hidden, hide it
@@ -1230,55 +1542,108 @@ void vtTerrain::_CreateStructures()
 			}
 		}
 	}
-	for (uint i = 0; i < m_Layers.size(); i++)
+	int created = 0;
+	for (i = 0; i < m_Layers.size(); i++)
 	{
 		vtStructureLayer *slay = dynamic_cast<vtStructureLayer*>(m_Layers[i].get());
 		if (slay)
+		{
 			CreateStructures(slay);
+			created++;
+		}
+	}
+	if (created == 0)
+	{
+		// No structures loaded, but the user might want to create some later,
+		//  so create a default structure set, and set the projection to match
+		//  the terrain.
+		vtStructureLayer *slay = NewStructureLayer();
+		slay->SetFilename("Untitled.vtst");
+		slay->m_proj = m_proj;
+		SetActiveLayer(slay);
 	}
 }
 
 /////////////////////////
 
-void vtTerrain::_CreateAbstractLayersFromParams()
+void vtTerrain::_CreateAbstractLayers()
 {
 	// Go through the layers in the terrain parameters, and try to load them
-	for (uint i = 0; i < m_Params.NumLayers(); i++)
+	uint i, num = m_Params.m_Layers.size();
+	for (i = 0; i < num; i++)
 	{
-		if (m_Params.LayerType(i) == LT_RAW)
+		const vtTagArray &lay = m_Params.m_Layers[i];
+
+		// Look for abstract layers
+		vtString ltype = lay.GetValueString("Type");
+		if (ltype != TERR_LTYPE_ABSTRACT)
+			continue;
+
+		VTLOG(" Layer %d: Abstract\n", i);
+		for (uint j = 0; j < lay.NumTags(); j++)
 		{
-			VTLOG(" Layer %d: Abstract\n", i);
-			_CreateAbstractLayerFromParams(i);
+			const vtTag *tag = lay.GetTag(j);
+			VTLOG("   Tag '%s': '%s'\n", (const char *)tag->name, (const char *)tag->value);
+		}
+
+		// Load the features: use the loader we are provided, or the default
+		vtFeatureSet *feat = NULL;
+		vtString fname = lay.GetValueString("Filename");
+		vtString path = FindFileOnPaths(vtGetDataPath(), fname);
+		if (path == "")
+		{
+			// For historical reasons, also search a "PointData" folder on the data path
+			vtString prefix = "PointData/";
+			path = FindFileOnPaths(vtGetDataPath(), prefix+fname);
+		}
+		if (path == "")
+		{
+			// If it's not a file, perhaps it's a virtual data source
+			if (m_pFeatureLoader)
+				feat = m_pFeatureLoader->LoadFrom(fname);
+			if (!feat)
+			{
+				VTLOG("Couldn't find features file '%s'\n", (const char *) fname);
+				continue;
+			}
+		}
+		if (!feat)
+		{
+			vtFeatureLoader loader;
+			feat = loader.LoadFrom(path);
+		}
+		if (!feat)
+		{
+			VTLOG("Couldn't read features from file '%s'\n", (const char *) path);
+			continue;
+		}
+		VTLOG("Successfully read features from file '%s'\n", (const char *) path);
+
+		VTLOG1("  Constructing and appending layer.\n");
+		vtAbstractLayer *layer = new vtAbstractLayer(this);
+		layer->SetFeatureSet(feat);
+		m_Layers.push_back(layer);
+
+		// Copy all the other attributes to the new layer
+		VTLOG1("  Setting layer properties.\n");
+		layer->SetProperties(lay);
+	}
+
+	// Now for each layer that we have, create the geometry and labels
+	for (i = 0; i < m_Layers.size(); i++)
+	{
+		vtAbstractLayer *layer = dynamic_cast<vtAbstractLayer*>(m_Layers[i].get());
+		if (layer)
+		{
+			layer->CreateStyledFeatures();
+
+			// Show only layers which should be visible
+			bool bVis;
+			bool has_value = layer->GetProperties().GetValueBool("Visible", bVis);
+			if (has_value)
+				layer->SetVisible(bVis);
 		}
 	}
-}
-
-bool vtTerrain::_CreateAbstractLayerFromParams(int index)
-{
-	const vtTagArray &lay = m_Params.m_Layers[index];
-
-	// Show the tags
-	for (uint j = 0; j < lay.NumTags(); j++)
-	{
-		const vtTag *tag = lay.GetTag(j);
-		VTLOG("   Tag '%s': '%s'\n", (const char *)tag->name, (const char *)tag->value);
-	}
-
-	vtAbstractLayer *ab_layer = new vtAbstractLayer;
-
-	// Copy all the properties from params to the new layer
-	VTLOG1("  Setting layer properties.\n");
-	ab_layer->SetProps(lay);
-	m_Layers.push_back(ab_layer);
-
-	// Abstract geometry goes into the scale features group, so it will be
-	//  scaled up/down with the vertical exaggeration.
-	bool success = ab_layer->Load(GetProjection(), NULL, m_progress_callback);
-	if (!success)
-		return false;
-
-	CreateAbstractLayerVisuals(ab_layer);
-	return true;
 }
 
 /////////////////////////
@@ -1290,11 +1655,9 @@ void vtTerrain::_CreateImageLayers()
 		return;
 
 	// Go through the layers in the terrain parameters, and try to load them
-	for (uint i = 0; i < m_Params.NumLayers(); i++)
+	uint i, num = m_Params.m_Layers.size();
+	for (i = 0; i < num; i++)
 	{
-		if (m_Params.LayerType(i) != LT_IMAGE)
-			continue;
-
 		const vtTagArray &lay = m_Params.m_Layers[i];
 
 		// Look for image layers
@@ -1336,24 +1699,30 @@ void vtTerrain::_CreateImageLayers()
 			VTLOG("Couldn't get extents from image, so we can't use it as an image overlay.\n");
 			continue;
 		}
+
+		// Copy all the other attributes to the new layer (TODO?)
+		//feat->SetProperties(lay);
+
 		m_Layers.push_back(ilayer);
-		AddMultiTextureOverlay(ilayer);
+
+		ilayer->m_pMultiTexture = AddMultiTextureOverlay(ilayer->m_pImage,
+			ilayer->m_pImage->GetExtents(), GL_DECAL);
 	}
 }
 
 //
 // \param TextureMode One of GL_DECAL, GL_MODULATE, GL_BLEND, GL_REPLACE, GL_ADD
 //
-void vtTerrain::AddMultiTextureOverlay(vtImageLayer *im_layer)
+vtMultiTexture *vtTerrain::AddMultiTextureOverlay(vtImage *pImage, const DRECT &extents,
+									   int TextureMode)
 {
-	DRECT extents = im_layer->m_pImage->GetExtents();
 	DRECT EarthExtents = GetHeightField()->GetEarthExtents();
 
 	int iTextureUnit = m_TextureUnits.ReserveTextureUnit();
 	if (iTextureUnit == -1)
-		return;
+		return NULL;
 
-	// Calculate the mapping of texture coordinates
+		// Calculate the mapping of texture coordinates
 	DPoint2 scale;
 	FPoint2 offset;
 	vtHeightFieldGrid3d *grid = GetDynTerrain();
@@ -1374,7 +1743,7 @@ void vtTerrain::AddMultiTextureOverlay(vtImageLayer *im_layer)
 	else	// might be a TiledGeom, or a TIN
 	{
 		FRECT worldExtents;
-		GetLocalConversion().ConvertFromEarth(extents, worldExtents);
+		g_Conv.ConvertFromEarth(extents, worldExtents);
 
 		// Map input values (0-terrain size in world coords) to 0-1
 		scale.Set(1.0/worldExtents.Width(), 1.0/worldExtents.Height());
@@ -1384,9 +1753,9 @@ void vtTerrain::AddMultiTextureOverlay(vtImageLayer *im_layer)
 	offset.x = (float) ((extents.left - EarthExtents.left) / extents.Width());
 	offset.y = (float) ((extents.bottom - EarthExtents.bottom) / extents.Height());
 
-	im_layer->m_pMultiTexture = new vtMultiTexture;
-	im_layer->m_pMultiTexture->Create(GetTerrainSurfaceNode(), im_layer->m_pImage,
-		scale, offset, iTextureUnit, GL_DECAL);
+	// apply it to the node that is above the terrain surface
+	return AddMultiTexture(GetTerrainSurfaceNode(), iTextureUnit, pImage,
+		TextureMode, scale, offset);
 }
 
 osg::Node *vtTerrain::GetTerrainSurfaceNode()
@@ -1400,74 +1769,6 @@ osg::Node *vtTerrain::GetTerrainSurfaceNode()
 	return NULL;
 }
 
-///////////////////////////////////////////////////////////////////////////////
-
-void vtTerrain::_CreateElevLayers()
-{
-	// Go through the layers in the terrain parameters, and try to load them
-	for (uint i = 0; i < m_Params.NumLayers(); i++)
-	{
-		// Look for elevation layers
-		if (m_Params.LayerType(i) != LT_ELEVATION)
-			continue;
-
-		const vtTagArray &layer_tags = m_Params.m_Layers[i];
-
-		VTLOG(" Layer %d: Elevation\n", i);
-		for (uint j = 0; j < layer_tags.NumTags(); j++)
-		{
-			const vtTag *tag = layer_tags.GetTag(j);
-			VTLOG("   Tag '%s': '%s'\n", (const char *)tag->name, (const char *)tag->value);
-		}
-
-		vtString fname = layer_tags.GetValueString("Filename");
-		vtString path = FindFileOnPaths(vtGetDataPath(), fname);
-		if (path == "")
-		{
-			vtString prefix = "Elevation/";
-			path = FindFileOnPaths(vtGetDataPath(), prefix+fname);
-		}
-		if (path == "")
-		{
-			VTLOG("Couldn't find elevation layer file '%s'\n", (const char *) fname);
-			continue;
-		}
-
-		vtElevLayer *elayer = new vtElevLayer;
-		elayer->SetProps(layer_tags);
-		if (!elayer->Load(path, m_progress_callback))
-		{
-			VTLOG("Couldn't read elevation from file '%s'\n", (const char *) path);
-			continue;
-		}
-		VTLOG("Read elevation from file '%s'\n", (const char *) path);
-
-		elayer->MakeMaterials();
-
-		vtGeode *wsgeom = elayer->GetTin()->CreateGeometry(false);
-		wsgeom->setName("Elevation layer");
-
-		// We require that the TIN has a compatible CRS with the base
-		//  terrain, but the extents may be different.  If they are,
-		//  we may need to offset the TIN to be in the correct place.
-		DRECT ext1 = m_pHeightField->GetEarthExtents();
-		DRECT ext2 = elayer->GetTin()->GetEarthExtents();
-		DPoint2 offset = ext2.LowerLeft() - ext1.LowerLeft();
-		float x, z;
-		GetLocalConversion().ConvertVectorFromEarth(offset, x, z);
-		
-		vtTransform *xform = new vtTransform;
-		xform->Translate(FPoint3(x, 0, z));
-		xform->addChild(wsgeom);
-		m_pUnshadowedGroup->addChild(xform);
-
-		m_Layers.push_back(elayer);
-	}
-}
-
-/**
- Turn on fog for this terrain.  Mutually exclusive with shadow.
- */
 void vtTerrain::SetFog(bool fog)
 {
 	m_bFog = fog;
@@ -1491,9 +1792,6 @@ void vtTerrain::SetFog(bool fog)
 	}
 }
 
-/**
- Set the color of the fog.
- */
 void vtTerrain::SetFogColor(const RGBf &color)
 {
 	m_fog_color = color;
@@ -1501,9 +1799,6 @@ void vtTerrain::SetFogColor(const RGBf &color)
 		SetFog(true);
 }
 
-/**
- Set the distance at which the fog is solid.
- */
 void vtTerrain::SetFogDistance(float fMeters)
 {
 	m_Params.SetValueFloat(STR_FOGDISTANCE, fMeters / 1000);
@@ -1511,9 +1806,6 @@ void vtTerrain::SetFogDistance(float fMeters)
 		SetFog(true);
 }
 
-/**
- Turn on shadows for this terrain.  Mutually exclusive with fog.
- */
 void vtTerrain::SetShadows(bool shadows)
 {
 	m_bShadows = shadows;
@@ -1576,9 +1868,6 @@ void vtTerrain::SetShadows(bool shadows)
 	}
 }
 
-/**
- Set shadow options (darkness, radius, etc.)
- */
 void vtTerrain::SetShadowOptions(const vtShadowOptions &opt)
 {
 	//param.SetValueBool(STR_STRUCT_SHADOWS);
@@ -1781,7 +2070,7 @@ void vtTerrain::CreateStep1()
  */
 bool vtTerrain::CreateStep2()
 {
-	VTLOG1("Step2\n");
+	VTLOG("Step1\n");
 
 	// for GetValueFloat below
 	LocaleWrap normal_numbers(LC_NUMERIC, "C");
@@ -1795,6 +2084,8 @@ bool vtTerrain::CreateStep2()
 		m_pElevGrid->SetupConversion(m_Params.GetValueFloat(STR_VERTICALEXAG));
 		m_pHeightField = m_pElevGrid.get();
 		m_proj = m_pElevGrid->GetProjection();
+		// set global projection based on this terrain
+		g_Conv = m_pElevGrid->m_Conversion;
 		m_bIsCreated = true;
 		return true;
 	}
@@ -1804,6 +2095,8 @@ bool vtTerrain::CreateStep2()
 		VTLOG1("Using supplied TIN.\n");
 		m_pHeightField = m_pTin;
 		m_proj = m_pTin->m_proj;
+		// set global projection based on this terrain
+		g_Conv = m_pTin->m_Conversion;
 		m_bIsCreated = true;
 		return true;
 	}
@@ -1878,6 +2171,8 @@ bool vtTerrain::CreateStep2()
 		VTLOG("\t\tVertical exaggeration: %g\n", exag);
 		m_pElevGrid->SetupConversion(exag);
 
+		g_Conv = m_pElevGrid->m_Conversion;
+
 		FRECT frect = m_pElevGrid->m_WorldExtents;
 		VTLOG("\t\tWorld Extents LRTB: %g %g %g %g\n",
 			frect.left, frect.right, frect.top, frect.bottom);
@@ -1908,6 +2203,8 @@ bool vtTerrain::CreateStep2()
 			VTLOG("\tTIN load succeeded.\n");
 
 			m_proj = m_pTin->m_proj;
+			g_Conv = m_pTin->m_Conversion;
+
 			m_pHeightField = m_pTin;
 		}
 	}
@@ -1955,6 +2252,7 @@ bool vtTerrain::CreateStep2()
 		}
 		m_pTiledGeom->SetTexLODFactor(m_Params.GetValueFloat(STR_TEXURE_LOD_FACTOR));
 		m_pHeightField = m_pTiledGeom;
+		g_Conv = m_pHeightField->m_Conversion;
 		m_proj = m_pTiledGeom->m_proj;
 
 		// The tiled geometry base texture will always use texture unit 0
@@ -1970,6 +2268,7 @@ bool vtTerrain::CreateStep2()
 			return false;
 		}
 		m_pHeightField = m_pExternalHeightField;
+		g_Conv = m_pExternalHeightField->m_Conversion;
 		m_proj = m_pExternalHeightField->GetProjection();
 	}
 	char type[10], value[2048];
@@ -1987,7 +2286,7 @@ bool vtTerrain::CreateStep2()
  */
 bool vtTerrain::CreateStep3(vtTransform *pSunLight, vtLightSource *pLightSource)
 {
-	VTLOG1("Step3\n");
+	VTLOG("Step2\n");
 
 	// Remember the lightsource in case we need it later for shadows
 	m_pLightSource = pLightSource;
@@ -1997,23 +2296,10 @@ bool vtTerrain::CreateStep3(vtTransform *pSunLight, vtLightSource *pLightSource)
 		return true;
 
 	int type = m_Params.GetValueInt(STR_SURFACE_TYPE);
-	if (type == 0)		// Single grid
-	{
-		// measure total texture processing time
-		clock_t c1 = clock();
-
-		m_Texture.LoadTexture(m_Params, GetHeightFieldGrid3d(), m_progress_callback);
-
-		m_Texture.ShadeTexture(m_Params, GetHeightFieldGrid3d(), pSunLight->GetDirection(),
-			m_progress_callback);
-
-		// The terrain's base texture will always use unit 0
-		m_TextureUnits.ReserveTextureUnit();
-	}
-	if (type == 1)	// TIN
-	{
-		m_pTin->MakeMaterialsFromOptions(m_Params);
-	}
+	int tex = m_Params.GetValueInt(STR_TEXTURE);
+	if (type == 0 ||	// single grid
+		(type == 1 && tex == 1))	// TIN, single texture
+		_CreateTextures(pSunLight->GetDirection(), m_progress_callback);
 	return true;
 }
 
@@ -2022,7 +2308,7 @@ bool vtTerrain::CreateStep3(vtTransform *pSunLight, vtLightSource *pLightSource)
  */
 bool vtTerrain::CreateStep4()
 {
-	VTLOG1("Step4\n");
+	VTLOG("Step3\n");
 
 	// if we aren't going to produce the terrain surface, nothing to do
 	if (m_Params.GetValueBool(STR_SUPPRESS))
@@ -2041,9 +2327,12 @@ bool vtTerrain::CreateStep4()
 
 bool vtTerrain::CreateFromTIN()
 {
-	bool bDropShadow = false;
+	bool bDropShadow = true;
 
-	// Make the TIN's geometry.
+	// build heirarchy (add terrain to scene graph)
+	int tex = m_Params.GetValueInt(STR_TEXTURE);
+	if (tex == 1)
+		m_pTin->SetTextureMaterials(m_pTerrMats);
 	vtGeode *geode = m_pTin->CreateGeometry(bDropShadow);
 	geode->SetCastShadow(false);
 	m_pTerrainGroup->addChild(geode);
@@ -2101,7 +2390,7 @@ bool vtTerrain::CreateFromExternal()
  */
 bool vtTerrain::CreateStep5()
 {
-	VTLOG1("Step5\n");
+	VTLOG("Step4\n");
 
 	// some algorithms need an additional stage of initialization
 	if (m_pDynGeom != NULL)
@@ -2113,11 +2402,8 @@ bool vtTerrain::CreateStep5()
 		VTLOG("CLOD construction: %.3f seconds.\n", time);
 	}
 
-	// We should also speed up our TIN if we have one.
-	if (m_pTin != NULL)
-	{
-		m_pTin->SetupTriangleBins(25);	// TODO: make this number adaptive
-	}
+	if (m_Params.GetValueBool(STR_DETAILTEXTURE))
+		_CreateDetailTexture();
 
 	return true;
 }
@@ -2127,8 +2413,6 @@ bool vtTerrain::CreateStep5()
  */
 void vtTerrain::CreateStep6()
 {
-	VTLOG1("Step6\n");
-
 	// must have a heightfield by this point
 	if (!m_pHeightField)
 		return;
@@ -2145,8 +2429,6 @@ void vtTerrain::CreateStep6()
 
 void vtTerrain::CreateStep7()
 {
-	VTLOG1("Step7\n");
-
 	// create roads
 	if (m_Params.GetValueBool(STR_ROADS))
 		_CreateRoads();
@@ -2154,15 +2436,11 @@ void vtTerrain::CreateStep7()
 
 void vtTerrain::CreateStep8()
 {
-	VTLOG1("Step8\n");
-
 	_CreateVegetation();
 }
 
 void vtTerrain::CreateStep9()
 {
-	VTLOG1("Step9\n");
-
 	_CreateOtherCulture();
 
 	if (m_Params.GetValueBool(STR_OCEANPLANE))
@@ -2181,27 +2459,10 @@ void vtTerrain::CreateStep9()
 		else
 			CreateWaterHeightfield(wpath);
 	}
-}
 
-void vtTerrain::CreateStep10()
-{
-	VTLOG1("Step10\n");
-
-	_CreateAbstractLayersFromParams();
-}
-
-void vtTerrain::CreateStep11()
-{
-	VTLOG1("Step11\n");
+	_CreateAbstractLayers();
 
 	_CreateImageLayers();
-}
-
-void vtTerrain::CreateStep12()
-{
-	VTLOG1("Step12\n");
-
-	_CreateElevLayers();
 
 	// Engines will be activated later in vtTerrainScene::SetTerrain
 	ActivateEngines(false);
@@ -2235,7 +2496,7 @@ void vtTerrain::CreateStep12()
 		VTLOG("Reading animpath: %s.\n", (const char *) path);
 		vtAnimPath *anim = new vtAnimPath;
 		// Ensure that anim knows the projection
-		if (!anim->SetProjection(GetProjection(), GetLocalConversion()))
+		if (!anim->SetProjection(GetProjection()))
 		{
 			// no projection, no functionality
 			delete anim;
@@ -2470,7 +2731,7 @@ float vtTerrain::GetLODDistance(TFType ftype)
  * If you know that your data is a grid, you can use GetHeightFieldGrid3d()
  * to get that specifically.
  */
-vtHeightField3d *vtTerrain::GetHeightField() const
+vtHeightField3d *vtTerrain::GetHeightField()
 {
 	return m_pHeightField;
 }
@@ -2537,6 +2798,232 @@ int vtTerrain::GetShadowTextureUnit()
 	return m_iShadowTextureUnit;
 }
 
+void vtTerrain::_ApplyPreLight(vtHeightFieldGrid3d *pElevGrid, vtBitmapBase *bitmap,
+							  const FPoint3 &light_dir, bool progress_callback(int))
+{
+	// for GetValueFloat below
+	LocaleWrap normal_numbers(LC_NUMERIC, "C");
+
+	VTLOG("  Prelighting texture: ");
+
+	clock_t c1 = clock();
+
+	float shade_factor = m_Params.GetValueFloat(STR_PRELIGHTFACTOR);
+	bool bTrue = m_Params.GetValueBool("ShadeTrue");
+	bool bQuick = m_Params.GetValueBool("ShadeQuick");
+	float ambient = 0.25f;
+	float gamma = 0.80f;
+	if (m_Params.GetValueBool(STR_CAST_SHADOWS))
+	{
+		// A more accurate shading, still a little experimental
+		pElevGrid->ShadowCastDib(bitmap, light_dir, shade_factor, ambient, progress_callback);
+	}
+	else if (bQuick)
+		pElevGrid->ShadeQuick(bitmap, shade_factor, bTrue, progress_callback);
+	else
+		pElevGrid->ShadeDibFromElevation(bitmap, light_dir, shade_factor,
+			ambient, gamma, bTrue, progress_callback);
+
+	clock_t c2 = clock();
+
+	clock_t c3 = c2 - c1;
+	VTLOG("%.3f seconds.\n", (float)c3 / CLOCKS_PER_SEC);
+}
+
+/**
+ * Create a set of points on the terrain for a 2D polyline by draping the point onto
+ * the terrain surface.
+ *
+ * \param line	The 2D line to drape, in Earth coordinates.
+ * \param fOffset	An offset to elevate each point in the resulting geometry,
+ *		useful for keeping it visibly above the ground.
+ * \param bInterp	True to interpolate between the vertices of the input
+ *		line. This is generally desirable when the ground is much more finely
+ *		spaced than the input line.
+ * \param bCurve	True to interpret the vertices of the input line as
+ *		control points of a curve.  The created geometry will consist of
+ *		a draped line which passes through the control points.
+ * \param bTrue		True to use the true elevation of the terrain, ignoring
+ *		whatever scale factor is being used to exaggerate elevation for
+ *		display.
+ * \param output	Received the points.
+ * \return The approximate length of the resulting 3D polyline.
+ */
+float vtTerrain::LineOnSurface(const DLine2 &line, float fOffset, bool bInterp,
+	bool bCurve, bool bTrue, FLine3 &output)
+{
+	uint i, j;
+	FPoint3 v1, v2, v;
+
+	float fSpacing=0;
+	if (bInterp)
+	{
+		// try to guess how finely to tessellate our line
+		if (m_pDynGeom)
+		{
+			FPoint2 spacing = m_pDynGeom->GetWorldSpacing();
+			fSpacing = std::min(spacing.x, spacing.y) / 2;
+		}
+		else if (m_pTin)
+		{
+			// TINs don't have a grid spacing.  In lieu of using a completely
+			//  different (more correct) algorithm for draping, just estimate.
+			DRECT ext = m_pTin->GetEarthExtents();
+			FPoint2 p1, p2;
+			m_pHeightField->m_Conversion.convert_earth_to_local_xz(ext.left, ext.bottom, p1.x, p1.y);
+			m_pHeightField->m_Conversion.convert_earth_to_local_xz(ext.right, ext.top, p2.x, p2.y);
+			fSpacing = (p2 - p1).Length() / 1000.0f;
+		}
+		else if (m_pTiledGeom)
+		{
+			// There is no ideal way to drape a line on a tileset of tiles
+			//  with varying resolution.  For now, just use the highest (LOD0)
+			//  grid density at the starting point.
+			FPoint2 spacing = m_pTiledGeom->GetWorldSpacingAtPoint(line[0]);
+			fSpacing = std::min(spacing.x, spacing.y);
+		}
+	}
+
+	float fTotalLength = 0.0f;
+	int iVerts = 0;
+	uint points = line.GetSize();
+	if (bCurve)
+	{
+		DPoint2 p2, last(1E9,1E9);
+		DPoint3 p3;
+
+		int spline_points = 0;
+		CubicSpline spline;
+		for (i = 0; i < points; i++)
+		{
+			p2 = line[i];
+			if (i > 1 && p2 == last)
+				continue;
+			p3.Set(p2.x, p2.y, 0);
+			spline.AddPoint(p3);
+			spline_points++;
+			last = p2;
+		}
+		spline.Generate();
+
+		// estimate how many steps to subdivide this line into
+		double dLinearLength = line.Length();
+		float fLinearLength, dummy;
+		m_pHeightField->m_Conversion.ConvertVectorFromEarth(DPoint2(dLinearLength,0.0), fLinearLength, dummy);
+		double full = (double) (spline_points-1);
+		int iSteps = (uint) (fLinearLength / fSpacing);
+		if (iSteps < 3)
+			iSteps = 3;
+		double dStep = full / iSteps;
+
+		FPoint3 last_v;
+		double f;
+		for (f = 0; f <= full; f += dStep)
+		{
+			spline.Interpolate(f, &p3);
+
+			m_pHeightField->m_Conversion.convert_earth_to_local_xz(p3.x, p3.y, v.x, v.z);
+			m_pHeightField->FindAltitudeAtPoint(v, v.y, bTrue);
+			v.y += fOffset;
+			output.Append(v);
+			iVerts++;
+
+			// keep a running total of approximate ground length
+			if (f > 0)
+				fTotalLength += (v - last_v).Length();
+			last_v = v;
+		}
+	}
+	else
+	{
+		// not curved: straight line in earth coordinates
+		FPoint3 last_v;
+		for (i = 0; i < points; i++)
+		{
+			if (bInterp)
+			{
+				v1 = v2;
+				m_pHeightField->m_Conversion.convert_earth_to_local_xz(line[i].x, line[i].y, v2.x, v2.z);
+				if (i == 0)
+					continue;
+
+				// estimate how many steps to subdivide this segment into
+				FPoint3 diff = v2 - v1;
+				float fLen = diff.Length();
+				uint iSteps = (uint) (fLen / fSpacing);
+				if (iSteps < 1) iSteps = 1;
+
+				for (j = (i == 1 ? 0:1); j <= iSteps; j++)
+				{
+					// simple linear interpolation of the ground coordinate
+					v.Set(v1.x + diff.x / iSteps * j, 0.0f, v1.z + diff.z / iSteps * j);
+					m_pHeightField->FindAltitudeAtPoint(v, v.y, bTrue);
+					v.y += fOffset;
+					output.Append(v);
+					iVerts++;
+
+					// keep a running total of approximate ground length
+					if (j > 0)
+						fTotalLength += (v - last_v).Length();
+					last_v = v;
+				}
+			}
+			else
+			{
+				m_pHeightField->m_Conversion.ConvertFromEarth(line[i], v.x, v.z);
+				m_pHeightField->FindAltitudeAtPoint(v, v.y, bTrue);
+				v.y += fOffset;
+				output.Append(v);
+			}
+		}
+	}
+	return fTotalLength;
+}
+
+/**
+ * Create geometry on the terrain for a 2D line by draping the point onto
+ * the terrain surface.
+ *
+ * \param pMF	A vtGeomFactory which will produces the mesh geometry.
+ * \param line	The 2D line to drape, in Earth coordinates.
+ * \param fOffset	An offset to elevate each point in the resulting geometry,
+ *		useful for keeping it visibly above the ground.
+ * \param bInterp	True to interpolate between the vertices of the input
+ *		line. This is generally desirable when the ground is much more finely
+ *		spaced than the input line.
+ * \param bCurve	True to interpret the vertices of the input line as
+ *		control points of a curve.  The created geometry will consist of
+ *		a draped line which passes through the control points.
+ * \param bTrue		True to use the true elevation of the terrain, ignoring
+ *		whatever scale factor is being used to exaggerate elevation for
+ *		display.
+ * \return The approximate length of the resulting 3D line mesh.
+ *
+ * \par Example:
+	\code
+	DLine2 line = ...;
+	vtTerrain *pTerr = ...;
+	vtGeode *pLineGeom = new vtGeode;
+	pTerr->AddNode(pLineGeom);
+	vtGeomFactory mf(pLineGeom, osg::PrimitiveSet::LINE_STRIP, 0, 30000, 1);
+	float length = pTerr->AddSurfaceLineToMesh(&mf, dline, 10, true);
+	\endcode
+ */
+float vtTerrain::AddSurfaceLineToMesh(vtGeomFactory *pMF, const DLine2 &line,
+									 float fOffset, bool bInterp, bool bCurve,
+									 bool bTrue)
+{
+	FLine3 tessellated;
+	float fTotalLength = LineOnSurface(line, fOffset, bInterp, bCurve, bTrue, tessellated);
+
+	pMF->PrimStart();
+	for (uint i = 0; i < tessellated.GetSize(); i++)
+		pMF->AddVertex(tessellated[i]);
+	pMF->PrimEnd();
+
+	return fTotalLength;
+}
+
 
 ///////////////////////////////////////////////////////////////////////
 // Camera viewpoints
@@ -2558,43 +3045,55 @@ void vtTerrain::RemoveLayer(vtLayer *lay, bool progress_callback(int))
 {
 	vtStructureLayer *slay = dynamic_cast<vtStructureLayer*>(lay);
 	vtAbstractLayer *alay = dynamic_cast<vtAbstractLayer*>(lay);
-	vtVegLayer *vlay = dynamic_cast<vtVegLayer*>(lay);
 	if (slay)
 	{
-		// Remove each structure from the terrain
+		// first remove each structure from the terrain
 		for (uint i = 0; i < slay->size(); i++)
 		{
 			if (progress_callback != NULL)
 				progress_callback(i * 99 / slay->size());
 
-			DeleteStructureFromTerrain(slay, i);
+			vtStructure *str = slay->at(i);
+			vtStructure3d *str3d = slay->GetStructure3d(i);
+
+			// notify any structure-handling extension
+			if (m_pStructureExtension)
+				m_pStructureExtension->OnDelete(this, str);
+
+			// Remove it from the paging grid
+			if (m_pPagedStructGrid)
+				m_pPagedStructGrid->RemoveFromGrid(slay, i);
+
+			// If it was a successfully create structure, it will have a container
+			if (str3d->GetContainer())
+			{
+				RemoveNodeFromStructGrid(str3d->GetContainer());
+				str3d->DeleteNode();
+			}
 		}
+
 		// Be certain we're not still trying to page it in
 		if (m_pPagedStructGrid)
 			m_pPagedStructGrid->ClearQueue(slay);
+
+		// If that was the current layer, deal with it
+		if (slay == GetStructureLayer())
+			SetActiveLayer(NULL);
 	}
 	else if (alay)
 	{
 		// first remove them from the terrain
 		RemoveFeatureGeometries(alay);
-	}
-	else if (vlay)
-	{
-		for (uint i = 0; i < vlay->NumEntities(); i++)
-			vlay->Select(i, true);
-		DeleteSelectedPlants(vlay);
-	}
 
-	// If that was the active layer, deal with it
-	if (lay == GetActiveLayer())
-		SetActiveLayer(NULL);
-
-	// Removing the reference-counted layer causes it to be deleted
+		// If that was the current layer, deal with it
+		if (alay == GetAbstractLayer())
+			SetActiveLayer(NULL);
+	}
 	m_Layers.Remove(lay);
 }
 
 /**
- * Currently handled by this method: structure, vegetation, abstract layers.
+ * Currently handled by this method: structure and abstract layers.
  */
 vtLayer *vtTerrain::LoadLayer(const char *fname)
 {
@@ -2603,77 +3102,24 @@ vtLayer *vtTerrain::LoadLayer(const char *fname)
 	vtString ext = GetExtension(fname);
 	if (!ext.CompareNoCase(".vtst"))
 	{
-		vtStructureLayer *st_layer = LoadStructuresFromXML(fname);
-		if (st_layer)
-			CreateStructures(st_layer);
-		return st_layer;
-	}
-	else if (!ext.CompareNoCase(".vf"))
-	{
-		return LoadVegetation(fname);
+		return LoadStructuresFromXML(fname);
 	}
 	else if (!ext.CompareNoCase(".shp"))
 	{
-		vtAbstractLayer *ab_layer = NewAbstractLayer();
-		ab_layer->SetLayerName(fname);
-
-		// TODO here: progress dialog on load?
-		if (ab_layer->Load(GetProjection(), NULL))
-		{
-			VTLOG("Successfully read features from file '%s'\n", fname);
-			return ab_layer;
-		}
-		else
+		vtFeatureLoader loader;
+		vtFeatureSet *feat = loader.LoadFrom(fname);
+		if (!feat)
 		{
 			VTLOG("Couldn't read features from file '%s'\n", fname);
-			RemoveLayer(ab_layer);
+			return NULL;
 		}
+		VTLOG("Successfully read features from file '%s'\n", fname);
+		vtAbstractLayer *alay = new vtAbstractLayer(this);
+		alay->SetFeatureSet(feat);
+		m_Layers.push_back(alay);
+		return alay;
 	}
 	return NULL;
-}
-
-vtLayer *vtTerrain::GetOrCreateLayerOfType(LayerType type)
-{
-	vtLayer *layer = GetActiveLayer();
-	if (layer && layer->GetType() == type)
-		return layer;		// We already have one active.
-
-	// Look for one
-	for (uint i = 0; i < m_Layers.size(); i++)
-	{
-		if (m_Layers[i]->GetType() == type)
-			return m_Layers[i];
-	}
-	// else, create one.
-	switch (type)
-	{
-	case LT_IMAGE:
-		// TODO maybe
-		break;
-	case LT_STRUCTURE:
-		layer = NewStructureLayer();
-		layer->SetLayerName("Untitled.vtst");
-		break;
-	case LT_VEG:
-		layer = NewVegLayer();
-		layer->SetLayerName("Untitled.vf");
-		break;
-	default:
-		// We don't support the rest (..yet). Keep picky compilers quiet.
-		break;
-	}
-	return layer;
-}
-
-uint vtTerrain::NumLayersOfType(LayerType type)
-{
-	uint count = 0;
-	for (uint i = 0; i < m_Layers.size(); i++)
-	{
-		if (m_Layers[i]->GetType() == type)
-			count++;
-	}
-	return count;
 }
 
 
@@ -2686,7 +3132,7 @@ vtVegLayer *vtTerrain::GetVegLayer()
 }
 
 /**
- * Create a new veg array for this terrain, and returns it.
+ * Create a new veg array for this terrain, and return it.
  */
 vtVegLayer *vtTerrain::NewVegLayer()
 {
@@ -2701,58 +3147,8 @@ vtVegLayer *vtTerrain::NewVegLayer()
 	return vlay;
 }
 
-vtVegLayer *vtTerrain::LoadVegetation(const vtString &fname)
-{
-	vtVegLayer *v_layer = NewVegLayer();
-	bool success;
-	if (!fname.Right(3).CompareNoCase("shp"))
-		success = v_layer->ReadSHP(fname);
-	else
-		success = v_layer->ReadVF(fname);
-	if (success)
-	{
-		VTLOG("\tLoaded plants file, %d plants.\n", v_layer->NumEntities());
-		v_layer->SetFilename(fname);
-	}
-	else
-	{
-		VTLOG1("\tCouldn't load plants file.\n");
-		return NULL;
-	}
-
-	// Create the 3d plants
-	VTLOG1(" Creating Plant geometry..\n");
-	if (m_Params.GetValueBool(STR_TREES_USE_SHADERS))
-	{
-		float fVegDistance = m_Params.GetValueInt(STR_VEGDISTANCE);
-		osg::GroupLOD::setGroupDistance(fVegDistance);
-		int created = v_layer->CreatePlantShaderNodes(m_progress_callback);
-		m_pVegGroup = v_layer->m_group;
-		m_pTerrainGroup->addChild(m_pVegGroup);
-	}
-	else
-	{
-		int created = v_layer->CreatePlantNodes(m_progress_callback);
-		VTLOG("\tCreated: %d of %d plants\n", created, v_layer->NumEntities());
-		if (v_layer->NumOffTerrain())
-			VTLOG("\t%d were off the terrain.\n", v_layer->NumOffTerrain());
-
-		for (uint i = 0; i < v_layer->NumEntities(); i++)
-		{
-			vtTransform *pTrans = v_layer->GetPlantNode(i);
-
-			// add tree to scene graph
-			if (pTrans)
-				AddNodeToVegGrid(pTrans);
-		}
-	}
-	return v_layer;
-}
-
 /**
  * Create a new plant instance at a given location and add it to the terrain.
- *
- * \param v_layer The vegetation layer to add to.
  * \param pos The 2D earth position of the new plant.
  * \param iSpecies Index of the species in the terrain's plant list.
  *		If you don't know the index, you can find it with
@@ -2779,29 +3175,26 @@ bool vtTerrain::AddPlant(vtVegLayer *v_layer, const DPoint2 &pos, int iSpecies, 
 int vtTerrain::DeleteSelectedPlants(vtVegLayer *v_layer)
 {
 	int num_deleted = 0;
-	for (int i = v_layer->NumEntities() - 1; i >= 0; i--)
+
+	// first remove them from the terrain
+	for (int i = v_layer->GetNumEntities() - 1; i >= 0; i--)
 	{
 		if (v_layer->IsSelected(i))
 		{
-			RemoveAndDeletePlant(v_layer, i);
-			num_deleted++;
+			vtTransform *pTrans = v_layer->GetPlantNode(i);
+			if (pTrans != NULL)
+			{
+				osg::Group *pParent = pTrans->getParent(0);
+				if (pParent)
+				{
+					pParent->removeChild(pTrans);
+					v_layer->DeletePlant(i);
+					num_deleted ++;
+				}
+			}
 		}
 	}
 	return num_deleted;
-}
-
-void vtTerrain::RemoveAndDeletePlant(vtVegLayer *v_layer, int index)
-{
-	vtTransform *pTrans = v_layer->GetPlantNode(index);
-	if (pTrans != NULL)
-	{
-		osg::Group *pParent = pTrans->getParent(0);
-		if (pParent)
-		{
-			pParent->removeChild(pTrans);
-			v_layer->DeletePlant(index);
-		}
-	}
 }
 
 /**
@@ -2884,17 +3277,6 @@ bool vtTerrain::FindClosestPlant(const DPoint2 &point, double epsilon,
 	return (plant_index != -1);
 }
 
-void vtTerrain::DeselectAllPlants()
-{
-	for (size_t i = 0; i < m_Layers.size(); i++)
-	{
-		vtVegLayer *v_layer = dynamic_cast<vtVegLayer *>(m_Layers[i].get());
-		if (v_layer)
-			v_layer->VisualDeselectAll();
-	}
-}
-
-
 /**
  * Adds a node to the terrain.
  * The node will be added to the Structure LOD Grid of the terrain, so it will be
@@ -2965,230 +3347,21 @@ void vtTerrain::EnforcePageOut()
 		m_fPagingStructureDist = fStructLodDist + 50;
 }
 
-///////////////////////////////////////////////////////////////////////
-
-class TurbineEngine : public vtEngine
+void vtTerrain::ExtendStructure(vtStructure *s)
 {
-public:
-	TurbineEngine()
-	{
-		m_fLastTime = FLT_MAX;
-		m_fDir = PIf * 0.5f;
-		m_fRot = 0.0f;
-		m_fRotSpeed = 0.0f;
-	}
-	void Eval();
-
-	float m_fLastTime;
-	float m_fDir;		// radians
-	float m_fRot;		// radians
-	float m_fRotSpeed;	// radians per second
-	FPoint3 m_rotor_pivot;
-	vtStructure *m_pStructure;
-	vtTerrain *m_pTerrain;
-};
-
-void TurbineEngine::Eval()
-{
-	float fNow = vtGetTime();
-	if (m_fLastTime==FLT_MAX)
-		m_fLastTime = fNow;
-	float fElapsed = fNow - m_fLastTime;
-
-	float fWindDir = 0.0f;
-	float fWindSpeed = 0.0f;
-
-	// Get these properties from the terrain
-	TParams &params = m_pTerrain->GetParams();
-	params.GetValueFloat("WindDirection", fWindDir);
-	params.GetValueFloat("WindSpeed", fWindSpeed);
-
-	// Convert degrees to radians
-	float fTargetDir = ((180-fWindDir) / 180.0f * PIf);
-
-	// Face wind gradually
-	m_fDir += ((fTargetDir - m_fDir) * 0.05f);
-
-	// "The maximum rotor speed is about 35 rpm for the smallest windmills.
-	//  The larger windmills never go above 15-18 rpm."
-	// 35 rpm = 3.66 radians/sec
-
-	// Windspeed goes from 0-40, mapping 40->3.66 is 0.0915
-
-	// And match wind speed gradually
-	// Convert m/s to approximate radians/s
-	float fTargetSpeed = fWindSpeed * 0.0915;	// ad hoc
-	m_fRotSpeed += ((fTargetSpeed - m_fRotSpeed) * 0.05f);
-
-	for (unsigned int t = 0; t < NumTargets(); t++)
-	{
-		osg::Referenced *tar = GetTarget(t);
-		vtTransform *x1 = dynamic_cast<vtTransform*>(tar);
-		if (!x1) return;
-
-		//x1->Identity();
-		//x1->Rotate2(FPoint3(0,1,0), m_fDir);
-
-		m_fRot += (m_fRotSpeed * fElapsed);
-		if (m_fRot >= PI2f)
-			m_fRot -= PI2f;
-		x1->Identity();
-		x1->Rotate(FPoint3(0,0,1), m_fRot);
-		x1->Translate(m_rotor_pivot);
-	}
-	m_fLastTime = fNow;
-}
-
-/**
- Extend some structures with behavior.  A developer can also subclass vtTerrain
- to implement their own behaviors.
- */
-void vtTerrain::OnCreateBehavior(vtStructure *str)
-{
-	vtStructInstance3d *si = dynamic_cast<vtStructInstance3d *>(str);
-	if (!si)
-		return;
-
-	vtString itemname = si->GetValueString("itemname", true);
-	if (itemname == "")
-		return;
-
-	vtItem *item = m_Content.FindItemByName(itemname);
-	// If that didn't work, also try the global content manager
-	if (!item)
-		item = vtGetContent().FindItemByName(itemname);
-	if (!item)
-		return;
-
-	vtString behavior = item->GetValueString("behavior", true);
-	if (behavior == "wind_turbine")
-	{
-		itemname += " rotor";
-
-		// Look in terrain content, and global content manager
-		osg::Node *n2 = m_Content.CreateNodeFromItemname(itemname);
-		if (!n2)
-			n2 = vtGetContent().CreateNodeFromItemname(itemname);
-
-		if (!n2)
-			return;
-
-		vtTransform *x1 = new vtTransform;
-
-		x1->setName("x1");
-
-		si->GetContainer()->addChild(x1);
-		x1->addChild(n2);
-
-		TurbineEngine *te = new TurbineEngine;
-		te->m_pStructure = str;
-		te->setName("Turbine");
-		te->m_rotor_pivot.Set(0,0,0);
-
-		// Look in terrain content, and global content manager
-		vtItem *rotor_item = m_Content.FindItemByName(itemname);
-		if (!rotor_item)
-			rotor_item = vtGetContent().FindItemByName(itemname);
-		if (rotor_item)
-		{
-			const char *pivot = rotor_item->GetValueString("rotor_pivot");
-			if (pivot)
-			{
-				// Avoid trouble with '.' and ',' in Europe
-				LocaleWrap normal_numbers(LC_NUMERIC, "C");
-
-				FPoint3 p;
-				if (sscanf(pivot, "%f, %f, %f", &p.x, &p.y, &p.z) == 3)
-					te->m_rotor_pivot = p;
-			}
-		}
-		te->AddTarget(x1);
-		te->m_pTerrain = this;
-		AddEngine(te);
-	}
-}
-
-void vtTerrain::OnDeleteBehavior(vtStructure *str)
-{
-	// Remove all engines which are associated with this structure
-	vtEngine *top = GetEngineGroup();
-	for (unsigned int i = 0; i < top->NumChildren(); i++)
-	{
-		vtEngine *eng = top->GetChild(i);
-		TurbineEngine *te = dynamic_cast<TurbineEngine*>(eng);
-		if (te && te->m_pStructure == str)
-		{
-			// remove it
-			top->RemoveChild(eng);
-			return;
-		}
-	}
+	// notify any structure-handling extension
+	if (m_pStructureExtension)
+		m_pStructureExtension->OnCreate(this, s);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////
 // Abstracts
 
-/**
- * Create a new abstract array for this terrain, and returns it.
- */
-vtAbstractLayer *vtTerrain::NewAbstractLayer()
-{
-	vtAbstractLayer *alay = new vtAbstractLayer;
-	m_Layers.push_back(alay);
-	return alay;
-}
-
 /** Get the currently active abstract layer for this terrain. */
 vtAbstractLayer *vtTerrain::GetAbstractLayer()
 {
 	return dynamic_cast<vtAbstractLayer *>(m_pActiveLayer);
-}
-
-bool vtTerrain::CreateAbstractLayerVisuals(vtAbstractLayer *ab_layer)
-{
-	// We must decide how to tesselate the features, in case of interpolation of edges.
-	// That depends on the spacing of the underlying surface, which may vary from place
-	// to place.  Look for where the center of the featureset is.
-	bool have_center = false;
-	DPoint2 center;
-	DRECT ext;
-	bool have_extents = ab_layer->EarthExtents(ext);
-	if (have_extents)
-	{
-		center = ext.GetCenter();
-		const vtProjection &source = ab_layer->GetFeatureSet()->GetAtProjection();
-
-		// If we have two valid CRSs, and they are not the same, then we need a transform
-		if (source.GetRoot() && m_proj.GetRoot() && !source.IsSame(&m_proj))
-		{
-			OCT *trans = CreateConversionIgnoringDatum(&source, &m_proj);
-			if (trans)
-			{
-				if (trans->Transform(1, &center.x, &center.y) == 1)
-					have_center = true;
-				delete trans;
-			}
-		}
-	}
-	if (!have_center)
-	{
-		// Just use the terrain center.
-		center = GetHeightFieldGrid3d()->GetEarthExtents().GetCenter();
-	}
-	float fSpacing = EstimateGroundSpacingAtPoint(center);
-
-	VTLOG1("  Constructing layer visuals.\n");
-	ab_layer->CreateFeatureVisuals(GetScaledFeatures(), GetHeightFieldGrid3d(),
-		fSpacing, m_progress_callback);
-
-	// Show only layers which should be visible
-	bool bVis;
-	bool has_value = ab_layer->Props().GetValueBool("Visible", bVis);
-	if (has_value)
-		ab_layer->SetVisible(bVis);
-
-	return true;
 }
 
 void vtTerrain::RemoveFeatureGeometries(vtAbstractLayer *alay)
@@ -3202,7 +3375,7 @@ int vtTerrain::DeleteSelectedFeatures(vtAbstractLayer *alay)
 
 	int NumToDelete = 0;
 	vtFeatureSet *fset = alay->GetFeatureSet();
-	for (uint j = 0; j < fset->NumEntities(); j++)
+	for (uint j = 0; j < fset->GetNumEntities(); j++)
 	{
 		if (fset->IsSelected(j))
 		{
@@ -3215,7 +3388,7 @@ int vtTerrain::DeleteSelectedFeatures(vtAbstractLayer *alay)
 		VTLOG("Set %d items to delete, removing visuals..\n", NumToDelete);
 
 		// Delete high-level features first
-		for (uint j = 0; j < fset->NumEntities(); j++)
+		for (uint j = 0; j < fset->GetNumEntities(); j++)
 		{
 			if (fset->IsDeleted(j))
 			{
@@ -3323,7 +3496,7 @@ void vtTerrain::RedrapeCulture(const DRECT &area)
 		vtVegLayer *vlay = dynamic_cast<vtVegLayer *>(m_Layers[i].get());
 		if (vlay)
 		{
-			for (uint i = 0; i < vlay->NumEntities(); i++)
+			for (uint i = 0; i < vlay->GetNumEntities(); i++)
 			{
 				vlay->UpdateTransform(i);
 			}

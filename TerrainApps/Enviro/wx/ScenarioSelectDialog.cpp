@@ -83,10 +83,7 @@ ScenarioSelectDialog::ScenarioSelectDialog( wxWindow *parent, wxWindowID id, con
 void ScenarioSelectDialog::SetTerrain(vtTerrain *pTerrain)
 {
 	m_pTerrain = pTerrain;
-	if (pTerrain)
-		m_Scenarios = pTerrain->GetParams().m_Scenarios;
-	else
-		m_Scenarios.clear();
+	m_Scenarios = pTerrain->GetParams().m_Scenarios;
 	m_bModified = false;
 	UpdateEnableState();
 }
@@ -105,8 +102,7 @@ void ScenarioSelectDialog::ActivateCurrent()
 	int sel = GetScenarioList()->GetSelection();
 	if (sel < 0)
 		return;
-	if (m_pTerrain)
-		m_pTerrain->ActivateScenario(sel);
+	m_pTerrain->ActivateScenario(sel);
 	g_App.SetScenario(sel);
 }
 

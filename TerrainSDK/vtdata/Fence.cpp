@@ -182,9 +182,6 @@ void vtLinearParams::ApplyStyle(vtLinearStyle style)
 		m_fConnectBottom = 0.0f;
 		m_fConnectWidth = 0.0f;
 		break;
-	case FS_TOTAL:
-		// keep picky compilers quiet.
-		break;
 	}
 }
 

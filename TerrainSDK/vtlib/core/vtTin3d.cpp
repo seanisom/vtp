@@ -3,21 +3,14 @@
 //
 // Class which represents a Triangulated Irregular Network.
 //
-// Copyright (c) 2002-2013 Virtual Terrain Project
+// Copyright (c) 2002-2011 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
 #include "vtlib/vtlib.h"
 #include "vtdata/FilePath.h"	// for FindFileOnPaths
 #include "vtdata/DataPath.h"
-
 #include "vtTin3d.h"
-#include "SurfaceTexture.h"
-#include "Light.h"
-
-// We will split the TIN into chunks of geometry, each with no more than this many vertices.
-const int kMaxChunkVertices = 10000;
-const int kColorMapTableSize = 8192;
 
 
 vtTin3d::vtTin3d()
@@ -25,7 +18,6 @@ vtTin3d::vtTin3d()
 	m_pMats = NULL;
 	m_pGeode = NULL;
 	m_pDropGeode = NULL;
-	m_pColorMap = NULL;
 }
 
 /**
@@ -50,18 +42,15 @@ FPoint3 ComputeNormal(const FPoint3 &p1, const FPoint3 &p2, const FPoint3 &p3)
 	return cross;
 }
 
-void vtTin3d::SetMaterial(vtMaterialArray *pMats, int mat_idx)
+void vtTin3d::SetTextureMaterials(vtMaterialArray *pMats)
 {
 	m_pMats = pMats;
-	m_MatIndex = mat_idx;
 }
 
 void vtTin3d::MakeSurfaceMaterials()
 {
 	uint iSurfTypes = m_surftypes.size();
 	bool bExplicitNormals = HasVertexNormals();
-
-	m_StartOfSurfaceMaterials = m_pMats->size();
 
 	for (uint i = 0; i < iSurfTypes; i++)
 	{
@@ -80,166 +69,75 @@ void vtTin3d::MakeSurfaceMaterials()
 		}
 
 		m_pMats->AddTextureMaterial(path, false, bLighting, false, false,
-			fAmbient, 1.0f, 1.0f, 0.0f, false, true);	// No clamp, yes mipmap.
+			fAmbient, 1.0f, 1.0f, 0.0f, false, false, true);
 	}
 }
 
-/**
- High-level method to make materials from layer options.
- */
-void vtTin3d::MakeMaterialsFromOptions(const vtTagArray &options)
+
+#define MAX_CHUNK_VERTS	30000
+
+vtGeode *vtTin3d::CreateGeometry(bool bDropShadowMesh, int m_matidx)
 {
-	const vtString color_map_name = options.GetValueString(STR_COLOR_MAP);
-	const vtString geotypical_name = options.GetValueString(STR_TEXTURE_GEOTYPICAL);
+	bool bGeoSpecific = (m_pMats != NULL);
 
-	const float fScale = options.GetValueFloat(STR_GEOTYPICAL_SCALE);
-	const float fOpacity = options.GetValueFloat(STR_OPACITY);
-
-	vtString name = options.GetValueString(STR_COLOR_MAP);
-
-	ColorMap *cmap = NULL;
-	osg::Image *image = NULL;
-	if (color_map_name != "")
-	{
-		cmap = LoadColorMap(color_map_name);
-	}
-	if (geotypical_name != "")
-	{
-		// Geotypical material
-		vtString fname = "Geotypical/";
-		fname += geotypical_name;
-		vtString path = FindFileOnPaths(vtGetDataPath(), fname);
-		image = osgDB::readImageFile((const char *) path);
-	}
-	MakeMaterials(cmap, image, fScale, fOpacity);
-}
-
-/**
- Lower-level method to make materials.
- */
-void vtTin3d::MakeMaterials(ColorMap *cmap, osg::Image *image, float fScale, float fOpacity)
-{
-	// set up geotypical materials
-	m_pMats = new vtMaterialArray;
-
-	// White: used for 1D-textured terrain surface
-	bool lighting = true;
-	bool culling = false;
-	m_MatIndex = m_pMats->AddRGBMaterial(RGBf(1, 1, 1), culling, lighting, false, fOpacity);
-
-	// Grey: used for drop shadow plane
-	m_ShadowMatIndex = m_pMats->AddRGBMaterial(RGBf(0.4f, 0.4f, 0.4f), false, false, false);
-
-	if (cmap)
-	{
-		SetColorMap(cmap);
-
-		// Setup TexGen for a 1D texture.
-		vtMaterial *mat = m_pMats->at(m_MatIndex);
-
-		int unit = mat->NextAvailableTextureUnit();
-
-		// Rather than look through the color map for each pixel, pre-build
-		//  a color lookup table once - should be faster in nearly all cases.
-		float fMin, fMax;
-		GetHeightExtents(fMin, fMax);
-		m_pColorMap->GenerateColorTable(4096, fMin, fMax);
-
-		// A 1D texture to color by elevation
-		osg::Image *image = new osg::Image();
-		image->allocateImage(4096, 1, 1, GL_RGB, GL_UNSIGNED_BYTE);
-		for (int i = 0; i < 4096; i++)
-		{
-			RGBi rgb = m_pColorMap->m_table[i];
-
-			int x = i, y = 0;
-			uchar *buf = image->data(x, y);
-			buf[0] = rgb.r;
-			buf[1] = rgb.g;
-			buf[2] = rgb.b;
-		}
-		mat->SetTexture1D(image, unit);
-
-		// Set TexGen to scale from min to max
-		float fRange = fMax - fMin;
-		mat->SetTexGen1D(FPoint3(0, 1/fRange, 0), -fMin / fRange, unit);
-		mat->SetTextureMode(GL_MODULATE, unit);
-#if 0
-		// Set up the texgen
-		int unit = 0;
-		osg::TexGen *pTexgen = new osg::TexGen;
-
-		pTexgen->setMode(osg::TexGen::EYE_LINEAR);
-		pTexgen->setPlane(osg::TexGen::S, osg::Vec4(0.0f, 1/fRange, 0.0f, -fMin / fRange));
-	
-		mat->setTextureAttributeAndModes(unit, pTexgen, osg::StateAttribute::ON);
-		mat->setTextureMode(unit, GL_TEXTURE_GEN_S,  osg::StateAttribute::ON);
-
-		osg::ref_ptr<osg::TexEnv> pTexEnv = new osg::TexEnv(osg::TexEnv::MODULATE);
-		mat->setTextureAttributeAndModes(unit, pTexEnv.get(), osg::StateAttribute::ON);
-#endif
-	}
-	else if (image)
-	{
-		vtMaterial *pMat = new vtMaterial;
-
-		int unit = pMat->NextAvailableTextureUnit();
-		pMat->SetTexture2D(image, unit);
-		pMat->SetCulling(culling);
-		pMat->SetLighting(lighting);
-		pMat->SetClamp(false);
-		pMat->SetDiffuse(1.0f, 1.0f, 1.0f, fOpacity);
-		pMat->SetMipMap(false);
-		m_MatIndex = m_pMats->AppendMaterial(pMat);
-
-		if (m_MatIndex == -1)
-		{
-			// In case of error, fall back on something reasonable.
-			m_MatIndex = m_pMats->AddRGBMaterial(RGBf(1,1,0), false, false, true);
-		}
-		else
-		{
-			// A geotypical texture.  Setup TexGen.
-			pMat->SetTexGen2D(FPoint2(1.0f/fScale, 1.0f/fScale), FPoint2(0, 0), unit);
-			pMat->SetTextureMode(GL_MODULATE, unit);
-		}
-	}
-}
-
-vtGeode *vtTin3d::CreateGeometry(bool bDropShadowMesh)
-{
 	uint iSurfTypes = m_surftypes.size();
 	bool bUseSurfaceTypes = (m_surfidx.size() > 0 && iSurfTypes > 0);
+	bool bTextured = bGeoSpecific || bUseSurfaceTypes;
 	bool bExplicitNormals = HasVertexNormals();
-	bool bUseVertexColors = !bUseSurfaceTypes;
+
+	// The first 3 materials are hard-coded, the rest are per surface type
+	int texture_base = 3;
+
+	if (!bGeoSpecific)
+	{
+		// set up geotypical materials
+		m_pMats = new vtMaterialArray;
+		bool lighting = false;
+
+		// White: used for vertex-colored terrain surface
+		m_pMats->AddRGBMaterial(RGBf(1, 1, 1), false, lighting, false);
+
+		// Grey: used for drop shadow plane
+		m_pMats->AddRGBMaterial(RGBf(0.4f, 0.4f, 0.4f), false, false, false);
+
+		// Black
+		m_pMats->AddRGBMaterial(RGBf(0, 0, 0), false, false, false);
+
+		if (bUseSurfaceTypes)
+			MakeSurfaceMaterials();
+	}
 
 	m_pGeode = new vtGeode;
 	m_pGeode->SetMaterials(m_pMats);
 
-	if (bUseSurfaceTypes)
-	{
-		MakeSurfaceMaterials();
-	}
+	// Break it up into a series of meshes - this is good for both
+	// culling and memory management
 
-	// Break it up into a series of meshes - this is good for both culling and
-	// memory management.
 	DPoint3 ep;		// earth point
 	FPoint3 wp;		// world point
 	FPoint3 p[3], norm;
+	RGBf color;
+	float r, g=1.0f, b=0.5f;
 
-	// Most TINs are larger in the horizontal dimension than the vertical, so
+	// most TINs are larger in the horizontal dimension than the vertical, so
 	// use horizontal extents as the basis of subdivision
 	DRECT rect = m_EarthExtents;
+	double sizex = rect.Width();
+	double sizey = rect.Height();
+	float height_range = (m_fMaxHeight - m_fMinHeight);
 
-	// Make it slightly larger to avoid edge conditions
-	rect.Grow(0.000001, 0.000001);
-
-	const DPoint2 EarthSize = rect.SizeExtents();
+	// make it slightly larger avoid edge condition
+	rect.left -= 0.000001;
+	sizex += 0.000002;
+	rect.bottom -= 0.000001;
+	sizey += 0.000002;
 
 	int divx, divy;		// number of x and y divisions
-	uint dsize = 0;
+	uint dsize=0;
 	Bin *bins = NULL;
 	uint tris = NumTris();
+	int bx, by;
+	DPoint2 gp;
 	vtArray<vtMesh *> pTypeMeshes;
 
 	uint i, j, k;
@@ -247,41 +145,39 @@ vtGeode *vtTin3d::CreateGeometry(bool bDropShadowMesh)
 	bool acceptable = false;
 	while (!acceptable)
 	{
-		// Take the smaller dimension and split it to ensure a minimum level
+		// take the smaller dimension and split it to ensure a minimum level
 		// of subdivision, with the larger dimension proportional
-		if (EarthSize.x < EarthSize.y)
+		if (sizex < sizey)
 		{
 			divx = divs;
-			divy = (int) (divx * EarthSize.y / EarthSize.x);
+			divy = (int) (divx * sizey / sizex);
 		}
 		else
 		{
 			divy = divs;
-			divx = (int) (divy * EarthSize.x / EarthSize.y);
+			divx = (int) (divy * sizex / sizey);
 		}
 
-		// Create a 2D array of Bins
+		// create a 2d array of Bins
 		dsize = divx*divy;
 		bins = new Bin[dsize];
 
-		// See how many triangles would go into each bin
-		uint most = 0;
+		int most = -1, newsize;
 		for (i = 0; i < tris; i++)
 		{
 			j = i * 3;
-			const DPoint2 &gp = (m_vert[m_tri[j]] + m_vert[m_tri[j+1]] + m_vert[m_tri[j+2]]) / 3;
-			const int bx = (int) (divx * (gp.x - rect.left) / EarthSize.x);
-			const int by = (int) (divy * (gp.y - rect.bottom) / EarthSize.y);
+			gp = (m_vert[m_tri[j]] + m_vert[m_tri[j+1]] + m_vert[m_tri[j+2]]) / 3;
+			bx = (int) (divx * (gp.x - rect.left) / sizex);
+			by = (int) (divy * (gp.y - rect.bottom) / sizey);
 
 			Bin &bref = bins[bx * divy + by];
 			bref.push_back(i);
-			const uint newsize = bref.size();
+			newsize = bref.size();
 			if (newsize > most)
 				most = newsize;
 		}
-		if (most > kMaxChunkVertices)
+		if (most > 10000)
 		{
-			// Too many in one bin, increase the divisions and try again.
 			delete [] bins;
 			divs = divs * 3 / 2;
 		}
@@ -295,21 +191,23 @@ vtGeode *vtTin3d::CreateGeometry(bool bDropShadowMesh)
 	uint in_bin;
 	int tri, vidx;
 
-	// If the material is textured, it will use TexGen so we don't need texture
-	// coordinate per vertex.
-	int vert_type = 0;
-	if (bUseSurfaceTypes)
-		vert_type = VT_TexCoords;
-
-	// We always have normals for lighting
-	vert_type |= VT_Normals;
-
 	for (i = 0; i < dsize; i++)
 	{
 		Bin &bref = bins[i];
 		in_bin = bref.size();
 		if (!in_bin)
 			continue;
+
+		int vert_type;
+		if (bTextured)
+		{
+			if (bExplicitNormals)
+				vert_type = VT_Normals|VT_TexCoords;
+			else
+				vert_type = VT_TexCoords;
+		}
+		else
+			vert_type = VT_Normals|VT_Colors;
 
 		vtMesh *pMesh = NULL;
 		if (bUseSurfaceTypes)
@@ -341,36 +239,49 @@ vtGeode *vtTin3d::CreateGeometry(bool bDropShadowMesh)
 			if (shade < 0)
 				shade = -shade;
 
-			float fTiling;
+			bool bTiled = true;
 			if (bUseSurfaceTypes)
 			{
 				// We mush pick a mesh based on surface type
 				int surftype = m_surfidx[tri];
 				if (pTypeMeshes[surftype] == NULL)
-					pTypeMeshes[surftype] = new vtMesh(osg::PrimitiveSet::TRIANGLES,
-						vert_type, in_bin * 3);
+					pTypeMeshes[surftype] = new vtMesh(osg::PrimitiveSet::TRIANGLES, vert_type, in_bin * 3);
 				pMesh = pTypeMeshes[surftype];
-				fTiling = m_surftype_tiling[surftype];
+				bTiled = m_surftype_tiled[surftype];
 			}
 
-			int vert_base = pMesh->NumVertices();
+			int vert_base = pMesh->GetNumVertices();
 			for (k = 0; k < 3; k++)
 			{
 				vidx = m_tri[tribase + k];
 
 				// This is where we actually add the vertex
 				int vert_index = pMesh->AddVertex(p[k]);
-				if (bUseSurfaceTypes)
+				if (bTextured)
 				{
 					FPoint2 uv;
-					uv.Set((m_vert[vidx].x - m_EarthExtents.left) / fTiling,
-							(m_vert[vidx].y - m_EarthExtents.bottom) / fTiling);
+					if (bGeoSpecific || !bTiled)
+						uv.Set((m_vert[vidx].x - m_EarthExtents.left) / sizex,
+							   (m_vert[vidx].y - m_EarthExtents.bottom) / sizey);
+					else
+						uv.Set((m_vert[vidx].x - m_EarthExtents.left) / 6,
+							   (m_vert[vidx].y - m_EarthExtents.bottom) / 6);
 					pMesh->SetVtxTexCoord(vert_index, uv);
+
+					if (bExplicitNormals)
+						pMesh->SetVtxNormal(vert_index, m_vert_normal[vidx]);
 				}
-				if (bExplicitNormals)
-					pMesh->SetVtxNormal(vert_index, m_vert_normal[vidx]);
 				else
+				{
+					// red varies by elevation
+					r = (m_z[vidx] - m_fMinHeight) / height_range;
+
 					pMesh->SetVtxNormal(vert_index, norm);
+
+					color.Set(r, g, b);
+					color *= shade;
+					pMesh->SetVtxColor(vert_index, color);
+				}
 			}
 			pMesh->AddTri(vert_base, vert_base+1, vert_base+2);
 		}
@@ -380,7 +291,7 @@ vtGeode *vtTin3d::CreateGeometry(bool bDropShadowMesh)
 			{
 				if (pTypeMeshes[j] != NULL)
 				{
-					m_pGeode->AddMesh(pTypeMeshes[j], m_StartOfSurfaceMaterials + j);
+					m_pGeode->AddMesh(pTypeMeshes[j], texture_base + j);
 					m_Meshes.Append(pTypeMeshes[j]);
 				}
 			}
@@ -388,13 +299,65 @@ vtGeode *vtTin3d::CreateGeometry(bool bDropShadowMesh)
 		else
 		{
 			// Simple case
-			m_pGeode->AddMesh(pMesh, m_MatIndex);
+			m_pGeode->AddMesh(pMesh, m_matidx);
 			m_Meshes.Append(pMesh);
 		}
 	}
 
 	// Free up temp arrays
 	delete [] bins;
+
+	/*
+	int base = 0;
+	remaining = verts;
+	while (remaining)
+	{
+		int chunk = remaining;
+		if (chunk > MAX_CHUNK_VERTS)
+			chunk = MAX_CHUNK_VERTS;
+		int tris = chunk / 3;
+
+		vtMesh *pMesh = new vtMesh(GL_TRIANGLES, VT_Normals|VT_Colors, chunk);
+
+		for (i = 0; i < tris; i++)
+		{
+			for (j = 0; j < 3; j++)
+				m_Conversion.ConvertFromEarth(m_vert[base + (i*3+j)], p[j]);
+			norm = ComputeNormal(p[0], p[1], p[2]);
+
+			float shade = norm.Dot(light_dir);	// shading 0 (dark) to 1 (light)
+
+			for (j = 0; j < 3; j++)
+			{
+				r = (m_points[i*3+j].z - m_fMinHeight) / (m_fMaxHeight - m_fMinHeight);
+				pMesh->AddVertex(p[j]);
+				pMesh->SetVtxNormal(i*3+j, norm);
+
+				color.Set(r, g, b);
+				color *= shade;
+				pMesh->SetVtxColor(i*3+j, color);
+			}
+		}
+		m_pGeode->AddMesh(pMesh, 0);
+		m_Meshes.Append(pMesh);
+
+		if (bDropShadowMesh)
+		{
+			vtMesh *pShadowMesh = new vtMesh(GL_TRIANGLES, 0, chunk);
+			for (i = 0; i < chunk; i++)
+			{
+				ep = m_points[base+i];
+				ep.z = m_fMinHeight - 4.9;
+				m_Conversion.ConvertFromEarth(ep, wp);
+				pShadowMesh->AddVertex(wp);
+			}
+			m_pGeode->AddMesh(pShadowMesh, 2);
+		}
+
+		remaining -= chunk;
+		base += chunk;
+	}
+		*/
 
 	if (bDropShadowMesh)
 	{
@@ -417,7 +380,7 @@ vtGeode *vtTin3d::CreateGeometry(bool bDropShadowMesh)
 		pBaseMesh->AddVertex(wp);
 
 		pBaseMesh->AddFan(0, 1, 2, 3);
-		m_pGeode->AddMesh(pBaseMesh, m_ShadowMatIndex);
+		m_pGeode->AddMesh(pBaseMesh, 1);
 	}
 
 	// The TIN is a large geometry which should not attempt to cast a shadow,
@@ -455,7 +418,7 @@ bool vtTin3d::FindAltitudeAtPoint(const FPoint3 &input, float &fAltitude,
 	for (uint m = 0; m < m_Meshes.GetSize(); m++)
 	{
 		vtMesh *mesh = m_Meshes[m];
-		int tris = mesh->NumVertices() / 3;
+		int tris = mesh->GetNumVertices() / 3;
 		for (int i = 0; i < tris; i++)
 		{
 			// get world points
@@ -566,7 +529,7 @@ bool vtTin3d::CastRayToSurface(const FPoint3 &point, const FPoint3 &dir,
 			continue;
 		}
 
-		int tris = mesh->NumVertices() / 3;
+		int tris = mesh->GetNumVertices() / 3;
 		for (i = 0; i < tris; i++)
 		{
 			// get world points
@@ -595,7 +558,7 @@ FPoint3 vtTin3d::FindVectorToClosestVertex(const FPoint3 &pos)
 	for (uint m = 0; m < m_Meshes.GetSize(); m++)
 	{
 		vtMesh *mesh = m_Meshes[m];
-		int points = mesh->NumVertices();
+		int points = mesh->GetNumVertices();
 		for (int i = 0; i < points; i++)
 		{
 			vert = mesh->GetVtxPos(i);

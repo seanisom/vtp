@@ -462,7 +462,7 @@ bool vtRoadLayer::EditLinkProperties(const DPoint2 &point, float error,
 
 	for (LinkEdit* curLink = GetFirstLink(); curLink; curLink = curLink->GetNext())
 	{
-		if (curLink->OverlapsExtent(target))
+		if (curLink->WithinExtent(target))
 		{
 			b = curLink->DistanceToPoint(point);
 			if (b < dist)
@@ -643,5 +643,99 @@ void vtRoadLayer::DoClean()
 
 	CloseProgressDialog();
 	ComputeExtents();
+}
+
+#include "ElevLayer.h"
+#include "vtdata/ElevationGrid.h"
+
+void vtRoadLayer::CarveRoadway(vtElevLayer *pElev, float margin)
+{
+	vtElevationGrid	*grid = pElev->GetGrid();
+
+	if (!pElev || !grid)
+		return;
+
+	// how many units to flatten on either side of the roadway, past the
+	//  physical edge of the link surface
+	float shoulder = margin;
+	float fade = margin;
+
+	OpenProgressDialog(_("Scanning Grid against Roads"));
+
+	float half;
+	LinkEdit *pLink;
+	for (pLink = GetFirstLink(); pLink; pLink = pLink->GetNext())
+	{
+		pLink->ComputeExtent();
+		half = pLink->m_fWidth / 2 + shoulder + fade;
+		pLink->m_extent.Grow(half, half);
+	}
+
+	int altered_heixels = 0;
+	float height;
+	int linkpoint;
+	float fractional;
+	double a, b, total;
+	DPoint3 loc;
+	int i, j;
+	int xsize, ysize;
+	grid->GetDimensions(xsize, ysize);
+	for (i = 0; i < xsize; i++)
+	{
+		UpdateProgressDialog(i*100/xsize);
+		for (j = 0; j < ysize; j++)
+		{
+			grid->GetEarthLocation(i, j, loc);
+			DPoint2 p2(loc.x, loc.y);
+
+			for (pLink = GetFirstLink(); pLink; pLink = pLink->GetNext())
+			{
+				if (!pLink->WithinExtent(p2))
+					continue;
+
+				// Find position in link coordinates.
+				// These factors (a,b) are similar to what Pete Willemsen calls
+				//  Curvilinear Coordinates: distance and offset.
+				DPoint2 closest;
+				total = pLink->GetLinearCoordinates(p2, a, b, closest,
+					linkpoint, fractional, false);
+				half = pLink->m_fWidth / 2 + shoulder + fade;
+
+				// Check if the point is actually on the link
+				if (a < 0 || a > total || b < -half || b > half)
+					continue;
+
+				// Don't use the height of the ground at the middle of the link.
+				// That assumes the link is draped perfectly.  In reality,
+				//  it's draped based only on the height at each vertex of
+				//  the link.  Just use those.
+				float alt1, alt2;
+				grid->FindAltitudeOnEarth(pLink->GetAt(linkpoint), alt1);
+				grid->FindAltitudeOnEarth(pLink->GetAt(linkpoint+1), alt2);
+				height = alt1 + (alt2 - alt1) * fractional;
+
+				// If the point falls in the 'fade' region, interpolate
+				//  the offset from 1 to 0 across the region.
+				if (half - fabs(b) > fade)
+					grid->SetFValue(i, j, height);
+				else
+				{
+					float amount = (half - fabs(b)) / fade;
+					float current = grid->GetFValue(i, j);
+					float diff = height - current;
+					grid->SetFValue(i, j, current + amount * diff);
+				}
+				altered_heixels++;
+				break;
+			}
+		}
+	}
+	if (altered_heixels)
+	{
+		grid->ComputeHeightExtents();
+		pElev->SetModified(true);
+		pElev->ReRender();
+	}
+	CloseProgressDialog();
 }
 

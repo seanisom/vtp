@@ -334,7 +334,7 @@ void Enviro::MakeDemoGlobe()
 		vtFeatureSet *feat1 = loader.LoadFromSHP(users);
 		vtFeatureSetPoint2D *ft = (vtFeatureSetPoint2D *) feat1;
 
-		int half = ft->NumEntities() / 2;
+		int half = ft->GetNumEntities() / 2;
 		int foo = 0;
 		for (i = 0; i < half; i++)
 		{
@@ -377,7 +377,8 @@ void Enviro::MakeOverlayGlobe(vtImage *input, bool progress_callback(int))
 	// Make dymaxion overlay images
 	vtImage *output[10];
 
-	const IPoint2 input_size = input->GetSize();
+	int input_x = input->GetWidth();
+	int input_y = input->GetHeight();
 	int depth = input->GetDepth();
 	int output_size = 512;
 
@@ -418,8 +419,8 @@ void Enviro::MakeOverlayGlobe(vtImage *input, bool progress_callback(int))
 				uvw.y = v;
 				ico.FaceUVToGeo(face, uvw, lon, lat);
 
-				int source_x = (int) (lon / PI2d * input_size.x);
-				int source_y = (int) (lat / PId * input_size.y);
+				int source_x = (int) (lon / PI2d * input_x);
+				int source_y = (int) (lat / PId * input_y);
 
 				if (depth == 8)
 				{
@@ -971,14 +972,14 @@ void Enviro::FlyInStage1()
 		DPoint3 earth_geo(m_FlyInCenter.x, m_FlyInCenter.y,
 			m_fTransitionHeight);
 
-		const vtProjection &tproj = m_pTargetTerrain->GetProjection();
+		vtProjection &tproj = m_pTargetTerrain->GetProjection();
 		vtProjection gproj;
 		CreateSimilarGeographicProjection(tproj, gproj);
 		OCT *trans = CreateCoordTransform(&gproj, &tproj);
 		DPoint3 earth_local = earth_geo;
 		trans->Transform(1, &earth_local.x, &earth_local.y);
 
-		const vtLocalConversion &conv = m_pTargetTerrain->GetLocalConversion();
+		vtLocalConversion &conv = m_pTargetTerrain->GetHeightField()->m_Conversion;
 		FPoint3 world;
 		conv.ConvertFromEarth(earth_local, world);
 

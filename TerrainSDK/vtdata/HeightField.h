@@ -1,7 +1,7 @@
 //
 // vtHeightField.h
 //
-// Copyright (c) 2002-2013 Virtual Terrain Project
+// Copyright (c) 2002-2012 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -121,9 +121,6 @@ public:
 
 	void SetCulture(CultureExtension *ext) { m_pCulture = ext; }
 
-	float LineOnSurface(const DLine2 &line, float fSpacing, float fOffset,
-		bool bInterp, bool bCurve, bool bTrue, FLine3 &output);
-
 	FRECT	m_WorldExtents;		// cooked (OpenGL) extents (in the XZ plane)
 	vtLocalConversion	m_Conversion;
 
@@ -172,18 +169,18 @@ public:
 	virtual float GetElevation(int iX, int iZ, bool bTrue = false) const = 0;
 	virtual void GetWorldLocation(int i, int j, FPoint3 &loc, bool bTrue = false) const = 0;
 
-	bool ColorDibFromElevation(vtBitmapBase *pBM, ColorMap *cmap,
-		int iGranularity, const RGBAi &nodata, bool progress_callback(int) = NULL) const;
-	bool ColorDibFromTable(vtBitmapBase *pBM, const ColorMap *color_map,
-		const RGBAi &nodata, bool progress_callback(int) = NULL) const;
+	bool ColorDibFromElevation(vtBitmapBase *pBM, const ColorMap *cmap,
+		int iGranularity, const RGBAi &nodata, bool progress_callback(int) = NULL);
+	bool ColorDibFromTable(vtBitmapBase *pBM, std::vector<RGBi> &table,
+		float fMin, float fMax, const RGBAi &nodata, bool progress_callback(int) = NULL);
 
 	void ShadeDibFromElevation(vtBitmapBase *pBM, const FPoint3 &light_dir,
 		float fLightFactor, float fAmbient = 0.1f, float fGamma = 1.0f,
-		bool bTrue = false, bool progress_callback(int) = NULL) const;
+		bool bTrue = false, bool progress_callback(int) = NULL);
 	void ShadeQuick(vtBitmapBase *pBM, float light_factor, bool bTrue = false,
 		bool progress_callback(int) = NULL);
 	void ShadowCastDib(vtBitmapBase *pBM, const FPoint3 &ight_dir,
-		float fLightFactor, float fAmbient, bool progress_callback(int) = NULL) const;
+		float fLightFactor, float fAmbient, bool progress_callback(int) = NULL);
 
 protected:
 	IPoint2	m_iSize;

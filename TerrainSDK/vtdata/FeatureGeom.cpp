@@ -1,7 +1,7 @@
 //
 // Features.cpp
 //
-// Copyright (c) 2002-2013 Virtual Terrain Project
+// Copyright (c) 2002-2012 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -21,7 +21,7 @@ vtFeatureSetPoint2D::vtFeatureSetPoint2D() : vtFeatureSet()
 	m_eGeomType = wkbPoint;
 }
 
-uint vtFeatureSetPoint2D::NumEntities() const
+uint vtFeatureSetPoint2D::GetNumEntities() const
 {
 	return m_Point2.GetSize();
 }
@@ -38,7 +38,7 @@ void vtFeatureSetPoint2D::Reserve(int iNum)
 
 bool vtFeatureSetPoint2D::ComputeExtent(DRECT &rect) const
 {
-	int i, entities = NumEntities();
+	int i, entities = GetNumEntities();
 
 	if (!entities)
 		return false;
@@ -83,7 +83,7 @@ bool vtFeatureSetPoint2D::AppendGeometryFrom(vtFeatureSet *pFromSet)
 	if (!pFrom)
 		return false;
 
-	for (uint i = 0; i < pFrom->NumEntities(); i++)
+	for (uint i = 0; i < pFrom->GetNumEntities(); i++)
 		m_Point2.Append(pFrom->m_Point2[i]);
 	return true;
 }
@@ -108,7 +108,7 @@ void vtFeatureSetPoint2D::GetPoint(uint num, DPoint2 &p) const
 
 int vtFeatureSetPoint2D::FindClosestPoint(const DPoint2 &p, double epsilon, double *distance)
 {
-	uint entities = NumEntities();
+	uint entities = GetNumEntities();
 	double dist, closest = 1E9;
 	int found = -1;
 
@@ -128,7 +128,7 @@ int vtFeatureSetPoint2D::FindClosestPoint(const DPoint2 &p, double epsilon, doub
 
 void vtFeatureSetPoint2D::FindAllPointsAtLocation(const DPoint2 &loc, std::vector<int> &found)
 {
-	for (uint i = 0; i < NumEntities(); i++)
+	for (uint i = 0; i < GetNumEntities(); i++)
 	{
 		if (loc == m_Point2[i])
 			found.push_back(i);
@@ -198,17 +198,6 @@ void vtFeatureSetPoint2D::LoadGeomFromSHP(SHPHandle hSHP, bool progress_callback
 	}
 }
 
-bool vtFeatureSetPoint2D::EarthExtents(DRECT &ext) const
-{
-	ext.SetRect(1E9,-1E9,-1E9,1E9);
-
-	if (m_Point2.IsEmpty())
-		return false;
-
-	ext.GrowToContainLine(m_Point2);
-	return true;
-}
-
 
 /////////////////////////////////////////////////////////////////////////////
 // vtFeatureSetPoint3D
@@ -219,7 +208,7 @@ vtFeatureSetPoint3D::vtFeatureSetPoint3D() : vtFeatureSet()
 	m_eGeomType = wkbPoint25D;
 }
 
-uint vtFeatureSetPoint3D::NumEntities() const
+uint vtFeatureSetPoint3D::GetNumEntities() const
 {
 	return m_Point3.GetSize();
 }
@@ -236,7 +225,7 @@ void vtFeatureSetPoint3D::Reserve(int iNum)
 
 bool vtFeatureSetPoint3D::ComputeExtent(DRECT &rect) const
 {
-	int i, entities = NumEntities();
+	int i, entities = GetNumEntities();
 
 	if (!entities)
 		return false;
@@ -285,7 +274,7 @@ bool vtFeatureSetPoint3D::AppendGeometryFrom(vtFeatureSet *pFromSet)
 	if (!pFrom)
 		return false;
 
-	for (uint i = 0; i < pFrom->NumEntities(); i++)
+	for (uint i = 0; i < pFrom->GetNumEntities(); i++)
 		m_Point3.Append(pFrom->m_Point3[i]);
 	return true;
 }
@@ -378,17 +367,6 @@ void vtFeatureSetPoint3D::LoadGeomFromSHP(SHPHandle hSHP, bool progress_callback
 	}
 }
 
-bool vtFeatureSetPoint3D::EarthExtents(DRECT &ext) const
-{
-	ext.SetRect(1E9,-1E9,-1E9,1E9);
-
-	if (m_Point3.IsEmpty())
-		return false;
-
-	ext.GrowToContainLine(m_Point3);
-	return true;
-}
-
 
 /////////////////////////////////////////////////////////////////////////////
 // vtFeatureSetLineString
@@ -399,7 +377,7 @@ vtFeatureSetLineString::vtFeatureSetLineString() : vtFeatureSet()
 	m_eGeomType = wkbLineString;
 }
 
-uint vtFeatureSetLineString::NumEntities() const
+uint vtFeatureSetLineString::GetNumEntities() const
 {
 	return m_Line.size();
 }
@@ -416,7 +394,7 @@ void vtFeatureSetLineString::Reserve(int iNum)
 
 bool vtFeatureSetLineString::ComputeExtent(DRECT &rect) const
 {
-	int i, entities = NumEntities();
+	int i, entities = GetNumEntities();
 
 	if (!entities)
 		return false;
@@ -467,7 +445,7 @@ bool vtFeatureSetLineString::AppendGeometryFrom(vtFeatureSet *pFromSet)
 	if (!pFrom)
 		return false;
 
-	for (uint i = 0; i < pFrom->NumEntities(); i++)
+	for (uint i = 0; i < pFrom->GetNumEntities(); i++)
 		m_Line.push_back(pFrom->m_Line[i]);
 	return true;
 }
@@ -529,15 +507,7 @@ int vtFeatureSetLineString::FixGeometry(double dEpsilon)
 
 		// and colinear. The epsilon here is far more sensitive.
 		removed += m_Line[i].RemoveColinearPoints(dEpsilon / 10.0, false);
-
-		// Remove any "polylines" with less than 2 points
-		if (m_Line[i].GetSize() < 2)
-			SetToDelete(i);
 	}
-	int deleted = ApplyDeletion();
-	if (deleted > 0)
-		VTLOG("Deleted %d bad polylines\n", deleted);
-
 	return removed;
 }
 
@@ -628,21 +598,6 @@ void vtFeatureSetLineString::LoadGeomFromSHP(SHPHandle hSHP, bool progress_callb
 	}
 }
 
-bool vtFeatureSetLineString::EarthExtents(DRECT &ext) const
-{
-	ext.SetRect(1E9,-1E9,-1E9,1E9);
-
-	if (m_Line.size() == 0)
-		return false;
-
-	for (uint i = 0; i < m_Line.size(); i++)
-	{
-		const DLine2 &dl = m_Line[i];
-		ext.GrowToContainLine(dl);
-	}
-	return true;
-}
-
 
 /////////////////////////////////////////////////////////////////////////////
 // vtFeatureSetLineString
@@ -653,7 +608,7 @@ vtFeatureSetLineString3D::vtFeatureSetLineString3D() : vtFeatureSet()
 	m_eGeomType = wkbLineString25D;
 }
 
-uint vtFeatureSetLineString3D::NumEntities() const
+uint vtFeatureSetLineString3D::GetNumEntities() const
 {
 	return m_Line.size();
 }
@@ -670,7 +625,7 @@ void vtFeatureSetLineString3D::Reserve(int iNum)
 
 bool vtFeatureSetLineString3D::ComputeExtent(DRECT &rect) const
 {
-	int i, entities = NumEntities();
+	int i, entities = GetNumEntities();
 
 	if (!entities)
 		return false;
@@ -721,7 +676,7 @@ bool vtFeatureSetLineString3D::AppendGeometryFrom(vtFeatureSet *pFromSet)
 	if (!pFrom)
 		return false;
 
-	for (uint i = 0; i < pFrom->NumEntities(); i++)
+	for (uint i = 0; i < pFrom->GetNumEntities(); i++)
 		m_Line.push_back(pFrom->m_Line[i]);
 	return true;
 }
@@ -871,21 +826,6 @@ void vtFeatureSetLineString3D::LoadGeomFromSHP(SHPHandle hSHP, bool progress_cal
 	}
 }
 
-bool vtFeatureSetLineString3D::EarthExtents(DRECT &ext) const
-{
-	ext.SetRect(1E9,-1E9,-1E9,1E9);
-
-	if (m_Line.size() == 0)
-		return false;
-
-	for (uint i = 0; i < m_Line.size(); i++)
-	{
-		const DLine3 &dl = m_Line[i];
-		ext.GrowToContainLine(dl);
-	}
-	return true;
-}
-
 
 /////////////////////////////////////////////////////////////////////////////
 // vtFeatureSetPolygon
@@ -897,7 +837,7 @@ vtFeatureSetPolygon::vtFeatureSetPolygon() : vtFeatureSet()
 	m_pIndex = NULL;
 }
 
-uint vtFeatureSetPolygon::NumEntities() const
+uint vtFeatureSetPolygon::GetNumEntities() const
 {
 	return m_Poly.size();
 }
@@ -914,7 +854,7 @@ void vtFeatureSetPolygon::Reserve(int iNum)
 
 bool vtFeatureSetPolygon::ComputeExtent(DRECT &rect) const
 {
-	int i, entities = NumEntities();
+	int i, entities = GetNumEntities();
 
 	if (!entities)
 		return false;
@@ -976,7 +916,7 @@ bool vtFeatureSetPolygon::AppendGeometryFrom(vtFeatureSet *pFromSet)
 	if (!pFrom)
 		return false;
 
-	for (uint i = 0; i < pFrom->NumEntities(); i++)
+	for (uint i = 0; i < pFrom->GetNumEntities(); i++)
 	{
 		switch (m_eGeomType) {
 		case wkbPolygon:
@@ -1038,7 +978,7 @@ void SpatialIndex::GenerateIndices(const class vtFeatureSetPolygon *feat)
 	uint e;
 	int i, j;
 
-	for (e = 0; e < feat->NumEntities(); e++)
+	for (e = 0; e < feat->GetNumEntities(); e++)
 	{
 		const DPolygon2 &poly = feat->GetPolygon(e);
 		poly.ComputeExtents(ext);
@@ -1123,7 +1063,7 @@ int vtFeatureSetPolygon::FixGeometry(double dEpsilon)
 	PolyChecker PolyChecker;
 
 	int removed = 0;
-	const int num = m_Poly.size();
+	int num = m_Poly.size();
 
 	for (int i = 0; i < num; i++)
 	{
@@ -1134,21 +1074,6 @@ int vtFeatureSetPolygon::FixGeometry(double dEpsilon)
 
 		// and colinear. The epsilon here is far more sensitive.
 		removed += dpoly.RemoveColinearPoints(dEpsilon / 10);
-
-		// Remove any "polygons" with less than 3 points
-		bool bad = false;
-		for (uint j = 0; j < dpoly.size(); j++)
-		{
-			const DLine2 &dline = dpoly[j];
-			if (dline.GetSize() < 3)
-				bad = true;
-		}
-		if (bad)
-		{
-			// Flag for deletion
-			SetToDelete(i);
-			break;
-		}
 
 		DLine2 &outer = dpoly[0];
 		if (PolyChecker.IsClockwisePolygon(outer) == false)
@@ -1165,12 +1090,10 @@ int vtFeatureSetPolygon::FixGeometry(double dEpsilon)
 				// Incorrect winding
 				inner.ReverseOrder();
 			}
+
 		}
 	}
-	int deleted = ApplyDeletion();
-	if (deleted > 0)
-		VTLOG("Deleted %d bad polygons\n", deleted);
-
+	// potential TODO: remove too-small rings (with less than 3 points)
 	return removed;
 }
 
@@ -1376,20 +1299,5 @@ void vtFeatureSetPolygon::LoadGeomFromSHP(SHPHandle hSHP, bool progress_callback
 	}
 	if (iFailed > 0)
 		VTLOG("  %d of the %d entities were bad.\n", iFailed, nElems);
-}
-
-bool vtFeatureSetPolygon::EarthExtents(DRECT &ext) const
-{
-	ext.SetRect(1E9,-1E9,-1E9,1E9);
-
-	if (m_Poly.size() == 0)
-		return false;
-
-	for (uint i = 0; i < m_Poly.size(); i++)
-	{
-		const DPolygon2 &poly = m_Poly[i];
-		ext.GrowToContainLine(poly[0]);
-	}
-	return true;
 }
 

@@ -1,7 +1,7 @@
 //
 // HeightField.cpp
 //
-// Copyright (c) 2001-2013 Virtual Terrain Project
+// Copyright (c) 2001-2012 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -15,10 +15,6 @@ ColorMap::ColorMap()
 {
 	m_bBlend = true;
 	m_bRelative = true;
-}
-
-ColorMap::~ColorMap()
-{
 }
 
 bool ColorMap::Save(const char *fname) const
@@ -133,31 +129,29 @@ int ColorMap::Num() const
 }
 
 /**
- * Tell this ColorMap to generate an internal table of interpolated colors.
- * This sets it up to use ColorFromTable().
+ * Generate an array of interpolated colors from this ColorMap.
  *
- * \param iTableSize The desired number of elements in the table.
+ * \param table An empty table ready to fill with the interpolated colors.
+ * \param iTableSize The desired number of elements in the resulting table.
  * \param fMin, fMax The elevation range to interpolate over.
  */
-void ColorMap::GenerateColorTable(int iTableSize, float fMin, float fMax)
+void ColorMap::GenerateColors(std::vector<RGBi> &table, int iTableSize,
+							  float fMin, float fMax) const
 {
 	if (m_color.size() < 2)
 		return;
 
-	m_iTableSize = iTableSize;
-	m_fMin = fMin;
-	m_fMax = fMax;
-	m_fRange = fMax - fMin;
-	float step = m_fRange/iTableSize;
+	float fRange = fMax - fMin;
+	float step = fRange/iTableSize;
 
 	int current = 0;
 	int num = Num();
 	RGBi c1, c2;
-	float base = 0, next, bracket_size = 0, fraction;
+	float base=0, next, bracket_size=0, fraction;
 
 	if (m_bRelative == true)
 	{
-		bracket_size = m_fRange / (num - 1);
+		bracket_size = fRange / (num - 1);
 		current = -1;
 	}
 
@@ -168,7 +162,7 @@ void ColorMap::GenerateColorTable(int iTableSize, float fMin, float fMax)
 		if (m_bRelative)
 		{
 			// use regular divisions
-			int bracket = (int) ((elev-fMin) / m_fRange * (num-1));
+			int bracket = (int) ((elev-fMin) / fRange * (num-1));
 			if (bracket != current)
 			{
 				current = bracket;
@@ -197,11 +191,11 @@ void ColorMap::GenerateColorTable(int iTableSize, float fMin, float fMax)
 		}
 		else
 			c3 = c1;
-		m_table.push_back(c3);
+		table.push_back(c3);
 	}
 
 	// Add one to catch top data
-	c3 = m_table[iTableSize-1];
-	m_table.push_back(c3);
+	c3 = table[iTableSize-1];
+	table.push_back(c3);
 }
 

@@ -4,7 +4,7 @@
 // This library has a concept of current conversion from earth to world
 // coordinates which is represented by the vtLocalConversion class.
 //
-// Copyright (c) 2001-2013 Virtual Terrain Project
+// Copyright (c) 2001-2009 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -16,18 +16,23 @@
 #include "Projections.h"
 #include "LocalConversion.h"
 
+//
+// The global current projection for the current terrain is stored here.
+//
+vtLocalConversion g_Conv;
+
 ////////////////////////////////////////////////////////////////////////////
 
 vtLocalConversion::vtLocalConversion()
 {
-	m_EarthOrigin.Set(0, 0);
+	SetOrigin(DPoint2(0, 0));
 }
 
 void vtLocalConversion::Setup(LinearUnits units, const DRECT &earthextents)
 {
 	m_units = units;
 
-	m_EarthOrigin.Set(earthextents.left, earthextents.bottom);
+	SetOrigin(DPoint2(earthextents.left, earthextents.bottom));
 	if (units == LU_DEGREES)
 	{
 		double middle = (earthextents.bottom + earthextents.top) / 2;
@@ -41,22 +46,9 @@ void vtLocalConversion::Setup(LinearUnits units, const DRECT &earthextents)
 	}
 }
 
-void vtLocalConversion::Setup(LinearUnits units, const DPoint2 &origin)
+void vtLocalConversion::SetOrigin(const DPoint2 &origin)
 {
-	m_units = units;
-
 	m_EarthOrigin = origin;
-	if (units == LU_DEGREES)
-	{
-		double middle = origin.y / 2;
-		double fMetersPerLongitude = EstimateDegreesToMeters(middle);
-		m_scale.x = fMetersPerLongitude;
-		m_scale.y = METERS_PER_LATITUDE;
-	}
-	else
-	{
-		m_scale.x = m_scale.y = GetMetersPerUnit(units);
-	}
 }
 
 void vtLocalConversion::convert_earth_to_local_xz(double ex, double ey,

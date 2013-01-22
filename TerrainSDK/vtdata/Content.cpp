@@ -388,7 +388,8 @@ bool vtTagArray::WriteToXML(const char *fname, const char *title) const
 
 void vtTagArray::WriteToXMLBody(FILE *fp, int iIndent) const
 {
-	for (uint i = 0; i < NumTags(); i++)
+	uint i, size = NumTags();
+	for (i = 0; i < size; i++)
 	{
 		// indent
 		for (int j = 0; j < iIndent; j++)

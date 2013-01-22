@@ -88,16 +88,16 @@ bool ContourConverter::SetupGrid(vtHeightFieldGrid3d *pHGGrid)
 /**
  * Set up the class to create line features on a terrain.
  *
- * \param pHFGrid The heightfield you will generate the contour lines on.
+ * \param pTerr The terrain you will generate the contour lines on.
  * \param fset The featureset to receive the polylines.
  * \return True if successful.
  */
-bool ContourConverter::Setup(vtHeightFieldGrid3d *pHFGrid, vtFeatureSetLineString *fset)
+bool ContourConverter::Setup(vtHeightFieldGrid3d *pHGGrid, vtFeatureSetLineString *fset)
 {
-	if (!pHFGrid)
+	if (!pHGGrid)
 		return false;
 
-	if (!SetupGrid(pHFGrid))
+	if (!SetupGrid(pHGGrid))
 		return false;
 
 	m_pLS = fset;

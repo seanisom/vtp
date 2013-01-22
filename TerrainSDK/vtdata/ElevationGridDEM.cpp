@@ -257,18 +257,9 @@ bool vtElevationGrid::LoadFromDEM(const char *szFileName,
 
 	// Special case.  Some old DEMs claim to be NAD27, but they are of Hawai'i,
 	//  and Hawai'i has no NAD27, it is actually OHD.
-	if (iDatum == EPSG_DATUM_NAD27)
+	if (bGeographic && iDatum == EPSG_DATUM_NAD27)
 	{
-		DRECT Hawaii(0,0,0,0);
-		if (bGeographic)
-			Hawaii.SetRect(-164, 24, -152, 17);
-		else if (iCoordSystem == 1)	// UTM
-		{
-			if (iUTMZone == 4)
-				Hawaii.SetRect(240000, 2600000, 1000000, 2000000);
-			else if (iUTMZone == 5)
-				Hawaii.SetRect(-400000, 2600000, 400000, 2000000);
-		}
+		DRECT Hawaii(-164, 24, -152, 17);
 		for (i = 0; i < 4; i++)
 		{
 			if (Hawaii.ContainsPoint(m_Corners[i]))

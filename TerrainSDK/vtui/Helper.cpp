@@ -31,11 +31,6 @@ bool IsGUIApp()
 	return pApp != NULL;
 }
 
-/**
-  Make a wxBitmap of a given pixel size, filled with a single color.
-  
-  The caller is responsible for deleting the bitmap later.
- */
 wxBitmap *MakeColorBitmap(int xsize, int ysize, wxColour color)
 {
 	wxImage pImage(xsize, ysize);
@@ -236,20 +231,14 @@ int AddFilenamesToStringArray(vtStringArray &array, const char *directory,
 //////////////////////////////////////
 
 /**
- Add a file format type to a directory dialog filter string.
- 
- For example, to ask the user for a BT or JPEG file:
- \code
+ * Add a file format type to a directory dialog filter string.
+ *
+ * Example, to ask the user for a BT or JPEG file:
+
 	wxString filter = _("All Formats|");
 	AddType(filter, _T("BT Files (*.bt)|*.bt"));
 	AddType(filter, _T("JPEG Files (*.jpg;*.jpeg)|*.jpg;*.jpeg"));
 	wxFileDialog loadFile(NULL, _("Open file"), _T(""), _T(""), filter, wxFD_OPEN);
- \endcode
- It is even easier if you use the standard strings from vtdata/FileFilters.h:
- \code
-	AddType(filter, FSTRING_BT);
-	AddType(filter, FSTRING_JPEG);
- \endcode
  */
 void AddType(wxString &str, const wxString &filter)
 {
@@ -990,21 +979,17 @@ void DisplayAndLog(const wchar_t *pFormat, ...)
 	VTLOG1("\n");
 }
 
-#if 0
-// A wxString-taking version of the function, to make it perfectly clear
+//
+// Also a wxString-taking version of the function, to make it perfectly clear
 //  to the compiler which overloaded function to use.
 //
-// This method produces incorrect results, at least with wx2.9.4 and VC10.
-// Passing an object (like wxString) instead of a char* for the format seems to
-// confused the va_list methods.
-//
-void DisplayAndLog(const wxString &wxformat, ...)
+void DisplayAndLog(const wxString &format, ...)
 {
 	va_list va;
-	va_start(va, wxformat);
+	va_start(va, format);
 
 	char ach[2048];
-	vsprintf(ach, wxformat.ToUTF8(), va);
+	vsprintf(ach, format, va);
 
 	wxString msg(ach, wxConvUTF8);
 
@@ -1015,22 +1000,6 @@ void DisplayAndLog(const wxString &wxformat, ...)
 
 	strcat(ach, "\n");
 	VTLOG1(ach);
-}
-#endif
-
-//
-// A wxString version of the function, which takes a single string.
-//
-void DisplayAndLog(const wxString &msg)
-{
-	// Careful here: Don't try to pop up a message box if called within a
-	//  wx console app.  wxMessageBox only works if it is a full wxApp.
-	if (IsGUIApp())
-		wxMessageBox(msg);
-
-	vtString msg2 = (const char *) msg.ToUTF8();
-	VTLOG1(msg2);
-	VTLOG1("\n");
 }
 
 /**

@@ -124,13 +124,13 @@
 #define ID_STEREO2 1077
 #define ID_STEREO3 1078
 #define ID_STEREO4 1079
-#define ID_TEXTURE_COMPRESSION 1080
-#define ID_DISABLE_MIPMAPS 1081
-#define ID_WINX 1082
-#define ID_WINY 1083
-#define ID_WIN_XSIZE 1084
-#define ID_WIN_YSIZE 1085
-#define ID_SIZE_INSIDE 1086
+#define ID_WINX 1080
+#define ID_WINY 1081
+#define ID_WIN_XSIZE 1082
+#define ID_WIN_YSIZE 1083
+#define ID_SIZE_INSIDE 1084
+#define ID_TEXTURE_COMPRESSION 1085
+#define ID_DISABLE_MIPMAPS 1086
 #define ID_DIRECT_PICKING 1087
 #define ID_SELECTION_CUTOFF 1088
 #define ID_SELECTION_RADIUS 1089
@@ -216,100 +216,99 @@
 #define ID_LABEL_HEIGHT 1169
 #define ID_LABEL_SIZE 1170
 #define ID_FONT 1171
-#define ID_OUTLINE 1172
-#define ID_TREECTRL 1173
-#define ID_ADD_PATH 1174
-#define ID_ADD_TERRAIN 1175
-#define ID_COPY 1176
-#define ID_DELETE 1177
-#define ID_EDIT_PARAMS 1178
-#define ID_SINGLE 1179
-#define ID_TFILE_SINGLE 1180
-#define ID_DERIVED 1181
-#define ID_CHOICE_COLORS 1182
-#define ID_EDIT_COLORS 1183
-#define ID_PRELIGHT 1184
-#define ID_LIGHT_FACTOR 1185
-#define ID_CAST_SHADOWS 1186
-#define ID_MIPMAP 1187
-#define ID_16BIT 1188
-#define ID_DERIVE_COLOR 1189
-#define ID_GEOTYPICAL 1190
-#define ID_TFILE_GEOTYPICAL 1191
-#define ID_GEOTYPICAL_SCALE 1192
-#define ID_OPACITY 1193
-#define ID_OPACITY_SLIDER 1194
-#define ID_USE_GRID 1195
-#define ID_FILENAME 1196
-#define ID_PRIMARY_TEXTURE 1197
-#define ID_LODMETHOD 1198
-#define ID_TRI_COUNT 1199
-#define ID_USE_TIN 1200
-#define ID_FILENAME_TIN 1201
-#define ID_SET_TIN_TEXTURE 1202
-#define ID_USE_TILESET 1203
-#define ID_FILENAME_TILES 1204
-#define ID_VTX_COUNT 1205
-#define ID_TILE_THREADING 1206
-#define ID_TFILE_TILESET 1207
-#define ID_TEX_LOD 1208
-#define ID_TEXTURE_GRADUAL 1209
-#define ID_USE_EXTERNAL 1210
-#define ID_TT_EXTERNAL_DATA 1211
-#define ID_VERTEXAG 1212
-#define ID_ELEVFILES 1213
-#define ID_SET_TEXTURE 1214
-#define ID_PLANTFILES 1215
-#define ID_VEGDISTANCE 1216
-#define ID_TREES_USE_SHADERS 1217
-#define ID_ROADS 1218
-#define ID_ROADFILE 1219
-#define ID_ROADHEIGHT 1220
-#define ID_ROADDISTANCE 1221
-#define ID_TEXROADS 1222
-#define ID_ROADCULTURE 1223
-#define ID_HIGHWAYS 1224
-#define ID_PAVED 1225
-#define ID_DIRT 1226
-#define ID_STRUCTFILES 1227
-#define ID_STRUCT_DISTANCE 1228
-#define ID_CONTENT_FILE 1229
-#define ID_CHECK_STRUCTURE_SHADOWS 1230
-#define ID_CHOICE_SHADOW_REZ 1231
-#define ID_DARKNESS 1232
-#define ID_SHADOWS_DEFAULT_ON 1233
-#define ID_CHECK_STRUCTURE_PAGING 1234
-#define ID_PAGING_MAX_STRUCTURES 1235
-#define ID_PAGE_OUT_DISTANCE 1236
-#define ID_RAWFILES 1237
-#define ID_STYLE 1238
-#define ID_IMAGEFILES 1239
-#define ID_WATER 1240
-#define ID_FILENAME_WATER 1241
-#define ID_DEPRESSOCEAN 1242
-#define ID_DEPRESSOCEANOFFSET 1243
-#define ID_TEXT_INIT_TIME 1244
-#define ID_SET_INIT_TIME 1245
-#define ID_TIMEMOVES 1246
-#define ID_TIMESPEED 1247
-#define ID_OVERLAY_FILE 1248
-#define ID_OVERLAY_DOTDOTDOT 1249
-#define ID_OVERLAY_X 1250
-#define ID_OVERLAY_Y 1251
-#define ID_CHECK_OVERVIEW 1252
-#define ID_CHECK_COMPASS 1253
-#define ID_NAV_STYLE 1254
-#define ID_MINHEIGHT 1255
-#define ID_NAVSPEED 1256
-#define ID_ALLOW_ROLL 1257
-#define ID_LOCFILE 1258
-#define ID_INIT_LOCATION 1259
-#define ID_HITHER 1260
-#define ID_ANIM_PATHS 1261
-#define ID_STRUCTTYPE 1262
-#define ID_CHOICE_VEHICLES 1263
-#define ID_SET_VEHICLE_COLOR 1264
-#define ID_VIF_RECALCULATE 1265
+#define ID_ENABLE_TEXTURE_OVERLAY 1172
+#define ID_TEXTURE_MODE 1173
+#define ID_TREECTRL 1174
+#define ID_ADD_PATH 1175
+#define ID_ADD_TERRAIN 1176
+#define ID_COPY 1177
+#define ID_DELETE 1178
+#define ID_EDIT_PARAMS 1179
+#define ID_SINGLE 1180
+#define ID_TFILE_SINGLE 1181
+#define ID_DERIVED 1182
+#define ID_CHOICE_COLORS 1183
+#define ID_EDIT_COLORS 1184
+#define ID_USE_GRID 1185
+#define ID_FILENAME 1186
+#define ID_LODMETHOD 1187
+#define ID_TRI_COUNT 1188
+#define ID_USE_TIN 1189
+#define ID_FILENAME_TIN 1190
+#define ID_USE_TILESET 1191
+#define ID_FILENAME_TILES 1192
+#define ID_VTX_COUNT 1193
+#define ID_TILE_CACHE_SIZE 1194
+#define ID_TILE_THREADING 1195
+#define ID_USE_EXTERNAL 1196
+#define ID_TT_EXTERNAL_DATA 1197
+#define ID_VERTEXAG 1198
+#define ID_NONE 1199
+#define ID_TILESET 1200
+#define ID_TFILE_TILESET 1201
+#define ID_TEXTURE_GRADUAL 1202
+#define ID_TEX_LOD 1203
+#define ID_MIPMAP 1204
+#define ID_16BIT 1205
+#define ID_PRELIGHT 1206
+#define ID_LIGHT_FACTOR 1207
+#define ID_CAST_SHADOWS 1208
+#define ID_RETAIN 1209
+#define ID_DETAILTEXTURE 1210
+#define ID_DT_NAME 1211
+#define ID_DT_SCALE 1212
+#define ID_DT_DISTANCE 1213
+#define ID_PLANTFILES 1214
+#define ID_VEGDISTANCE 1215
+#define ID_TREES_USE_SHADERS 1216
+#define ID_ROADS 1217
+#define ID_ROADFILE 1218
+#define ID_ROADHEIGHT 1219
+#define ID_ROADDISTANCE 1220
+#define ID_TEXROADS 1221
+#define ID_ROADCULTURE 1222
+#define ID_HIGHWAYS 1223
+#define ID_PAVED 1224
+#define ID_DIRT 1225
+#define ID_STRUCTFILES 1226
+#define ID_STRUCT_DISTANCE 1227
+#define ID_CONTENT_FILE 1228
+#define ID_CHECK_STRUCTURE_SHADOWS 1229
+#define ID_CHOICE_SHADOW_REZ 1230
+#define ID_DARKNESS 1231
+#define ID_SHADOWS_DEFAULT_ON 1232
+#define ID_CHECK_STRUCTURE_PAGING 1233
+#define ID_PAGING_MAX_STRUCTURES 1234
+#define ID_PAGE_OUT_DISTANCE 1235
+#define ID_WATER 1236
+#define ID_FILENAME_WATER 1237
+#define ID_DEPRESSOCEAN 1238
+#define ID_DEPRESSOCEANOFFSET 1239
+#define ID_TEXT_INIT_TIME 1240
+#define ID_SET_INIT_TIME 1241
+#define ID_TIMEMOVES 1242
+#define ID_TIMESPEED 1243
+#define ID_RAWFILES 1244
+#define ID_STYLE 1245
+#define ID_IMAGEFILES 1246
+#define ID_OVERLAY_FILE 1247
+#define ID_OVERLAY_DOTDOTDOT 1248
+#define ID_OVERLAY_X 1249
+#define ID_OVERLAY_Y 1250
+#define ID_CHECK_OVERVIEW 1251
+#define ID_CHECK_COMPASS 1252
+#define ID_NAV_STYLE 1253
+#define ID_MINHEIGHT 1254
+#define ID_NAVSPEED 1255
+#define ID_ALLOW_ROLL 1256
+#define ID_LOCFILE 1257
+#define ID_INIT_LOCATION 1258
+#define ID_HITHER 1259
+#define ID_ANIM_PATHS 1260
+#define ID_STRUCTTYPE 1261
+#define ID_CHOICE_VEHICLES 1262
+#define ID_SET_VEHICLE_COLOR 1263
+#define ID_VIF_RECALCULATE 1264
 
 ///////////////////////////////////////////////////////////////////////////////
 /// Class CameraDlgBase
@@ -542,8 +541,6 @@ class OptionsDlgBase : public wxDialog
 		wxRadioButton* m_samples4;
 		wxRadioButton* m_samples8;
 		wxRadioButton* m_samples16;
-		wxCheckBox* m_texture_compression;
-		wxCheckBox* m_disable_mipmaps;
 		wxStaticText* m_text118;
 		wxTextCtrl* m_winx;
 		wxStaticText* m_text119;
@@ -553,6 +550,8 @@ class OptionsDlgBase : public wxDialog
 		wxStaticText* m_text121;
 		wxTextCtrl* m_win_ysize;
 		wxCheckBox* m_size_inside;
+		wxCheckBox* m_texture_compression;
+		wxCheckBox* m_disable_mipmaps;
 		wxCheckBox* m_direct_picking;
 		wxStaticText* m_text122;
 		wxTextCtrl* m_selection_cutoff;
@@ -569,7 +568,6 @@ class OptionsDlgBase : public wxDialog
 		wxCheckBox* m_fly_in;
 		wxCheckBox* m_fly_in1;
 		wxCheckBox* m_fly_in2;
-		
 		wxButton* m_ok;
 		wxButton* m_cancel;
 	
@@ -853,7 +851,11 @@ class StyleDlgBase : public wxDialog
 		wxStaticText* m_text144;
 		wxStaticText* m_text145;
 		wxTextCtrl* m_font;
-		wxCheckBox* m_outline;
+		wxPanel* StylePanel4;
+		wxCheckBox* m_enable_texture_overlay;
+		
+		wxStaticText* m_text146;
+		wxChoice* m_texture_mode;
 		wxButton* m_ok;
 		wxButton* m_cancell;
 	
@@ -921,14 +923,7 @@ class TextureDlgBase : public wxDialog
 		wxRadioButton* m_derived;
 		
 		wxChoice* m_choice_colors;
-		wxButton* id_edit_colors;
-		wxCheckBox* m_prelight;
-		
-		wxStaticText* m_text9;
-		wxTextCtrl* m_light_factor;
-		wxCheckBox* m_cast_shadows;
-		wxCheckBox* mmipmap;
-		wxCheckBox* m_16bit;
+		wxButton* m_edit_colors;
 		wxButton* m_ok;
 		wxButton* m_cancel;
 	
@@ -936,37 +931,6 @@ class TextureDlgBase : public wxDialog
 		
 		TextureDlgBase( wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = wxEmptyString, const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize( -1,-1 ), long style = wxDEFAULT_DIALOG_STYLE|wxTAB_TRAVERSAL );
 		~TextureDlgBase();
-	
-};
-
-///////////////////////////////////////////////////////////////////////////////
-/// Class TinTextureDlgBase
-///////////////////////////////////////////////////////////////////////////////
-class TinTextureDlgBase : public wxDialog 
-{
-	private:
-	
-	protected:
-		wxCheckBox* m_derive_color;
-		
-		wxChoice* m_choice_colors;
-		wxButton* m_edit_colors;
-		wxCheckBox* m_geotypical;
-		wxComboBox* m_tfile_geotypical;
-		
-		wxStaticText* m_staticText1491;
-		wxTextCtrl* m_geotypical_scale;
-		wxStaticText* m_staticText1501;
-		wxStaticText* m_staticText14911;
-		wxTextCtrl* m_opacity;
-		wxSlider* m_opacity_slider;
-		wxButton* m_ok;
-		wxButton* m_cancel;
-	
-	public:
-		
-		TinTextureDlgBase( wxWindow* parent, wxWindowID id = wxID_ANY, const wxString& title = wxEmptyString, const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize( -1,-1 ), long style = wxDEFAULT_DIALOG_STYLE|wxTAB_TRAVERSAL );
-		~TinTextureDlgBase();
 	
 };
 
@@ -984,37 +948,55 @@ class TParamsDlgBase : public wxDialog
 		wxPanel* TParamsPanel1;
 		wxRadioButton* m_use_grid;
 		wxComboBox* m_filename;
-		wxButton* m_primary_texture;
 		wxStaticText* m_text3;
 		wxChoice* m_lodmethod;
 		wxStaticText* m_text4;
 		wxTextCtrl* m_tri_count;
 		wxRadioButton* m_use_tin;
 		wxComboBox* m_filename_tin;
-		wxButton* m_set_tin_texture;
 		wxRadioButton* m_use_tileset;
-		wxComboBox* m_filename_tileset;
+		wxComboBox* m_filename_tiles;
 		wxStaticText* m_text5;
 		wxTextCtrl* m_vtx_count;
+		wxStaticText* m_text6;
+		wxTextCtrl* m_tile_cache_size;
 		wxCheckBox* m_tile_threading;
-		
-		wxStaticText* m_staticText1441;
-		wxComboBox* m_tfile_tileset;
-		
-		wxStaticText* id_text31;
-		wxTextCtrl* m_tex_lod;
-		
-		wxCheckBox* m_texture_gradual;
 		wxRadioButton* m_use_external;
 		wxTextCtrl* m_tt_external_data;
 		wxStaticText* m_text7;
 		wxTextCtrl* m_vertexag;
 		wxStaticText* m_text8;
-		wxPanel* TParamsPanelPlus;
-		wxListBox* m_elev_files;
-		wxButton* m_set_texture;
+		wxPanel* TParamsPanel2;
+		wxRadioButton* m_none;
+		wxRadioButton* m_single;
+		wxComboBox* m_tfile_single;
+		wxRadioButton* m_derived;
+		
+		wxChoice* m_choice_colors;
+		wxButton* id_edit_colors;
+		wxRadioButton* m_tileset;
+		wxComboBox* id_tfile_tileset;
+		
+		wxCheckBox* m_texture_gradual;
+		
+		wxStaticText* id_text3;
+		wxTextCtrl* m_tex_lod;
+		wxCheckBox* mmipmap;
+		wxCheckBox* m_16bit;
+		wxCheckBox* m_prelight;
+		wxStaticText* m_text9;
+		wxTextCtrl* m_light_factor;
+		wxCheckBox* m_cast_shadows;
+		wxCheckBox* m_retain;
+		wxCheckBox* m_detailtexture;
+		wxComboBox* m_dt_name;
+		wxStaticText* m_text10;
+		wxTextCtrl* m_dt_scale;
+		wxStaticText* m_text11;
+		wxStaticText* m_text12;
+		wxTextCtrl* m_dt_distance;
 		wxPanel* TParamsPanel3;
-		wxListBox* m_plant_files;
+		wxListBox* id_plantfiles;
 		wxStaticText* m_text14;
 		wxTextCtrl* mmegdistance;
 		wxStaticText* m_text15;
@@ -1035,7 +1017,7 @@ class TParamsDlgBase : public wxDialog
 		wxCheckBox* id_paved;
 		wxCheckBox* m_dirt;
 		wxPanel* TParamsPanel8;
-		wxListBox* m_structure_files;
+		wxListBox* id_structfiles;
 		wxStaticText* m_text19;
 		wxTextCtrl* m_struct_distance;
 		wxStaticText* m_text20;
@@ -1044,7 +1026,7 @@ class TParamsDlgBase : public wxDialog
 		wxCheckBox* mmheck_structure_shadows;
 		
 		wxStaticText* id_text5;
-		wxChoice* m_choice_shadow_rez;
+		wxChoice* mmhoice_shadow_rez;
 		wxStaticText* m_text21;
 		wxTextCtrl* m_darkness;
 		wxCheckBox* m_shadows_default_on;
@@ -1060,10 +1042,6 @@ class TParamsDlgBase : public wxDialog
 		wxStaticText* m_text24;
 		wxTextCtrl* m_page_out_distance;
 		wxStaticText* m_text25;
-		wxPanel* TParamsPanel5;
-		wxListBox* m_raw_files;
-		wxButton* m_style;
-		wxListBox* m_image_files;
 		wxPanel* TParamsPanel4;
 		
 		wxCheckBox* m_oceanplane;
@@ -1071,7 +1049,7 @@ class TParamsDlgBase : public wxDialog
 		wxStaticText* m_text217;
 		wxTextCtrl* m_oceanplaneoffset;
 		wxCheckBox* m_water;
-		wxComboBox* m_filename_water;
+		wxComboBox* id_filename_water;
 		wxCheckBox* m_depressocean;
 		
 		wxStaticText* m_text218;
@@ -1093,6 +1071,12 @@ class TParamsDlgBase : public wxDialog
 		wxTextCtrl* m_timespeed;
 		wxStaticText* m_text29;
 		
+		wxPanel* TParamsPanel5;
+		
+		wxListBox* mmawfiles;
+		wxButton* m_style;
+		wxListBox* m_imagefiles;
+		
 		wxPanel* TParamsPanel6;
 		wxStaticText* id_text6;
 		wxTextCtrl* m_overlay_file;
@@ -1105,7 +1089,7 @@ class TParamsDlgBase : public wxDialog
 		wxCheckBox* m_check_compass;
 		wxPanel* TParamsPanel7;
 		wxStaticText* m_text32;
-		wxChoice* m_nav_style;
+		wxChoice* mmav_style;
 		
 		wxStaticText* m_text33;
 		wxTextCtrl* m_minheight;

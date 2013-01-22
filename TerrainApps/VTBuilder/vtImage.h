@@ -9,8 +9,6 @@
 #define VTIMAGE_H
 
 #include "wx/image.h"
-#include "gdal.h"
-
 #include "TilingOptions.h"
 #include "vtdata/Projections.h"
 
@@ -88,7 +86,7 @@ class vtImage
 {
 public:
 	vtImage();
-	vtImage(const DRECT &area, const IPoint2 &size,
+	vtImage(const DRECT &area, int xsize, int ysize,
 		const vtProjection &proj);
 	virtual ~vtImage();
 
@@ -121,7 +119,7 @@ public:
 	void SetRGBA(int x, int y, uchar r, uchar g, uchar b, uchar a = 255);
 	void SetRGBA(int x, int y, const RGBAi &rgb);
 	void ReplaceColor(const RGBi &rgb1, const RGBi &rgb2);
-	void SetupBitmapInfo(const IPoint2 &size);
+	void SetupBitmapInfo(int iXSize, int iYSize);
 
 	// File IO
 	bool ReadPPM(const char *fname, bool progress_callback(int) = NULL);
@@ -169,7 +167,7 @@ protected:
 };
 
 // Helpers
-bool GetBitDepthUsingGDAL(const char *fname, int &depth_in_bits, GDALDataType &eType);
+int GetBitDepthUsingGDAL(const char *fname);
 void MakeSampleOffsets(const DPoint2 cellsize, uint N, DLine2 &offsets);
 void SampleMipLevel(vtBitmap *bigger, vtBitmap *smaller);
 

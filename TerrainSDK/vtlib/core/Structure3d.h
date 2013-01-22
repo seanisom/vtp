@@ -127,7 +127,6 @@ public:
 protected:
 	vtGeode		*m_pHighlight;	// The wireframe highlight
 	osg::ref_ptr<osg::Node> m_pModel; // the contained model
-	double		m_RadiusInEarthCoords;
 };
 
 
@@ -145,7 +144,7 @@ public:
 	virtual vtStructInstance *NewInstance();
 
 	vtStructure3d *GetStructure3d(int i);
-	vtBuilding3d *GetBuilding(int i) const { return (vtBuilding3d *) at(i)->GetBuilding(); }
+	vtBuilding3d *GetBuilding(int i) { return (vtBuilding3d *) at(i)->GetBuilding(); }
 	vtFence3d *GetFence(int i) { return (vtFence3d *) at(i)->GetFence(); }
 	vtStructInstance3d *GetInstance(int i) { return (vtStructInstance3d *) at(i)->GetInstance(); }
 

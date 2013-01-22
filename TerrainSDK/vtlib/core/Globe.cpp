@@ -224,7 +224,7 @@ vtMaterialArray *vtIcoGlobe::CreateMaterialsFromFiles(const vtString &strImagePr
 							bCulling, bLighting,
 							GetDepth(img) == 32, false,	// transp, additive
 							0.1f, 1.0f, 1.0f, 0.0f,		// ambient, diffuse, alpha, emmisive
-							true, false);		// clamp, mipmap
+							false, true, false);		// texgen, clamp, mipmap
 			}
 			else
 				index = -1;
@@ -251,8 +251,8 @@ vtMaterialArray *vtIcoGlobe::CreateMaterialsFromImages(vtImage **images)
 		int index = mats->AddTextureMaterial(img,
 					 bCulling, bLighting,
 					 img->GetDepth() == 32, false,	// transp, additive
-					 0.1f, 1.0f, 1.0f, 0.0f,		// ambient, diffuse, alpha, emmisive
-					 true, false);					// clamp, mipmap
+					 0.1f, 1.0f, 1.0f, 0.0f,	// ambient, diffuse, alpha, emmisive
+					 false, true, false);		// texgen, clamp, mipmap
 		m_globe_mat[pair] = index;
 	}
 	return mats;
@@ -433,7 +433,7 @@ int vtIcoGlobe::AddGlobeFeatures(const char *fname, float fSize)
 	BuildSphericalFeatures(gl, fSize);
 	BuildFlatFeatures(gl, fSize);
 
-	return feat->NumEntities();
+	return feat->GetNumEntities();
 }
 
 void vtIcoGlobe::RemoveLayer(GlobeLayer *glay)
@@ -462,7 +462,7 @@ void vtIcoGlobe::BuildSphericalPoints(GlobeLayer *glay, float fSize)
 	int i, j, size;
 	vtArray<FSphere> spheres;
 
-	size = feat->NumEntities();
+	size = feat->GetNumEntities();
 	spheres.SetSize(size);
 
 	vtFeatureSetPoint2D *pSetP2 = dynamic_cast<vtFeatureSetPoint2D*>(feat);
@@ -596,7 +596,7 @@ void vtIcoGlobe::BuildSphericalLines(GlobeLayer *glay, float fSize)
 		return;
 
 	int i, size;
-	size = feat->NumEntities();
+	size = feat->GetNumEntities();
 
 	vtGeode *geode = new vtGeode;
 	geode->setName("spherical lines");
@@ -620,7 +620,7 @@ void vtIcoGlobe::BuildSphericalPolygons(GlobeLayer *glay, float fSize)
 		return;
 
 	int i, size;
-	size = feat->NumEntities();
+	size = feat->GetNumEntities();
 
 	vtGeode *geode = new vtGeode;
 	geode->setName("spherical lines");
@@ -655,7 +655,7 @@ void vtIcoGlobe::BuildFlatFeatures(GlobeLayer *glay, float fSize)
 		}
 
 		int i, size;
-		size = feat->NumEntities();
+		size = feat->GetNumEntities();
 
 		for (i = 0; i < size; i++)
 			BuildFlatPoint(glay, i, fSize);
@@ -1286,7 +1286,7 @@ void vtIcoGlobe::SetMeshConnect(int mface)
 
 	// translate vertices to set origin of this mface
 	int i;
-	int verts = mesh->NumVertices();
+	int verts = mesh->GetNumVertices();
 	FPoint3 pos;
 
 	FPoint3 edge_center = m_mface[mface].local_origin;
@@ -1692,7 +1692,7 @@ vtMovGeode *CreateSimpleEarth(const vtString &strDataPath)
 	mesh->CreateEllipsoid(FPoint3(0,0,0), size, res);
 
 	// fix up the texture coordinates
-	int numvtx = mesh->NumVertices();
+	int numvtx = mesh->GetNumVertices();
 	for (int i = 0; i < numvtx; i++)
 	{
 		FPoint2 coord;

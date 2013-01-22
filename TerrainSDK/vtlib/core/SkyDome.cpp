@@ -11,7 +11,7 @@
 #include "vtdata/SPA.h"
 #include "vtdata/FilePath.h"
 #include "SkyDome.h"
-#include "GeomUtil.h"	// for CreateBoundSphereGeode
+#include "GeomUtil.h"	// for CreateBoundSphereGeom
 
 // minimum and maximum ambient light values
 const float MIN_AMB = 0.0f;
@@ -171,7 +171,7 @@ void vtSkyDome::Create(const char *starfile, int depth, float radius,
 	CreateMarkers();
 	ShowMarkers(false);
 
-	NumVertices = m_pDomeMesh->NumVertices();
+	NumVertices = m_pDomeMesh->GetNumVertices();
 	SphVertices = new FPoint3[NumVertices];
 	ConvertVertices();
 
@@ -276,7 +276,7 @@ void vtSkyDome::CreateMarkers()
 
 	// Create celestial sphere wifreframe, to aid in development and testing
 	FSphere sph(FPoint3(0,0,0), 0.99);
-	m_pWireSphere = CreateBoundSphereGeode(sph, 60);
+	m_pWireSphere = CreateBoundSphereGeom(sph, 60);
 	m_pWireSphere->setName("Celestial Sphere wireframe");
 	m_pCelestial->addChild(m_pWireSphere);
 }
@@ -480,7 +480,7 @@ void vtSkyDome::ConvertVertices()
 {
 	FPoint3 p, psph;
 
-	int num = m_pDomeMesh->NumVertices();
+	int num = m_pDomeMesh->GetNumVertices();
 	for (int i = 0; i < num; i++)
 	{
 		p = m_pDomeMesh->GetVtxPos(i);
@@ -520,7 +520,7 @@ bool vtSkyDome::SetTexture(const char *filename)
 	if (m_pTextureMat)
 	{
 		// if it hasn't changed, return
-		osg::Image *image = m_pTextureMat->GetTextureImage();
+		osg::Image *image = m_pTextureMat->GetTexture();
 		if (filename && image->getFileName() == filename)
 			return true;
 
@@ -562,7 +562,7 @@ bool vtSkyDome::SetTexture(const char *filename)
 	m_pTextureMat = m_pMats->at(index);
 
 	// set the vertices to initially white
-	int verts = m_pDomeMesh->NumVertices();
+	int verts = m_pDomeMesh->GetNumVertices();
 	for (int i = 0; i < verts; i++)
 		m_pDomeMesh->SetVtxColor(i, RGBf(1,1,1));	// all white vertices
 
@@ -601,7 +601,7 @@ void vtSkyDome::ApplyDomeColors()
 		return;
 
 	// Set day colors
-	for (uint i = 0; i < mesh->NumVertices(); i++)
+	for (uint i = 0; i < mesh->GetNumVertices(); i++)
 	{
 		FPoint3 p = mesh->GetVtxPos(i);
 		psph = SphVertices[i];

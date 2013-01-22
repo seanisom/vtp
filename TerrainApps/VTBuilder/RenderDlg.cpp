@@ -14,9 +14,9 @@
 
 #include <wx/colordlg.h>
 #include "RenderDlg.h"
+#include "FileFilters.h"
 
 #include "vtdata/DataPath.h"
-#include "vtdata/FileFilters.h"
 #include "vtdata/FilePath.h"
 #include "vtui/AutoDialog.h"
 #include "vtui/ColorMapDlg.h"
@@ -55,8 +55,8 @@ RenderDlg::RenderDlg( wxWindow *parent, wxWindowID id, const wxString &title,
 	m_bJPEG = false;
 	m_ColorNODATA.Set(255,0,0);
 
-	m_Size.x = 256;
-	m_Size.y = 256;
+	m_iSizeX = 256;
+	m_iSizeY = 256;
 
 	// sampling
 	AddValidator(this, ID_RADIO_TO_FILE, &m_bToFile);
@@ -66,8 +66,8 @@ RenderDlg::RenderDlg( wxWindow *parent, wxWindowID id, const wxString &title,
 	AddValidator(this, ID_CHOICE_COLORS, &m_strColorMap);
 	AddValidator(this, ID_SHADING, &m_bShading);
 
-	AddNumValidator(this, ID_SIZEX, &m_Size.x);
-	AddNumValidator(this, ID_SIZEY, &m_Size.y);
+	AddNumValidator(this, ID_SIZEX, &m_iSizeX);
+	AddNumValidator(this, ID_SIZEY, &m_iSizeY);
 	AddValidator(this, ID_CONSTRAIN, &m_bConstraint);
 
 	UpdateEnabling();
@@ -88,7 +88,7 @@ void RenderDlg::OnInitDialog(wxInitDialogEvent& event)
 void RenderDlg::RecomputeSize()
 {
 	if (m_bConstraint)  // powers of 2 + 1
-		m_Size.x = m_Size.y = (1 << m_power);
+		m_iSizeX = m_iSizeY = (1 << m_power);
 }
 
 void RenderDlg::UpdateEnabling()
@@ -235,8 +235,8 @@ void RenderDlg::OnConstrain( wxCommandEvent &event )
 	{
 		// round up to a value at least as great as the current size
 		m_power = 1;
-		while (((1 << m_power) + 1) < m_Size.x ||
-			   ((1 << m_power) + 1) < m_Size.y)
+		while (((1 << m_power) + 1) < m_iSizeX ||
+			   ((1 << m_power) + 1) < m_iSizeY)
 			m_power++;
 	}
 	RecomputeSize();

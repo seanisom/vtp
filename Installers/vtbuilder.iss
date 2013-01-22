@@ -3,7 +3,7 @@
 
 [Setup]
 AppName=VTBuilder
-AppVerName=VTBuilder 1.45 (2013.01.09)
+AppVerName=VTBuilder 1.4 (2013.01.01)
 AppPublisher=Virtual Terrain Project
 AppPublisherURL=http://vterrain.org/
 AppSupportURL=http://vterrain.org/
@@ -12,7 +12,7 @@ DefaultDirName={pf}\VTP
 DefaultGroupName=VTP
 AllowNoIcons=yes
 LicenseFile=C:\VTP\license.txt
-OutputBaseFilename=VTBuilder_130109
+OutputBaseFilename=VTBuilder_130101
 OutputDir=C:\Distrib
 ; We need the following because some Windows machines won't turn Registry settings into Environment variables w/o a reboot
 AlwaysRestart=yes
@@ -68,8 +68,7 @@ Source: "C:\APIs\expat-2.0.1\win32\bin\Release\libexpat.dll"; DestDir: "{app}\Ap
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
 
 [Icons]
-Name: "{group}\Documentation"; Filename: "{app}\Docs\VTBuilder\en\index.html"
-Name: "{group}\Documentation - Italian"; Filename: "{app}\Docs\VTBuilder\it\index.html"
+Name: "{group}\Documentation"; Filename: "{app}\Docs\en\index.html"
 Name: "{group}\VTBuilder"; Filename: "{app}\Apps\VTBuilder.exe"; WorkingDir: "{app}/Apps"
 Name: "{group}\Uninstall VTBuilder"; Filename: "{uninstallexe}"
 

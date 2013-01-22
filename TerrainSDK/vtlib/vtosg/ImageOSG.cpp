@@ -444,9 +444,14 @@ void vtImage::SetPixel32(int x, int y, const RGBAi &rgba)
 	buf[3] = rgba.a;
 }
 
-IPoint2 vtImage::GetSize() const
+uint vtImage::GetWidth() const
 {
-	return IPoint2(s(), t());
+	return s();
+}
+
+uint vtImage::GetHeight() const
+{
+	return t();
 }
 
 uint vtImage::GetDepth() const
@@ -833,21 +838,24 @@ bool vtImageGeo::ReadTIF(const char *filename, bool progress_callback(int))
 		VTLOG("Reading the image data (%d x %d pixels)\n", iXSize, iYSize);
 #endif
 
+		int x, y;
+		int ixBlock, iyBlock;
 		int nxValid, nyValid;
+		int iY, iX;
 		RGBi rgb;
 		RGBAi rgba;
 		if (iRasterCount == 1)
 		{
 			GDALColorEntry Ent;
-			for (int iyBlock = 0; iyBlock < nyBlocks; iyBlock++)
+			for (iyBlock = 0; iyBlock < nyBlocks; iyBlock++)
 			{
 				if (progress_callback != NULL)
 					progress_callback(iyBlock * 100 / nyBlocks);
 
-				const int y = iyBlock * yBlockSize;
-				for (int ixBlock = 0; ixBlock < nxBlocks; ixBlock++)
+				y = iyBlock * yBlockSize;
+				for (ixBlock = 0; ixBlock < nxBlocks; ixBlock++)
 				{
-					const int x = ixBlock * xBlockSize;
+					x = ixBlock * xBlockSize;
 					Err = pBand->ReadBlock(ixBlock, iyBlock, pScanline);
 					if (Err != CE_None)
 						throw "Problem reading the image data.";
@@ -864,9 +872,9 @@ bool vtImageGeo::ReadTIF(const char *filename, bool progress_callback(int))
 					else
 						nyValid = yBlockSize;
 
-					for(int iY = 0; iY < nyValid; iY++ )
+					for( iY = 0; iY < nyValid; iY++ )
 					{
-						for(int iX = 0; iX < nxValid; iX++ )
+						for( iX = 0; iX < nxValid; iX++ )
 						{
 							if (bColorPalette)
 							{
@@ -885,15 +893,15 @@ bool vtImageGeo::ReadTIF(const char *filename, bool progress_callback(int))
 		}
 		if (iRasterCount >= 3)
 		{
-			for (int iyBlock = 0; iyBlock < nyBlocks; iyBlock++)
+			for (iyBlock = 0; iyBlock < nyBlocks; iyBlock++)
 			{
 				if (progress_callback != NULL)
 					progress_callback(iyBlock * 100 / nyBlocks);
 
-				const int y = iyBlock * yBlockSize;
-				for (int ixBlock = 0; ixBlock < nxBlocks; ixBlock++)
+				y = iyBlock * yBlockSize;
+				for (ixBlock = 0; ixBlock < nxBlocks; ixBlock++)
 				{
-					const int x = ixBlock * xBlockSize;
+					x = ixBlock * xBlockSize;
 					Err = pRed->ReadBlock(ixBlock, iyBlock, pRedline);
 					if (Err != CE_None)
 						throw "Cannot read data.";
@@ -994,11 +1002,10 @@ void vtImageGeo::ReadExtents(const char *filename)
 		double params[6];
 		if (ReadAssociatedWorldFile(filename, params))
 		{
-			const IPoint2 size = GetSize();
 			m_extents.left = params[4];
-			m_extents.right = params[4] + params[0] * size.x;
+			m_extents.right = params[4] + params[0] * GetWidth();
 			m_extents.top = params[5];
-			m_extents.bottom = params[5] + params[3] * size.y;
+			m_extents.bottom = params[5] + params[3] * GetHeight();
 		}
 	}
 }

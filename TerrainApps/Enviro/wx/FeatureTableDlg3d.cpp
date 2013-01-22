@@ -30,7 +30,7 @@ void FeatureTableDlg3d::OnModified()
 }
 void FeatureTableDlg3d::RefreshViz()
 {
-	m_pLayer->RefreshFeatureVisuals();
+	m_pLayer->RebuildVisual();
 }
 
 void FeatureTableDlg3d::OnFeatureDelete(vtFeature *f)
@@ -44,7 +44,7 @@ void FeatureTableDlg3d::OnFeatureDelete(vtFeature *f)
 
 void FeatureTableDlg3d::OnFieldEdited(uint iIndex)
 {
-	m_pLayer->RefreshFeature(iIndex);
+	m_pLayer->RebuildFeature(iIndex);
 }
 
 void FeatureTableDlg3d::OnEditEnd()

@@ -1,7 +1,7 @@
 //
 // Projections.cpp
 //
-// Copyright (c) 2001-2013 Virtual Terrain Project
+// Copyright (c) 2001-2009 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 // Parts of the code are derived from public-domain USGS software.
@@ -731,7 +731,7 @@ StatePlaneInfo *GetStatePlaneTable()
 	return g_StatePlaneInfo;
 }
 
-int NumStatePlanes()
+int GetNumStatePlanes()
 {
 	return sizeof(g_StatePlaneInfo) /  sizeof(StatePlaneInfo);
 }
@@ -930,7 +930,7 @@ void SetupEPSGDatums()
 		g_EPSGDatums.push_back(dat);
 	}
 	// sort them
-	qsort(&g_EPSGDatums.front(), count, sizeof(EPSGDatum), compare_datum);
+	qsort(g_EPSGDatums.data(), count, sizeof(EPSGDatum), compare_datum);
 }
 
 void CleanupEPSGDatums()
@@ -1118,34 +1118,20 @@ OCT *CreateCoordTransform(const vtProjection *pSource,
 		return result;
 }
 
-void TransformInPlace(OCT *transform, DPolygon2 &poly)
-{
-	for (uint ring = 0; ring < poly.size(); ring++)
-		TransformInPlace(transform, poly[ring]);
-}
-
-void TransformInPlace(OCT *transform, DLine2 &line)
-{
-	for (uint v = 0; v < line.GetSize(); v++)
-		transform->Transform(1, &line[v].x, &line[v].y);
-}
 
 double GetMetersPerUnit(LinearUnits lu)
 {
 	switch (lu)
 	{
-	case LU_DEGREES:
-	case LU_UNITEDGE:
-		return 1.0;		// actually no definition for degrees -> meters
-	case LU_METERS:
-		return 1.0;		// meters per meter
-	case LU_FEET_INT:
-		return 0.3048;		// international foot
-	case LU_FEET_US:
-		return (1200.0/3937.0);	// U.S. survey foot
-	case LU_UNKNOWN:
-		// keep picky compilers quiet.
-		break;
+		case LU_DEGREES:
+		case LU_UNITEDGE:
+			return 1.0;		// actually no definition for degrees -> meters
+		case LU_METERS:
+			return 1.0;		// meters per meter
+		case LU_FEET_INT:
+			return 0.3048;		// international foot
+		case LU_FEET_US:
+			return (1200.0/3937.0);	// U.S. survey foot
 	}
 	return 1.0;
 };
@@ -1159,9 +1145,6 @@ const char *GetLinearUnitName(LinearUnits lu)
 	case LU_FEET_INT: return "Feet";
 	case LU_FEET_US:  return "Feet (US)";
 	case LU_UNITEDGE:  return "UnitEdge";
-	case LU_UNKNOWN:
-		// keep picky compilers quiet.
-		break;
 	}
 	return "Unknown";
 }

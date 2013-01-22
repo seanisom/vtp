@@ -74,9 +74,6 @@ osg::PrimitiveSet* MakeAPrimitiveSet(const int VertexType, const osg::PrimitiveS
 			break;
 		}
 		break;
-	default:
-		// Keep picky compilers quiet.
-		break;
 	}
 	return pPrimitiveSet;
 }
@@ -270,9 +267,6 @@ vtGeode* PrimitiveCache::Realise(bool bUseVertexBufferObjects) const
 								break;
 						}
 						break;
-					default:
-						// Keep picky compilers quiet.
-						break;
 				}
 			}
 			if (bUseVertexBufferObjects)
@@ -288,7 +282,7 @@ vtGeode* GeometryBuilder::Generate()
 
 	int i;
 	uint j, k;
-	int iLevels = m_Building.NumLevels();
+	int iLevels = m_Building.GetNumLevels();
 
 	// create the edges (walls and roof)
 	float fHeight = 0.0f;
@@ -1525,9 +1519,6 @@ class osg::PrimitiveSet* FindOrCreatePrimitiveSet(osg::Geometry* pGeometry,
 			break;
 		case osg::PrimitiveSet::DrawElementsUIntPrimitiveType:
 			pPrimSet = new osg::DrawElementsUInt(Mode);
-			break;
-		default:
-			// Keep picky compilers quiet.
 			break;
 	}
 

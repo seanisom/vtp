@@ -20,9 +20,9 @@
 #include "Builder.h"
 
 // Layers
+//#include "RawLayer.h"
 #include "RoadLayer.h"
 #include "StructLayer.h"
-#include "UtilityLayer.h"
 #include "WaterLayer.h"
 
 ////////////////////////////////////////////////////////////////////////
@@ -32,7 +32,6 @@
 struct OSMNode {
 	DPoint2 p;
 	bool signal_lights;
-	vtPole *pole;
 };
 
 class VisitorOSM : public XMLVisitor
@@ -46,19 +45,12 @@ public:
 
 	vtRoadLayer *m_road_layer;
 	vtStructureLayer *m_struct_layer;
-	vtUtilityLayer *m_util_layer;
-
-	vtPole *m_pole;
-	vtLine *m_line;
 
 private:
 	void MakeRoad();
 	void MakeStructure();
 	void MakeBuilding();
 	void MakeLinear();
-
-	void StartPowerPole();
-	void MakePowerLine();
 	void ParseOSMTag(const vtString &key, const vtString &value);
 
 	enum ParseState {
@@ -66,6 +58,7 @@ private:
 		PS_NODE,
 		PS_WAY
 	} m_state;
+	int m_rec;
 
 	typedef std::map<int, OSMNode> NodeMap;
 	NodeMap m_nodes;
@@ -73,13 +66,10 @@ private:
 
 	vtProjection m_proj;
 
-	vtString	m_Name, m_URL;
 	LayerType	m_WayType;
 	bool		m_bIsArea;
-	int			m_id;
 
 	int			m_iRoadLanes;
-	int			m_iRoadFlags;
 	SurfaceType m_eSurfaceType;
 
 	vtStructureType m_eStructureType;
@@ -93,7 +83,6 @@ VisitorOSM::VisitorOSM() : m_state(PS_NONE)
 {
 	m_road_layer = NULL;
 	m_struct_layer = NULL;
-	m_util_layer = NULL;
 
 	// OSM is always in Geo WGS84
 	m_proj.SetWellKnownGeogCS("WGS84");
@@ -127,12 +116,11 @@ void VisitorOSM::startElement(const char *name, const XMLAttributes &atts)
 		if (!strcmp(name, "node"))
 		{
 			DPoint2 p;
+			int id;
 
 			val = atts.getValue("id");
 			if (val)
-				m_id = atoi(val);
-			else
-				m_id = -1;	// Shouldn't happen.
+				id = atoi(val);
 
 			val = atts.getValue("lon");
 			if (val)
@@ -145,35 +133,24 @@ void VisitorOSM::startElement(const char *name, const XMLAttributes &atts)
 			OSMNode node;
 			node.p = p;
 			node.signal_lights = false;
-			m_nodes[m_id] = node;
+			m_nodes[id] = node;
 
 			m_state = PS_NODE;
-
-			m_pole = NULL;
 		}
 		else if (!strcmp(name, "way"))
 		{
 			m_refs.clear();
 			m_state = PS_WAY;
-			val = atts.getValue("id");
-			if (val)
-				m_id = atoi(val);
-			else
-				m_id = -1;	// Shouldn't happen.
 
 			// Defaults
-			m_Name = "";
-			m_URL = "";
 			m_WayType = LT_UNKNOWN;
 			m_bIsArea = false;
 			m_iRoadLanes = 2;
-			m_iRoadFlags = RF_FORWARD | RF_REVERSE;	// bidrectional traffic
 			m_eSurfaceType = SURFT_PAVED;
 			m_eStructureType = ST_NONE;
 			m_iNumStories = -1;
 			m_fHeight = -1;
 			m_RoofType = NUM_ROOFTYPES;
-			m_line = NULL;
 		}
 	}
 	else if (m_state == PS_NODE && !strcmp(name, "tag"))
@@ -188,21 +165,13 @@ void VisitorOSM::startElement(const char *name, const XMLAttributes &atts)
 		if (val)
 			value = val;
 
-		if (key == "power" && value == "tower")
-			StartPowerPole();
-
 		// Node key/value
-		else if (key == "highway")
+		if (key == "highway")
 		{
 			if (value == "traffic_signals")
 			{
 				m_nodes[m_nodes.size()-1].signal_lights = true;
 			}
-		}
-		else if (m_pole)
-		{
-			// Add all node tags for power towers
-			m_pole->AddTag(key, value);
 		}
 	}
 	else if (m_state == PS_WAY)
@@ -228,10 +197,7 @@ void VisitorOSM::startElement(const char *name, const XMLAttributes &atts)
 			if (val)
 				value = val;
 
-			if (m_line)
-				m_line->AddTag(key, value);
-			else
-				ParseOSMTag(key, value);
+			ParseOSMTag(key, value);
 		}
 	}
 }
@@ -333,38 +299,15 @@ void VisitorOSM::ParseOSMTag(const vtString &key, const vtString &value)
 			m_eLinearStyle = FS_PRIVET;
 		}
 	}
-	if (key == "building" || key == "building:part")
+	if (key == "building")
 	{
-		// Values for "building" may be "yes" (94%), "house", "residential", "hut", "garage"..
+		// Values may be "yes" (94%), "house", "residential", "hut", "garage"..
 		m_WayType = LT_STRUCTURE;
 		m_eStructureType = ST_BUILDING;
 	}
 	if (key == "building:levels")
 	{
 		m_iNumStories = atoi(value);
-	}
-	if (key == "fence_type")
-	{
-		if (value == "chain")
-			m_eLinearStyle = FS_CHAINLINK;
-
-		if (value == "split_rail")
-			m_eLinearStyle = FS_WOOD_POSTS_WIRE;	// We don't do wooden fences yet.
-
-		if (value == "wood")
-			m_eLinearStyle = FS_WOOD_POSTS_WIRE;	// We don't do wooden fences yet.
-
-		if (value == "barbed_wire")
-			m_eLinearStyle = FS_WOOD_POSTS_WIRE;
-
-		if (value == "wire")
-			m_eLinearStyle = FS_METAL_POSTS_WIRE;
-
-		if (value == "pole")
-			m_eLinearStyle = FS_WOOD_POSTS_WIRE;	// We don't do wooden fences yet.
-
-		if (value == "hedge")
-			m_eLinearStyle = FS_PRIVET;
 	}
 	if (key == "height")
 	{
@@ -378,11 +321,6 @@ void VisitorOSM::ParseOSMTag(const vtString &key, const vtString &value)
 		// Look for values that do.
 		if (value == "bridleway")
 			m_eSurfaceType = SURFT_GRAVEL;
-		if (value == "cycleway")
-		{
-			m_iRoadLanes = 1;
-			m_eSurfaceType = SURFT_PAVED;
-		}
 		if (value == "footway")
 		{
 			m_iRoadLanes = 1;
@@ -422,33 +360,8 @@ void VisitorOSM::ParseOSMTag(const vtString &key, const vtString &value)
 	if (key == "man_made")
 		m_WayType = LT_UNKNOWN;		// Piers, towers, windmills, etc.
 
-	if (key == "name")
-		m_Name = value;
-
-	if (key == "oneway")
-	{
-		if (value == "yes")
-			m_iRoadFlags &= (~RF_REVERSE);
-		if (value == "-1")
-			m_iRoadFlags &= (~RF_FORWARD);
-	}
-
-	if (key.Left(13) == "parking:lane:")
-	{
-		vtString after = key.Mid(13);
-		if (after == "left")
-			m_iRoadFlags |= RF_PARKING_LEFT;
-		if (after == "right")
-			m_iRoadFlags |= RF_PARKING_RIGHT;
-		if (after == "both")
-			m_iRoadFlags |= (RF_PARKING_LEFT | RF_PARKING_RIGHT);
-	}
-
-	if (key == "power" && value == "line")
-	{
-		m_WayType = LT_UTILITY;
-		MakePowerLine();
-	}
+	if (key == "power")
+		m_WayType = LT_UNKNOWN;
 
 	if (key == "natural")	// value is coastline, marsh, etc.
 		m_WayType = LT_UNKNOWN;
@@ -467,16 +380,6 @@ void VisitorOSM::ParseOSMTag(const vtString &key, const vtString &value)
 
 	if (key == "route" && value == "ferry")
 		m_WayType = LT_UNKNOWN;
-
-	if (key == "sidewalk")
-	{
-		if (value == "left")
-			m_iRoadFlags |= RF_SIDEWALK_LEFT;
-		if (value == "right")
-			m_iRoadFlags |= RF_SIDEWALK_RIGHT;
-		if (value == "both")
-			m_iRoadFlags |= (RF_SIDEWALK_LEFT | RF_SIDEWALK_RIGHT);
-	}
 
 	if (key == "shop")
 	{
@@ -509,20 +412,8 @@ void VisitorOSM::ParseOSMTag(const vtString &key, const vtString &value)
 		if (value == "unpaved")
 			m_eSurfaceType = SURFT_GRAVEL;	// or SURFT_DIRT
 	}
-	if (key == "tunnel")
-	{
-		// We can't do tunnels, so ignore them for now.
-		if (value == "yes")
-			m_WayType = LT_UNKNOWN;
-	}
-	if (key == "url")
-		m_URL = value;
-
 	if (key == "waterway")
 		m_WayType = LT_WATER;
-
-	if (key == "website")
-		m_URL = value;
 }
 
 void VisitorOSM::MakeRoad()
@@ -536,7 +427,6 @@ void VisitorOSM::MakeRoad()
 	LinkEdit *link = m_road_layer->AddNewLink();
 
 	link->m_iLanes = m_iRoadLanes;
-	link->m_iFlags = m_iRoadFlags;
 	link->m_Surface = m_eSurfaceType;
 
 	int ref_first = m_refs[0];
@@ -656,21 +546,7 @@ void VisitorOSM::MakeStructure()
 
 void VisitorOSM::MakeBuilding()
 {
-	// We expect the building to be closed, which means the last node should
-	// be the same as the first.  If not, something is wrong.
-	if (m_refs.size() < 4)
-	{
-		VTLOG("Bad building, id %d, only %d nodes\n", m_id, m_refs.size());
-		return;
-	}
-	if (m_refs[0] != m_refs[m_refs.size()-1])
-	{
-		VTLOG("Bad building, id %d, not closed\n", m_id);
-		return;
-	}
-
-	// Our polylines are implicitly closed so we don't need redundancy.
-	m_refs.erase(m_refs.end() - 1);
+	vtBuilding *bld = m_struct_layer->AddNewBuilding();
 
 	// Apply footprint
 	DLine2 foot(m_refs.size());
@@ -685,59 +561,29 @@ void VisitorOSM::MakeBuilding()
 	if (pc.IsClockwisePolygon(foot))
 		foot.ReverseOrder();
 
-	vtBuilding *bld = m_struct_layer->AddNewBuilding();
-
-	// Make two levels: walls and a roof.
 	bld->SetFootprint(0, foot);
-	bld->SetFootprint(1, foot);
 
 	// Apply a default style of building
 	vtBuilding *pDefBld = GetClosestDefault(bld);
 	if (pDefBld)
-		bld->CopyStyleFrom(pDefBld, true);
+		bld->CopyFromDefault(pDefBld, true);
 	else
+	{
+		bld->SetStories(1);
 		bld->SetRoofType(ROOF_FLAT);
+	}
 
 	// Apply other building info, if we have it.
-	// Do we have both a height and a number of stories?
-	if (m_fHeight != -1 && m_iNumStories != -1 && m_iNumStories != 0)
-	{
-		bld->SetNumStories(m_iNumStories);
-		bld->GetLevel(0)->m_fStoryHeight = m_fHeight / m_iNumStories;
-	}
-	else if (m_fHeight != -1)
-	{
-		// We have height, but not number of stories. Estimate it.
-		int num = (int) (m_fHeight / 3.65);
-		if (num < 1)
-			num = 1;
-		bld->SetNumStories(num);
-		bld->GetLevel(0)->m_fStoryHeight = m_fHeight / num;
-	}
-	else if (m_iNumStories != -1)
-		bld->SetNumStories(m_iNumStories);
-
+	if (m_fHeight != -1)
+		bld->GetLevel(0)->m_fStoryHeight = m_fHeight;
+	if (m_iNumStories != -1)
+		bld->SetStories(m_iNumStories);
 	if (m_RoofType != NUM_ROOFTYPES)
 		bld->SetRoofType(m_RoofType);
-
-	if (m_Name != "")
-		bld->AddTag("name", m_Name);
-	if (m_URL != "")
-		bld->AddTag("url", m_URL);
-	if (m_id != -1)
-	{
-		char id_string[40];
-		sprintf(id_string, "%d", m_id);
-		bld->AddTag("id", id_string);
-	}
 }
 
 void VisitorOSM::MakeLinear()
 {
-	// We expect a linear feature to have at least 2 points.
-	if (m_refs.size() < 2)
-		return;
-
 	vtFence *ls = m_struct_layer->AddNewFence();
 
 	// Apply footprint
@@ -751,66 +597,8 @@ void VisitorOSM::MakeLinear()
 
 	// Apply style;
 	ls->ApplyStyle(m_eLinearStyle);
-
-	if (m_id != -1)
-	{
-		char id_string[40];
-		sprintf(id_string, "%d", m_id);
-		ls->AddTag("id", id_string);
-	}
 }
 
-void VisitorOSM::StartPowerPole()
-{
-	if (!m_util_layer)
-	{
-		m_util_layer = new vtUtilityLayer;
-		m_util_layer->SetProjection(m_proj);
-		m_util_layer->SetModified(true);
-	}
-
-	OSMNode &node = m_nodes[m_id];
-
-	m_pole = m_util_layer->AddNewPole();
-	m_pole->m_id = m_id;
-	m_pole->m_p = node.p;
-
-	node.pole = m_pole;
-}
-
-void VisitorOSM::MakePowerLine()
-{
-	m_line = m_util_layer->AddNewLine();
-
-	m_line->m_poles.resize(m_refs.size());
-	for (uint r = 0; r < m_refs.size(); r++)
-	{
-		int idx = m_refs[r];
-
-		// Look for that node by id; if we don't find it, then it wasn't a tower;
-		// it was probably a start or end point at a non-tower feature.
-		NodeMap::iterator it = m_nodes.find(m_id);
-		if (it != m_nodes.end())
-		{
-			// Connect to a known pole.
-			m_line->m_poles[r] = m_nodes[idx].pole;
-		}
-		else
-		{
-			// We need to make a new pole node.
-			OSMNode &node = m_nodes[idx];
-
-			m_pole = m_util_layer->AddNewPole();
-			m_pole->m_id = idx;
-			m_pole->m_p = node.p;
-
-			node.pole = m_pole;
-
-			// Then we can connect it
-			m_line->m_poles[r] = m_pole;
-		}
-	}
-}
 
 /**
  * Import what we can from OpenStreetMap.
@@ -822,7 +610,7 @@ void Builder::ImportDataFromOSM(const wxString &strFileName, LayerArray &layers,
 	//  OSM always has English punctuation
 	LocaleWrap normal_numbers(LC_NUMERIC, "C");
 
-	std::string fname_local = (const char *) strFileName.ToUTF8();
+	std::string fname_local = strFileName.ToUTF8();
 
 	VisitorOSM visitor;
 	try
@@ -834,16 +622,11 @@ void Builder::ImportDataFromOSM(const wxString &strFileName, LayerArray &layers,
 		DisplayAndLog(ex.getFormattedMessage().c_str());
 		return;
 	}
+	visitor.SetSignalLights();
 
 	if (visitor.m_road_layer)
-	{
-		visitor.SetSignalLights();
 		layers.push_back(visitor.m_road_layer);
-	}
 
 	if (visitor.m_struct_layer)
 		layers.push_back(visitor.m_struct_layer);
-
-	if (visitor.m_util_layer)
-		layers.push_back(visitor.m_util_layer);
 }

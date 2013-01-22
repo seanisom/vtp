@@ -5,7 +5,7 @@
 // This is can be a single building, or any single artificial structure
 // such as a wall or fence.
 //
-// Copyright (c) 2001-2013 Virtual Terrain Project
+// Copyright (c) 2001-2008 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -55,13 +55,19 @@ vtEdge::vtEdge()
 {
 	m_Color.Set(255,0,0);		// default color: red
 	m_iSlope = 90;		// vertical
+	m_fEaveLength = 0.0f;
 	m_pMaterial = GetGlobalMaterials()->FindName(BMAT_NAME_PLAIN);
+}
+
+vtEdge::~vtEdge()
+{
 }
 
 vtEdge::vtEdge(const vtEdge &lhs)
 {
 	m_Color = lhs.m_Color;
 	m_iSlope = lhs.m_iSlope;
+	m_fEaveLength = lhs.m_fEaveLength;
 	for (uint i = 0; i < lhs.m_Features.size(); i++)
 		m_Features.push_back(lhs.m_Features[i]);
 	m_pMaterial = lhs.m_pMaterial;
@@ -122,7 +128,7 @@ void vtEdge::AddFeature(int code, float width, float vf1, float vf2)
 	m_Features.push_back(vtEdgeFeature(code, width, vf1, vf2));
 }
 
-int vtEdge::NumFeaturesOfCode(int code) const
+int vtEdge::NumFeaturesOfCode(int code)
 {
 	int i, count = 0, size = m_Features.size();
 	for (i = 0; i < size; i++)
@@ -133,44 +139,30 @@ int vtEdge::NumFeaturesOfCode(int code) const
 	return count;
 }
 
-float vtEdge::FixedFeaturesWidth() const
+float vtEdge::FixedFeaturesWidth()
 {
-	float width = 0.0f;
-	for (uint i = 0; i < m_Features.size(); i++)
+	float width = 0.0f, fwidth;
+	int size = m_Features.size();
+	for (int i = 0; i < size; i++)
 	{
-		const float fwidth = m_Features[i].m_width;
+		fwidth = m_Features[i].m_width;
 		if (fwidth > 0)
 			width += fwidth;
 	}
 	return width;
 }
 
-float vtEdge::ProportionTotal() const
+float vtEdge::ProportionTotal()
 {
-	float width = 0.0f;
-	for (uint i = 0; i < m_Features.size(); i++)
+	float width = 0.0f, fwidth;
+	int size = m_Features.size();
+	for (int i = 0; i < size; i++)
 	{
-		const float fwidth = m_Features[i].m_width;
+		fwidth = m_Features[i].m_width;
 		if (fwidth < 0)
 			width += fwidth;
 	}
 	return width;
-}
-
-bool vtEdge::IsUniform() const
-{
-	const int windows = NumFeaturesOfCode(WFC_WINDOW);
-	const int doors = NumFeaturesOfCode(WFC_DOOR);
-	const int walls = NumFeaturesOfCode(WFC_WALL);
-	if (doors > 0)
-		return false;
-	if (walls != (windows + 1))
-		return false;
-	if (m_iSlope != 90)
-		return false;
-	if (m_pMaterial != NULL && *m_pMaterial != BMAT_NAME_SIDING)
-		return false;
-	return true;
 }
 
 /////////////////////////////////////
@@ -270,12 +262,6 @@ void vtLevel::SetEdgeMaterial(const char *matname)
 		m_Edges[i]->m_pMaterial = str;
 }
 
-void vtLevel::SetEdgeMaterial(const vtString *matname)
-{
-	for (uint i = 0; i < m_Edges.GetSize(); i++)
-		m_Edges[i]->m_pMaterial = matname;
-}
-
 void vtLevel::SetEdgeColor(RGBi color)
 {
 	for (uint i = 0; i < m_Edges.GetSize(); i++)
@@ -293,23 +279,15 @@ vtEdge *vtLevel::GetEdge(uint i) const
 float vtLevel::GetEdgeLength(uint iIndex) const
 {
 	int i = iIndex;
-	const int ring = m_Foot.WhichRing(i);
+	int ring = m_Foot.WhichRing(i);
 	if (ring == -1)
 		return 0.0f;
 	const DLine2 &dline = m_Foot[ring];
-	const int j = i+1 == dline.GetSize() ? 0 : i+1;
+	int edges = dline.GetSize();
+	int j = i+1;
+	if (j == edges)
+		j = 0;
 	return (float) (dline[j] - dline[i]).Length();
-}
-
-float vtLevel::GetLocalEdgeLength(uint iIndex) const
-{
-	int i = iIndex;
-	const int ring = m_LocalFootprint.WhichRing(i);
-	if (ring == -1)
-		return 0.0f;
-	const FLine3 &fline = m_LocalFootprint[ring];
-	const int j = i+1 == fline.GetSize() ? 0 : i+1;
-	return (float) (fline[j] - fline[i]).Length();
 }
 
 void vtLevel::RebuildEdges(uint n)
@@ -476,9 +454,22 @@ bool vtLevel::IsCornerConvex(int i)
  */
 bool vtLevel::IsUniform() const
 {
-	for (uint i = 0; i < m_Edges.GetSize(); i++)
+	int i, edges = NumEdges();
+	for (i = 0; i < edges; i++)
 	{
-		if (m_Edges[i]->IsUniform() == false)
+		vtEdge *edge = m_Edges[i];
+		int windows = edge->NumFeaturesOfCode(WFC_WINDOW);
+		int doors = edge->NumFeaturesOfCode(WFC_DOOR);
+		int walls = edge->NumFeaturesOfCode(WFC_WALL);
+		if (doors > 0)
+			return false;
+		if (walls != (windows + 1))
+			return false;
+		if (edge->m_iSlope != 90)
+			return false;
+//		if (edge->m_Color != RGBi(255, 255, 255))
+//			return false;
+		if (edge->m_pMaterial != NULL && *edge->m_pMaterial != BMAT_NAME_SIDING)
 			return false;
 	}
 	return true;
@@ -486,20 +477,21 @@ bool vtLevel::IsUniform() const
 
 void vtLevel::DetermineLocalFootprint(float fHeight)
 {
-	const uint rings = m_Foot.size();
+	DPoint2 p;
 	FPoint3 lp;
 
+	uint rings = m_Foot.size();
 	m_LocalFootprint.resize(rings);
 	for (unsigned ring = 0; ring < rings; ring++)
 	{
-		const DLine2 &dline2 = m_Foot[ring];
+		DLine2 &dline2 = m_Foot[ring];
 		FLine3 &fline3 = m_LocalFootprint[ring];
 
-		const uint edges = dline2.GetSize();
+		uint edges = dline2.GetSize();
 		fline3.SetSize(edges);
 		for (unsigned i = 0; i < edges; i++)
 		{
-			const DPoint2 &p = dline2[i];
+			p = dline2[i];
 			vtBuilding::s_Conv.ConvertFromEarth(p, lp.x, lp.z);
 			lp.y = fHeight;
 			fline3.SetAt(i, lp);
@@ -644,7 +636,7 @@ bool vtLevel::GetOverallEdgeColor(RGBi &color)
 // try to guess type of roof from looking at slopes of edges of
 // this level
 //
-RoofType vtLevel::GuessRoofType() const
+RoofType vtLevel::GuessRoofType()
 {
 	int sloped = 0, vert = 0, hori = 0;
 	int i, edges = NumEdges();
@@ -685,7 +677,6 @@ void vtLevel::FlipFootprintDirection()
 vtBuilding::vtBuilding() : vtStructure()
 {
 	SetType(ST_BUILDING);
-	m_pCRS = NULL;
 }
 
 vtBuilding::~vtBuilding()
@@ -716,9 +707,6 @@ vtBuilding &vtBuilding::operator=(const vtBuilding &v)
 	DeleteLevels();
 	for (uint i = 0; i < v.m_Levels.GetSize(); i++)
 		m_Levels.Append(new vtLevel(* v.m_Levels[i]));
-
-	m_pCRS = v.m_pCRS;
-
 	return *this;
 }
 
@@ -811,9 +799,9 @@ void vtBuilding::SetCircle(const DPoint2 &center, float fRad)
  *
  * \param which Can be either BLD_BASIC (the overall color of the building)
  *			or BLD_ROOF (the overall color of the roof).
- * \param color The color to set.
+ * \param col The color to set.
  */
-void vtBuilding::SetColor(BldColor which, const RGBi &color)
+void vtBuilding::SetColor(BldColor which, RGBi col)
 {
 	int i, levs = m_Levels.GetSize();
 	for (i = 0; i < levs; i++)
@@ -826,12 +814,12 @@ void vtBuilding::SetColor(BldColor which, const RGBi &color)
 			if (edge->m_iSlope < 90)
 			{
 				if (which == BLD_ROOF)
-					edge->m_Color = color;
+					edge->m_Color = col;
 			}
 			else
 			{
 				if (which == BLD_BASIC)
-					edge->m_Color = color;
+					edge->m_Color = col;
 			}
 		}
 	}
@@ -878,11 +866,11 @@ RGBi vtBuilding::GetColor(BldColor which) const
  *
  * \param iStories Number of stories to set.
  */
-void vtBuilding::SetNumStories(int iStories)
+void vtBuilding::SetStories(int iStories)
 {
 	vtLevel *pLev;
 
-	int previous = NumStories();
+	int previous = GetStories();
 	if (previous == iStories)
 		return;
 
@@ -902,7 +890,7 @@ void vtBuilding::SetNumStories(int iStories)
 		pLev->SetRoofType(ROOF_FLAT, 0);
 		levels++;
 	}
-	previous = NumStories(); // Just in case it changed
+	previous = GetStories(); // Just in case it changed
 
 	// increase if necessary
 	if (iStories > previous)
@@ -913,7 +901,7 @@ void vtBuilding::SetNumStories(int iStories)
 		pLev->m_iStories += (iStories - previous);
 	}
 	// decrease if necessary
-	while (NumStories() > iStories)
+	while (GetStories() > iStories)
 	{
 		// get top non-roof level
 		pLev = m_Levels[levels-2];
@@ -934,7 +922,7 @@ void vtBuilding::SetNumStories(int iStories)
  * Get the total number of stories of this building.  The top level is assumed
  *  to be a roof and does not count toward the total.
  */
-int vtBuilding::NumStories() const
+int vtBuilding::GetStories() const
 {
 	// this method assume each building must have at least two levels: one
 	// for the walls and one for the roof.
@@ -967,7 +955,7 @@ float vtBuilding::GetTotalHeight() const
  */
 void vtBuilding::SetFootprint(int lev, const DLine2 &foot)
 {
-	int levs = NumLevels();
+	int levs = GetNumLevels();
 	if (lev >= levs)
 		CreateLevel();
 
@@ -985,7 +973,7 @@ void vtBuilding::SetFootprint(int lev, const DLine2 &foot)
  */
 void vtBuilding::SetFootprint(int lev, const DPolygon2 &poly)
 {
-	int levs = NumLevels();
+	int levs = GetNumLevels();
 	if (lev >= levs)
 		CreateLevel();
 
@@ -1014,7 +1002,7 @@ void vtBuilding::SetRoofType(RoofType rt, int iSlope, int iLev)
 {
 	int i, edges;
 
-	if (NumLevels() < 2)
+	if (GetNumLevels() < 2)
 	{
 		// should not occur - this method is intended for buildings with roofs
 		return;
@@ -1025,8 +1013,8 @@ void vtBuilding::SetRoofType(RoofType rt, int iSlope, int iLev)
 	vtLevel *pLev, *below;
 	if (iLev == -1)
 	{
-		pLev = GetLevel(NumLevels()-1);
-		below = GetLevel(NumLevels()-2);
+		pLev = GetLevel(GetNumLevels()-1);
+		below = GetLevel(GetNumLevels()-2);
 	}
 	else
 	{
@@ -1067,34 +1055,13 @@ void vtBuilding::SetRoofType(RoofType rt, int iSlope, int iLev)
 	}
 }
 
-RoofType vtBuilding::GetRoofType() const
+RoofType vtBuilding::GetRoofType()
 {
 	// try to guess type of roof from looking at slopes of edges of
 	// the top level
-	const vtLevel *pLev = GetLevel(NumLevels()-1);
+	vtLevel *pLev = GetLevel(GetNumLevels()-1);
 
 	return pLev->GuessRoofType();
-}
-
-RGBi vtBuilding::GuessRoofColor() const
-{
-	const vtLevel *pRoof = GetLevel(NumLevels()-1);
-	for (int i = 0; i < pRoof->NumEdges(); i++)
-	{
-		if (pRoof->GetEdge(i)->m_iSlope != 90)
-			return pRoof->GetEdge(i)->m_Color;
-	}
-	return RGBi(255, 255, 255);
-}
-
-void vtBuilding::SetRoofColor(const RGBi &rgb)
-{
-	vtLevel *pRoof = GetLevel(NumLevels()-1);
-	for (int i = 0; i < pRoof->NumEdges(); i++)
-	{
-		if (pRoof->GetEdge(i)->m_iSlope != 90)
-			pRoof->GetEdge(i)->m_Color = rgb;
-	}
 }
 
 bool vtBuilding::GetBaseLevelCenter(DPoint2 &p) const
@@ -1108,7 +1075,9 @@ bool vtBuilding::GetBaseLevelCenter(DPoint2 &p) const
 
 void vtBuilding::Offset(const DPoint2 &p)
 {
-	for (uint i = 0; i < m_Levels.GetSize(); i++)
+	uint i;
+
+	for (i = 0; i < m_Levels.GetSize(); i++)
 	{
 		vtLevel *lev = m_Levels[i];
 		DPolygon2 &foot = lev->GetFootprint();
@@ -1125,16 +1094,21 @@ void vtBuilding::Offset(const DPoint2 &p)
 //
 bool vtBuilding::GetExtents(DRECT &rect) const
 {
+	uint i, j;
 	uint levs = m_Levels.GetSize();
 	if (levs == 0)
 		return false;
 
 	rect.SetRect(1E9, -1E9, -1E9, 1E9);
-	for (uint i = 0; i < levs; i++)
+	for (i = 0; i < levs; i++)
 	{
 		vtLevel *lev = m_Levels[i];
 		if (lev->GetFootprint().size() != 0)	// safety check
-			rect.GrowToContainLine(lev->GetOuterFootprint());
+		{
+			const DLine2 &outer = lev->GetOuterFootprint();
+			for (j = 0; j < outer.GetSize(); j++)
+				rect.GrowToContainPoint(outer[j]);
+		}
 	}
 	return true;
 }
@@ -1144,7 +1118,9 @@ vtLevel *vtBuilding::CreateLevel()
 	vtLevel *pLev = new vtLevel;
 	m_Levels.Append(pLev);
 
-	// We don't have to call DetermineLocalFootprints(), because the new level is empty.
+	// keep 2d and 3d in synch
+	DetermineLocalFootprints();
+
 	return pLev;
 }
 
@@ -1163,7 +1139,7 @@ vtLevel *vtBuilding::CreateLevel(const DPolygon2 &footprint)
 
 void vtBuilding::InsertLevel(int iLev, vtLevel *pLev)
 {
-	int levels = NumLevels();
+	int levels = GetNumLevels();
 	m_Levels.SetSize(levels+1);
 	for (int i = levels; i > iLev; i--)
 	{
@@ -1177,7 +1153,7 @@ void vtBuilding::InsertLevel(int iLev, vtLevel *pLev)
 
 void vtBuilding::DeleteLevel(int iLev)
 {
-	int levels = NumLevels();
+	int levels = GetNumLevels();
 	for (int i = iLev; i < levels-1; i++)
 	{
 		m_Levels[i] = m_Levels[i+1];
@@ -1236,7 +1212,7 @@ double vtBuilding::GetDistanceToInterior(const DPoint2 &point) const
 {
 	vtLevel *lev = m_Levels[0];
 
-	// Ignore holes - a small shortcut, could be be addressed later
+	// Ignore holes - a small shortcut, coulbe be addressed later
 	const DLine2 &foot = lev->GetOuterFootprint();
 	if (foot.ContainsPoint(point))
 		return 0.0;
@@ -1266,7 +1242,7 @@ void vtBuilding::WriteXML(GZOutput &out, bool bDegrees) const
 	gfprintf(out, ">\n");
 
 	int i, j, k;
-	int levels = NumLevels();
+	int levels = GetNumLevels();
 	for (i = 0; i < levels; i++)
 	{
 		const vtLevel *lev = GetLevel(i);
@@ -1339,6 +1315,9 @@ void vtBuilding::WriteXML(GZOutput &out, bool bDegrees) const
 			if (edge->m_iSlope != 90)
 				gfprintf(out, " Slope=\"%d\"", edge->m_iSlope);
 
+			if (edge->m_fEaveLength != 0.0f)
+				gfprintf(out, " EaveLength=\"%f\"", edge->m_fEaveLength);
+
 			if (!edge->m_Facade.IsEmpty())
 				gfprintf(out, " Facade=\"%s\"", (pcchar)edge->m_Facade);
 
@@ -1374,37 +1353,40 @@ void vtBuilding::WriteXML(GZOutput &out, bool bDegrees) const
 void vtBuilding::AddDefaultDetails()
 {
 	// requires at least 2 levels to operate
-	int numlevels = NumLevels();
+	int numlevels = GetNumLevels();
 	while (numlevels < 2)
 	{
 		CreateLevel();
-		numlevels = NumLevels();
+		numlevels = GetNumLevels();
 	}
 
 	// add some default windows/doors
-	for (int i = 0; i < numlevels - 1; i++)
+	vtLevel *lev;
+	vtEdge *edge;
+	int i, j;
+	for (i = 0; i < numlevels - 1; i++)
 	{
-		vtLevel *lev = m_Levels[i];
-		const int edges = lev->NumEdges();
-		for (int j = 0; j < edges; j++)
+		lev = m_Levels[i];
+		int edges = lev->NumEdges();
+		for (j = 0; j < edges; j++)
 		{
-			vtEdge *edge = lev->GetEdge(j);
-			const int doors = 0;
-			const int windows = (int) (lev->GetLocalEdgeLength(j) / 6.0f);
+			edge = lev->GetEdge(j);
+			int doors = 0;
+			int windows = (int) (lev->GetEdgeLength(j) / 6.0f);
 			edge->Set(doors, windows, BMAT_NAME_SIDING);
 		}
 	}
 
 	// process roof level
-	vtLevel *roof = m_Levels[numlevels - 1];
+	vtLevel *roof = m_Levels[i];
 	int edges = roof->NumEdges();
 	if (0 == edges)
 		roof->SetFootprint(m_Levels[0]->GetFootprint());
 	edges = roof->NumEdges();
 
-	for (int j = 0; j < edges; j++)
+	for (j = 0; j < edges; j++)
 	{
-		vtEdge *edge = roof->GetEdge(j);
+		edge = roof->GetEdge(j);
 		edge->m_iSlope = 0;		// flat roof
 	}
 	DetermineLocalFootprints();
@@ -1415,8 +1397,10 @@ void vtBuilding::DetermineLocalFootprints()
 	DPoint2 center;
 	GetBaseLevelCenter(center);
 
-	// The local conversion will be use to make the local footprints.
-	s_Conv.Setup(m_pCRS->GetUnits(), center);
+	// The local conversion for a building must be the same as the global conversion,
+	//  wiht the only difference being a different origin.
+	s_Conv = g_Conv;
+	s_Conv.SetOrigin(center);
 
 	int i;
 	int levs = m_Levels.GetSize();
@@ -1460,7 +1444,10 @@ int vtBuilding::GetEdgeFeatureValue(const char *value)
 
 bool vtBuilding::IsContainedBy(const DRECT &rect) const
 {
-	// It's easier to select buildings using their centers, than using their extents.
+	// I find that it's easier to select building using their centers
+//	DRECT r;
+//	GetExtents(r);
+//	return rect.ContainsRect(r);
 	DPoint2 center;
 	GetBaseLevelCenter(center);
 	return rect.ContainsPoint(center);
@@ -1472,88 +1459,22 @@ void vtBuilding::SwapLevels(int lev1, int lev2)
 	m_Levels[lev1] = m_Levels[lev2];
 	m_Levels[lev2] = pTemp;
 
-	// keep 2d and 3d in sync
+	// keep 2d and 3d in synch
 	DetermineLocalFootprints();
 }
 
-void vtBuilding::SetEaves(float fLength)
+void vtBuilding::CopyFromDefault(vtBuilding *pDefBld, bool bDoHeight)
 {
-	// Assume that the top level is the roof
-	vtLevel *roof = m_Levels[m_Levels.GetSize()-1];
-	if (roof->NumEdges() <= 4)
-		SetEavesSimple(fLength);
-	else
-		SetEavesFelkel(fLength);
-}
-
-void vtBuilding::SetEavesSimple(float fLength)
-{
-	// Assume that the top level is the roof
-	vtLevel *roof = m_Levels[m_Levels.GetSize()-1];
-	float height = roof->m_fStoryHeight;
-
-	for (int i = 0; i < roof->NumEdges(); i++)
-	{
-		vtEdge *edge = roof->GetEdge(i);
-
-		// Ignore vertical walls and flat roofs
-		if (edge->m_iSlope == 90 || edge->m_iSlope == 0)
-			continue;
-
-		// Assume only one edge feature on each edge of a roof.
-		if (edge->NumFeatures() != 1)
-			continue;
-
-		// Simple trigonometry to convert the height, angle and length of the
-		// eave (in meters) to produce the length as a fraction.
-		float angle = edge->SlopeRadians();
-		float fraction = fLength / (height / sin(angle));
-
-		edge->m_Features[0].m_vf1 = -fraction;
-	}
-}
-
-void vtBuilding::SetEavesFelkel(float fLength)
-{
-	// Assume that the top level is the roof
-	vtLevel *roof = m_Levels[m_Levels.GetSize()-1];
-
-	// Convert meters to local units
-	DPolygon2 &foot = roof->GetFootprint();
-	DLine2 &line = foot[0];
-	DLine2 offset(line.GetSize());
-	for (int i = 0; i < (int) line.GetSize(); i++)
-	{
-		AngleSideVector(line.GetSafePoint(i-1), line[i], line.GetSafePoint(i+1), offset[i]);
-	}
-	for (int i = 0; i < (int) line.GetSize(); i++)
-	{
-		// Offset points to the left, subtract it to go to the right, which on a
-		// counter-clockwise polygon, expands the polygon.
-		line[i] -= (offset[i] * fLength);
-	}
-
-	// keep 2d and 3d in sync
-	DetermineLocalFootprints();
-}
-
-void vtBuilding::CopyStyleFrom(const vtBuilding * const pSource, bool bDoHeight)
-{
-	SetElevationOffset(pSource->GetElevationOffset());
+	SetElevationOffset(pDefBld->GetElevationOffset());
 
 	DPolygon2 foot;
 
-	// If we will copy height information, then we will make as many levels as
-	// needed to match the source.
-	uint from_levels = pSource->NumLevels();
+	uint from_levels = pDefBld->GetNumLevels();
 	uint copy_levels;
 	if (bDoHeight)
 		copy_levels = from_levels;
 	else
-		copy_levels = NumLevels();
-
-	// Copy the roof angles first.
-	SetRoofType(pSource->GetRoofType());
+		copy_levels = GetNumLevels();
 
 	for (uint i = 0; i < copy_levels; i++)
 	{
@@ -1563,12 +1484,10 @@ void vtBuilding::CopyStyleFrom(const vtBuilding * const pSource, bool bDoHeight)
 		else
 			pLevel = CreateLevel(foot);
 
-		int from_level;
-		const vtLevel *pFromLevel;
+		vtLevel *pFromLevel;
 		if (bDoHeight)
 		{
-			from_level = i;
-			pFromLevel = pSource->GetLevel(i);
+			pFromLevel = pDefBld->GetLevel(i);
 
 			pLevel->m_iStories = pFromLevel->m_iStories;
 			pLevel->m_fStoryHeight = pFromLevel->m_fStoryHeight;
@@ -1577,6 +1496,7 @@ void vtBuilding::CopyStyleFrom(const vtBuilding * const pSource, bool bDoHeight)
 		{
 			// The target building may have more more levels than the default.
 			//  Try to guess an appropriate corresponding level.
+			int from_level;
 			if (i == 0)
 				from_level = 0;
 			else if (i == copy_levels-1)
@@ -1589,88 +1509,17 @@ void vtBuilding::CopyStyleFrom(const vtBuilding * const pSource, bool bDoHeight)
 				else
 					from_level = 0;
 			}
-			pFromLevel = pSource->GetLevel(from_level);
+			pFromLevel = pDefBld->GetLevel(from_level);
 		}
 		int from_edges = pFromLevel->NumEdges();
 		int to_edges = pLevel->NumEdges();
 
-		// Now that we have a source and target level, iterate through the edges.
-		if (i == copy_levels - 1 && i > 0)
-		{
-			// Handle roof specially: do the sloped edges.
-			vtLevel *below = GetLevel(i - 1);
-			RGBi color;
-			const vtString *material;
-			float vf1;		// Used for roof overhang / eaves.
-			for (int j = 0; j < from_edges; j++)
-			{
-				vtEdge *from_edge = pFromLevel->GetEdge(j);
-				if (from_edge->m_iSlope != 90)
-				{
-					color = from_edge->m_Color;
-					material = from_edge->m_pMaterial;
-					vf1 = from_edge->m_Features[0].m_vf1;
-				}
-			}
-			for (int j = 0; j < to_edges; j++)
-			{
-				vtEdge *to_edge = pLevel->GetEdge(j);
-				if (to_edge->m_iSlope != 90)
-				{
-					to_edge->m_Color = color;
-					to_edge->m_pMaterial = material;
-					to_edge->m_Features[0].m_vf1 = vf1;
-				}
-				else
-				{
-					to_edge->m_Color = below->GetEdge(j)->m_Color;
-					to_edge->m_pMaterial = below->GetEdge(j)->m_pMaterial;
-				}
-			}
-			continue;
-		}
-		// The non-roof case:
 		for (int j = 0; j < to_edges; j++)
 		{
-			const int k = j % from_edges;
-
-			vtEdge *from_edge = pFromLevel->GetEdge(k);
-			vtEdge *to_edge = pLevel->GetEdge(j);
-
-			to_edge->m_Color = from_edge->m_Color;
-			to_edge->m_pMaterial = from_edge->m_pMaterial;
-
-			// Try to create similar edge features (walls, windows, doors)
-			if (from_edge->IsUniform())
-			{
-				const int doors = 0;
-				int windows = (int) (pLevel->GetLocalEdgeLength(j) / 6.0f);
-				if (windows < 1)
-					windows = 1;
-				to_edge->Set(doors, windows, BMAT_NAME_SIDING);
-			}
-			else if (from_edge->NumFeatures() == 1)
-			{
-				to_edge->m_Features.clear();
-				to_edge->m_Features.push_back(from_edge->m_Features[0]);
-			}
-			else
-			{
-				// General case: not uniform, more than one feature
-				const int num_features1 = from_edge->NumFeatures();
-				const float length1 = pFromLevel->GetLocalEdgeLength(k);
-				float features_per_meter = (float) num_features1 / length1;
-
-				const float length2 = pLevel->GetLocalEdgeLength(j);
-				int num_features2 = (int) (features_per_meter * length2);
-				if (num_features2 < 1)
-					num_features2 = 1;
-
-				to_edge->m_Features.clear();
-				for (int m = 0; m < num_features2; m++)
-					to_edge->m_Features.push_back(from_edge->m_Features[m % num_features1]);
-			}
+			pLevel->GetEdge(j)->m_Color = pFromLevel->GetEdge(j % from_edges)->m_Color;
+			pLevel->GetEdge(j)->m_pMaterial = pFromLevel->GetEdge(j % from_edges)->m_pMaterial;
 		}
 	}
+	SetRoofType(pDefBld->GetRoofType());
 }
 

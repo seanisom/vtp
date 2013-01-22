@@ -488,7 +488,7 @@ bool vtElevationGrid::LoadFromASC(const char *szFileName,
 				return false;
 			if (i == 0)
 				VTLOG("(%f)", z);
-			if (z == nodata || z > 1E6 || z < -1E6)
+			if (z == nodata)
 				SetFValue(j, nrows-1-i, INVALID_ELEVATION);
 			else
 				SetFValue(j, nrows-1-i, z);
@@ -1301,9 +1301,9 @@ bool vtElevationGrid::LoadFromGRD(const char *szFileName,
 	if (!_AllocateArray())
 		return false;
 
+	int x, y;
 	float z;
-	double dz;
-	for (int y = 0; y < ny; y++)
+	for (y = 0; y < ny; y++)
 	{
 		if (progress_callback != NULL)
 		{
@@ -1314,14 +1314,15 @@ bool vtElevationGrid::LoadFromGRD(const char *szFileName,
 				return false;
 			}
 		}
-		for (int x = 0; x < nx; x++)
+		for (x = 0; x < nx; x++)
 		{
 			if (bDSRB) //DSRB format
 			{
+				double dz;
 				quiet = fread(&dz, 8, 1, fp);
-				z = (float) dz;
+				z = (float)dz;
 
-				if (z < zlo || z > zhi)
+				if(z < zlo || z > zhi)
 					z = INVALID_ELEVATION;
 
 				SetFValue(x, y, z);
@@ -1330,7 +1331,7 @@ bool vtElevationGrid::LoadFromGRD(const char *szFileName,
 			{
 				quiet = fread(&z, 4, 1, fp);
 
-				if (z < zlo || z > zhi)
+				if(z < zlo || z > zhi)
 					z = INVALID_ELEVATION;
 
 				SetFValue(x, y, z);
@@ -1681,20 +1682,17 @@ bool vtElevationGrid::SaveToGeoTIFF(const char *szFileName) const
 	// GDAL doesn't yet support utf-8 or wide filenames, so convert
 	vtString fname_local = UTF8ToLocal(szFileName);
 
-	GDALDataset *pDataset;
-	if (m_bFloatMode)
-		pDataset = pDriver->Create(fname_local, m_iSize.x, m_iSize.y,
-			1, GDT_Float32, papszParmList );
-	else
-		pDataset = pDriver->Create(fname_local, m_iSize.x, m_iSize.y,
-			1, GDT_Int16, papszParmList );
+	GDALDataset *pDataset = pDriver->Create(fname_local, m_iSize.x, m_iSize.y,
+		1, GDT_Int16, papszParmList );
 	if (!pDataset)
 		return false;
 
-	const DPoint2 &spacing = GetSpacing();
+	DPoint2 spacing = GetSpacing();
 	double adfGeoTransform[6] = { m_EarthExtents.left, spacing.x, 0,
 								  m_EarthExtents.top, 0, -spacing.y };
 	pDataset->SetGeoTransform(adfGeoTransform);
+
+	GInt16 *raster = new GInt16[m_iSize.x*m_iSize.y];
 
 	char *pszSRS_WKT = NULL;
 	m_proj.exportToWkt( &pszSRS_WKT );
@@ -1703,38 +1701,21 @@ bool vtElevationGrid::SaveToGeoTIFF(const char *szFileName) const
 
 	GDALRasterBand *pBand = pDataset->GetRasterBand(1);
 
-	if (m_bFloatMode)
+	int x, y;
+	float value;
+	for (x = 0; x < m_iSize.x; x++)
 	{
-		float *raster = new float[m_iSize.x*m_iSize.y];
-		for (int x = 0; x < m_iSize.x; x++)
+		for (y = 0; y < m_iSize.y; y++)
 		{
-			for (int y = 0; y < m_iSize.y; y++)
-			{
-				// flip as we copy
-				const float value = GetFValue(x, m_iSize.y-1-y);
-				raster[y*m_iSize.x + x] = value;
-			}
+			// flip as we copy
+			value = GetFValue(x, m_iSize.y-1-y);
+			raster[y*m_iSize.x + x] = (short) value;
 		}
-		pBand->RasterIO(GF_Write, 0, 0, m_iSize.x, m_iSize.y,
-			raster, m_iSize.x, m_iSize.y, GDT_Float32, 0, 0);
-		delete raster;
 	}
-	else
-	{
-		GInt16 *raster = new GInt16[m_iSize.x*m_iSize.y];
-		for (int x = 0; x < m_iSize.x; x++)
-		{
-			for (int y = 0; y < m_iSize.y; y++)
-			{
-				// flip as we copy
-				const float value = GetFValue(x, m_iSize.y-1-y);
-				raster[y*m_iSize.x + x] = (short) value;
-			}
-		}
-		pBand->RasterIO(GF_Write, 0, 0, m_iSize.x, m_iSize.y,
-			raster, m_iSize.x, m_iSize.y, GDT_Int16, 0, 0);
-		delete raster;
-	}
+	pBand->RasterIO( GF_Write, 0, 0, m_iSize.x, m_iSize.y,
+		raster, m_iSize.x, m_iSize.y, GDT_Int16, 0, 0 );
+
+	delete raster;
 	GDALClose(pDataset);
 
 	return true;
@@ -1756,14 +1737,16 @@ bool vtElevationGrid::SaveToBMP(const char *szFileName) const
 	float fScale = (fRange == 0.0f ? 0.0f : 255.0f / fRange);
 
 	vtDIB dib;
-	if (!dib.Create(m_iSize, 8, true))
+	if (!dib.Create(m_iSize.x, m_iSize.y, 8, true))
 		return false;
 
-	for (int x = 0; x < m_iSize.x; x++)
+	int x, y;
+	float value;
+	for (x = 0; x < m_iSize.x; x++)
 	{
-		for (int y = 0; y < m_iSize.y; y++)
+		for (y = 0; y < m_iSize.y; y++)
 		{
-			const float value = GetFValue(x, y);
+			value = GetFValue(x, y);
 			dib.SetPixel8(x, y, (uchar) ((value - fMin) * fScale));
 		}
 	}
@@ -2642,7 +2625,7 @@ bool vtElevationGrid::LoadFromXYZ(FILE *fp, const char *pattern, bool progress_c
 
 	// Create the grid, then go back and read all the points
 	vtProjection unknown;
-	Create(extents, IPoint2(iColumns, iRows), !bInteger, unknown);
+	Create(extents, iColumns, iRows, !bInteger, unknown);
 
 	DPoint2 base(extents.left, extents.bottom);
 	DPoint2 spacing = GetSpacing();

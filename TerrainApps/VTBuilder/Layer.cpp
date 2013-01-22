@@ -37,7 +37,7 @@ const wxChar *vtLayer::LayerFileExtension[LAYER_TYPES] =
 	_T(".vtst"),
 	_T(".hyd"),
 	_T(".vf"),
-	_T(".osm")
+	_T(".xml")
 };
 
 
@@ -235,8 +235,6 @@ vtLayer *vtLayer::CreateNewLayer(LayerType ltype)
 		break;
 	case LT_VEG:
 		pLayer = new vtVegLayer;
-		break;
-	default:	// Keep picky compilers quiet.
 		break;
 	}
 	return pLayer;

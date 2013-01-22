@@ -30,10 +30,7 @@ typedef double osg_matrix_value;
 #endif
 
 ///////////////////////
-// Math helpers.
-//
-// The s2v methods convert from "S" (the underlying scenegraph, OSG) to "v" (VTP).
-// The v2s methods convert from "v" (VTP) to "S" (the underlying scenegraph, OSG).
+// math helpers
 
 inline void v2s(const FPoint2 &f, osg::Vec2 &s) { s[0] = f.x; s[1] = f.y; }
 inline void v2s(const FPoint3 &f, osg::Vec3 &s) { s[0] = f.x; s[1] = f.y; s[2] = f.z; }

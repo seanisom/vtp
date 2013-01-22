@@ -43,7 +43,6 @@ public:
 	void TransferToWindow();
 	void SetSliderControls();
 
-	void SetTerrain(class vtTerrain *pTerr) { m_pTerrain = pTerr; }
 	void CameraChanged();
 	void CheckAndUpdatePos();
 
@@ -77,9 +76,8 @@ private:
 	float m_fDistRoad;
 
 	bool m_bSet;
-	DPoint3 m_EarthPos;
+	DPoint3 m_pos;
 	bool m_bOrtho;
-	class vtTerrain *m_pTerrain;
 
 private:
 	// WDR: handler declarations for CameraDlg

@@ -1,7 +1,7 @@
 //
 //  The menus functions of the main Frame window of the VTBuilder application.
 //
-// Copyright (c) 2001-2013 Virtual Terrain Project
+// Copyright (c) 2001-2012 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -21,7 +21,6 @@
 #include "vtdata/ChunkLOD.h"
 #include "vtdata/DataPath.h"
 #include "vtdata/ElevationGrid.h"
-#include "vtdata/FileFilters.h"
 #include "vtdata/Icosa.h"
 #include "vtdata/QuikGrid.h"
 #include "vtdata/TripDub.h"
@@ -39,6 +38,7 @@
 
 #include "App.h"
 #include "BuilderView.h"
+#include "FileFilters.h"
 #include "Frame.h"
 #include "MenuEnum.h"
 #include "Options.h"
@@ -79,7 +79,6 @@ EVT_MENU(ID_FILE_NEW,		MainFrame::OnProjectNew)
 EVT_MENU(ID_FILE_OPEN,		MainFrame::OnProjectOpen)
 EVT_MENU(ID_FILE_SAVE,		MainFrame::OnProjectSave)
 EVT_MENU(ID_FILE_PREFS,		MainFrame::OnProjectPrefs)
-EVT_MENU(ID_SPECIAL_FLIP,	MainFrame::OnElevFlip)
 EVT_MENU(ID_SPECIAL_BATCH,	MainFrame::OnBatchConvert)
 EVT_MENU(ID_SPECIAL_DYMAX_TEXTURES,	MainFrame::OnDymaxTexture)
 EVT_MENU(ID_SPECIAL_DYMAX_MAP,	MainFrame::OnDymaxMap)
@@ -106,6 +105,7 @@ EVT_MENU(ID_LAYER_IMPORT,		MainFrame::OnLayerImport)
 EVT_MENU(ID_LAYER_IMPORTTIGER,	MainFrame::OnLayerImportTIGER)
 EVT_MENU(ID_LAYER_IMPORTOSM,	MainFrame::OnLayerImportOSM)
 EVT_MENU(ID_LAYER_IMPORTNTF,	MainFrame::OnLayerImportNTF)
+EVT_MENU(ID_LAYER_IMPORTUTIL,	MainFrame::OnLayerImportUtil)
 EVT_MENU(ID_LAYER_IMPORT_MS,	MainFrame::OnLayerImportMapSource)
 EVT_MENU(ID_LAYER_IMPORT_POINT,	MainFrame::OnLayerImportPoint)
 EVT_MENU(ID_LAYER_IMPORT_XML,	MainFrame::OnLayerImportXML)
@@ -171,6 +171,7 @@ EVT_MENU(ID_ROAD_SHOWNODES,		MainFrame::OnRoadShowNodes)
 EVT_MENU(ID_ROAD_SELECTHWY,		MainFrame::OnSelectHwy)
 EVT_MENU(ID_ROAD_CLEAN,			MainFrame::OnRoadClean)
 EVT_MENU(ID_ROAD_GUESS,			MainFrame::OnRoadGuess)
+EVT_MENU(ID_ROAD_FLATTEN,		MainFrame::OnRoadFlatten)
 
 EVT_UPDATE_UI(ID_ROAD_SELECTROAD,	MainFrame::OnUpdateSelectLink)
 EVT_UPDATE_UI(ID_ROAD_SELECTNODE,	MainFrame::OnUpdateSelectNode)
@@ -178,6 +179,7 @@ EVT_UPDATE_UI(ID_ROAD_SELECTWHOLE,	MainFrame::OnUpdateSelectWhole)
 EVT_UPDATE_UI(ID_ROAD_DIRECTION,	MainFrame::OnUpdateDirection)
 EVT_UPDATE_UI(ID_ROAD_EDIT,			MainFrame::OnUpdateRoadEdit)
 EVT_UPDATE_UI(ID_ROAD_SHOWNODES,	MainFrame::OnUpdateRoadShowNodes)
+EVT_UPDATE_UI(ID_ROAD_FLATTEN,		MainFrame::OnUpdateRoadFlatten)
 
 EVT_MENU(ID_ELEV_SELECT,			MainFrame::OnElevSelect)
 EVT_MENU(ID_ELEV_REMOVERANGE,		MainFrame::OnElevRemoveRange)
@@ -195,7 +197,6 @@ EVT_MENU(ID_ELEV_PASTE_NEW,			MainFrame::OnElevPasteNew)
 EVT_MENU(ID_ELEV_BITMAP,			MainFrame::OnElevExportBitmap)
 EVT_MENU(ID_ELEV_TOTIN,				MainFrame::OnElevToTin)
 EVT_MENU(ID_ELEV_CONTOURS,			MainFrame::OnElevContours)
-EVT_MENU(ID_ELEV_CARVE,				MainFrame::OnElevCarve)
 EVT_MENU(ID_ELEV_MERGETIN,			MainFrame::OnElevMergeTin)
 EVT_MENU(ID_ELEV_TRIMTIN,			MainFrame::OnElevTrimTin)
 
@@ -214,7 +215,6 @@ EVT_UPDATE_UI(ID_ELEV_COPY,			MainFrame::OnUpdateIsGrid)
 EVT_UPDATE_UI(ID_ELEV_BITMAP,		MainFrame::OnUpdateIsGrid)
 EVT_UPDATE_UI(ID_ELEV_TOTIN,		MainFrame::OnUpdateIsGrid)
 EVT_UPDATE_UI(ID_ELEV_CONTOURS,		MainFrame::OnUpdateIsGrid)
-EVT_UPDATE_UI(ID_ELEV_CARVE,		MainFrame::OnUpdateIsGrid)
 EVT_UPDATE_UI(ID_ELEV_MERGETIN,		MainFrame::OnUpdateElevMergeTin)
 EVT_UPDATE_UI(ID_ELEV_TRIMTIN,		MainFrame::OnUpdateElevTrimTin)
 
@@ -288,36 +288,36 @@ EVT_MENU(ID_RAW_ADDPOINTS,			MainFrame::OnRawAddPoints)
 EVT_MENU(ID_RAW_ADDPOINT_TEXT,		MainFrame::OnRawAddPointText)
 EVT_MENU(ID_RAW_ADDPOINTS_GPS,		MainFrame::OnRawAddPointsGPS)
 EVT_MENU(ID_RAW_ADDFEATURE_WKT,		MainFrame::OnRawAddFeatureWKT)
+EVT_MENU(ID_RAW_SELECTCONDITION,	MainFrame::OnRawSelectCondition)
+EVT_MENU(ID_RAW_CONVERT_TOTIN,		MainFrame::OnRawConvertToTIN)
+EVT_MENU(ID_RAW_CONVERT_TOPOLYS,	MainFrame::OnRawConvertToPolygons)
+EVT_MENU(ID_RAW_EXPORT_IMAGEMAP,	MainFrame::OnRawExportImageMap)
+EVT_MENU(ID_RAW_EXPORT_KML,			MainFrame::OnRawExportKML)
+EVT_MENU(ID_RAW_GENERATE_ELEVATION,	MainFrame::OnRawGenElevation)
 EVT_MENU(ID_RAW_STYLE,				MainFrame::OnRawStyle)
 EVT_MENU(ID_RAW_SCALE_H,			MainFrame::OnRawScaleH)
 EVT_MENU(ID_RAW_SCALE_V,			MainFrame::OnRawScaleV)
 EVT_MENU(ID_RAW_OFFSET_V,			MainFrame::OnRawOffsetV)
 EVT_MENU(ID_RAW_CLEAN,				MainFrame::OnRawClean)
 EVT_MENU(ID_RAW_SELECT_BAD,			MainFrame::OnRawSelectBad)
-EVT_MENU(ID_RAW_SELECTCONDITION,	MainFrame::OnRawSelectCondition)
-EVT_MENU(ID_RAW_EXPORT_IMAGEMAP,	MainFrame::OnRawExportImageMap)
-EVT_MENU(ID_RAW_EXPORT_KML,			MainFrame::OnRawExportKML)
-EVT_MENU(ID_RAW_GENERATE_ELEVATION,	MainFrame::OnRawGenElevation)
-EVT_MENU(ID_RAW_GENERATE_TIN,		MainFrame::OnRawGenerateTIN)
-EVT_MENU(ID_RAW_CONVERT_TOPOLYS,	MainFrame::OnRawConvertToPolygons)
 
 EVT_UPDATE_UI(ID_RAW_SETTYPE,			MainFrame::OnUpdateRawSetType)
 EVT_UPDATE_UI(ID_RAW_ADDPOINTS,			MainFrame::OnUpdateRawAddPoints)
 EVT_UPDATE_UI(ID_RAW_ADDPOINT_TEXT,		MainFrame::OnUpdateRawAddPointText)
 EVT_UPDATE_UI(ID_RAW_ADDPOINTS_GPS,		MainFrame::OnUpdateRawAddPointsGPS)
 EVT_UPDATE_UI(ID_RAW_ADDFEATURE_WKT,	MainFrame::OnUpdateRawIsActive)
+EVT_UPDATE_UI(ID_RAW_SELECTCONDITION,	MainFrame::OnUpdateRawIsActive)
+EVT_UPDATE_UI(ID_RAW_CONVERT_TOTIN,		MainFrame::OnUpdateRawIsActive)
+EVT_UPDATE_UI(ID_RAW_CONVERT_TOPOLYS,	MainFrame::OnUpdateRawIsActive)
+EVT_UPDATE_UI(ID_RAW_EXPORT_IMAGEMAP,	MainFrame::OnUpdateRawIsActive)
+EVT_UPDATE_UI(ID_RAW_EXPORT_KML,		MainFrame::OnUpdateRawIsActive)
+EVT_UPDATE_UI(ID_RAW_GENERATE_ELEVATION,MainFrame::OnUpdateRawGenElevation)
 EVT_UPDATE_UI(ID_RAW_STYLE,				MainFrame::OnUpdateRawIsActive)
 EVT_UPDATE_UI(ID_RAW_SCALE_H,			MainFrame::OnUpdateRawIsActive)
 EVT_UPDATE_UI(ID_RAW_SCALE_V,			MainFrame::OnUpdateRawIsActive3D)
 EVT_UPDATE_UI(ID_RAW_OFFSET_V,			MainFrame::OnUpdateRawIsActive3D)
-EVT_UPDATE_UI(ID_RAW_CLEAN,				MainFrame::OnUpdateRawHasPolylines)
+EVT_UPDATE_UI(ID_RAW_CLEAN,				MainFrame::OnUpdateRawIsPolygon)
 EVT_UPDATE_UI(ID_RAW_SELECT_BAD,		MainFrame::OnUpdateRawIsPolygon)
-EVT_UPDATE_UI(ID_RAW_SELECTCONDITION,	MainFrame::OnUpdateRawIsActive)
-EVT_UPDATE_UI(ID_RAW_EXPORT_IMAGEMAP,	MainFrame::OnUpdateRawIsPolygon)
-EVT_UPDATE_UI(ID_RAW_EXPORT_KML,		MainFrame::OnUpdateRawIsPoint)
-EVT_UPDATE_UI(ID_RAW_GENERATE_ELEVATION,MainFrame::OnUpdateRawGenElevation)
-EVT_UPDATE_UI(ID_RAW_GENERATE_TIN,		MainFrame::OnUpdateRawIsActive)
-EVT_UPDATE_UI(ID_RAW_CONVERT_TOPOLYS,	MainFrame::OnUpdateRawIsActive)
 
 EVT_MENU(ID_AREA_CLEAR,				MainFrame::OnAreaClear)
 EVT_MENU(ID_AREA_ZOOM_ALL,			MainFrame::OnAreaZoomAll)
@@ -388,7 +388,6 @@ void MainFrame::CreateMenus()
 	fileMenu->Append(ID_FILE_MRU, _("Recent Projects"), mruMenu);
 	fileMenu->AppendSeparator();
 	wxMenu *specialMenu = new wxMenu;
-	specialMenu->Append(ID_SPECIAL_FLIP, _("&Flip Elevation North/South"));
 	specialMenu->Append(ID_SPECIAL_BATCH, _("Batch Conversion of Elevation"));
 	specialMenu->Append(ID_SPECIAL_DYMAX_TEXTURES, _("Create Dymaxion Textures"));
 	specialMenu->Append(ID_SPECIAL_DYMAX_MAP, _("Create Dymaxion Map"));
@@ -397,7 +396,7 @@ void MainFrame::CreateMenus()
 	specialMenu->Append(ID_SPECIAL_RUN_TEST, _("Run test"));
 	specialMenu->Append(ID_ELEV_COPY, _("Copy Elevation Layer to Clipboard"));
 	specialMenu->Append(ID_ELEV_PASTE_NEW, _("New Elevation Layer from Clipboard"));
-	fileMenu->Append(0, _T("&") + _("Special"), specialMenu);
+	fileMenu->Append(0, _("Special"), specialMenu);
 	fileMenu->AppendSeparator();
 	fileMenu->Append(ID_FILE_PREFS, _("Preferences"));
 	fileMenu->AppendSeparator();
@@ -496,6 +495,7 @@ void MainFrame::CreateMenus()
 	roadMenu->AppendSeparator();
 	roadMenu->Append(ID_ROAD_CLEAN, _("Clean RoadMap"), _("Clean"));
 	roadMenu->Append(ID_ROAD_GUESS, _("Guess Intersection Types"));
+	roadMenu->Append(ID_ROAD_FLATTEN, _("Flatten Elevation Grid Under Roads"));
 	m_pMenuBar->Append(roadMenu, _("&Roads"));
 	m_iLayerMenu[LT_ROAD] = menu_num;
 	menu_num++;
@@ -533,7 +533,6 @@ void MainFrame::CreateMenus()
 	elevMenu->Append(ID_ELEV_BITMAP, _("Re&nder to Bitmap..."));
 	elevMenu->Append(ID_ELEV_TOTIN, _("Convert Grid to TIN"));
 	elevMenu->Append(ID_ELEV_CONTOURS, _("Generate Contours"));
-	elevMenu->Append(ID_ELEV_CARVE, _("Carve Grid with Culture"));
 	elevMenu->AppendSeparator();
 	elevMenu->Append(ID_ELEV_MERGETIN, _("&Merge shared TIN vertices"));
 	elevMenu->AppendCheckItem(ID_ELEV_TRIMTIN, _("Trim TIN triangles by line segment"));
@@ -613,7 +612,7 @@ void MainFrame::CreateMenus()
 	rawMenu->Append(ID_RAW_EXPORT_IMAGEMAP, _("Export as HTML ImageMap"));
 	rawMenu->Append(ID_RAW_EXPORT_KML, _("Export as KML"));
 	rawMenu->Append(ID_RAW_GENERATE_ELEVATION, _("Generate Grid from 3D Points"));
-	rawMenu->Append(ID_RAW_GENERATE_TIN, _("Generate TIN"));
+	rawMenu->Append(ID_RAW_CONVERT_TOTIN, _("Generate TIN"));
 	rawMenu->Append(ID_RAW_CONVERT_TOPOLYS, _("Generate Polygons from Polylines"));
 	m_pMenuBar->Append(rawMenu, _("Ra&w"));
 	m_iLayerMenu[LT_RAW] = menu_num;
@@ -655,7 +654,7 @@ void MainFrame::CreateMenus()
 	// Help
 	helpMenu = new wxMenu;
 	wxString msg = _("About ");
-	msg += wxString("VTBuilder", wxConvUTF8);
+	msg += wxString(APPNAME, wxConvUTF8);
 #ifdef __WXMAC__
 #endif
 	helpMenu->Append(wxID_HELP, _("&About"), msg);
@@ -706,7 +705,10 @@ void MainFrame::OnProjectNew(wxCommandEvent &event)
 
 wxString GetProjectFilter()
 {
-	return FSTRING_VTB;
+	wxString str(APPNAME, wxConvUTF8);
+	str += _T(" ");
+	str += _("Project Files (*.vtb)|*.vtb");
+	return str;
 }
 
 void MainFrame::OnProjectOpen(wxCommandEvent &event)
@@ -799,29 +801,6 @@ void MainFrame::OnProjectPrefs(wxCommandEvent &event)
 		// safety checks
 		CheckOptionBounds();
 	}
-}
-
-void MainFrame::OnElevFlip(wxCommandEvent &event)
-{
-	vtElevLayer *t = GetActiveElevLayer();
-	if (!t || !t->GetGrid())
-		return;
-
-	// Quick and dirty flip code.  Yes, this could be optimized.
-	vtElevationGrid *grid = t->GetGrid();
-	IPoint2 dim = grid->GetDimensions();
-	for (int j = 0; j < dim.y / 2; j++)
-	{
-		for (int i = 0; i < dim.x; i++)
-		{
-			float f = grid->GetFValue(i, j);
-			grid->SetFValue(i, j, grid->GetFValue(i, dim.y - 1 - j));
-			grid->SetFValue(i, dim.y - 1 - j, f);
-		}
-	}
-	t->SetModified(true);
-	t->ReRender();
-	m_pView->Refresh();
 }
 
 void MainFrame::OnBatchConvert(wxCommandEvent &event)
@@ -1107,8 +1086,7 @@ void MainFrame::OnLayerNew(wxCommandEvent &event)
 	if (lt == LT_ELEVATION)
 	{
 		vtElevLayer *pEL = (vtElevLayer *)pL;
-		vtElevationGrid *grid = new vtElevationGrid(m_area, IPoint2(1025, 1025),
-			false, m_proj);
+		vtElevationGrid *grid = new vtElevationGrid(m_area, 1025, 1025, false, m_proj);
 		grid->FillWithSingleValue(1000);
 		pEL->SetGrid(grid);
 	}
@@ -1277,7 +1255,6 @@ void MainFrame::OnLayerImportOSM(wxCommandEvent &event)
 	UpdateProgressDialog(0, loadFile.GetPath());
 
 	LayerArray layers;
-	layers.SetOwnership(false);
 	ImportDataFromOSM(loadFile.GetPath(), layers, progress_callback);
 
 	CloseProgressDialog();
@@ -1295,10 +1272,43 @@ void MainFrame::OnLayerImportNTF(wxCommandEvent &event)
 		return;
 
 	LayerArray layers;
-	layers.SetOwnership(false);
 	ImportDataFromNTF(loadFile.GetPath(), layers);
 	for (uint i = 0; i < layers.size(); i++)
 		AddLayerWithCheck(layers[i], true);
+}
+
+void MainFrame::OnLayerImportUtil(wxCommandEvent &event)
+{
+	// ask the user for a directory
+	wxDirDialog getDir(NULL, _("Import Utility Data from Directory of SHP Files"));
+	bool bResult = (getDir.ShowModal() == wxID_OK);
+	if (!bResult)
+		return;
+	wxString strDirName = getDir.GetPath();
+
+//	dlg.m_strCaption = _T("Shapefiles do not contain projection information.  ")
+//		_T("Please indicate the projection of this file:");
+	// ask user for a projection
+	ProjectionDlg dlg(NULL, -1, _("Indicate Projection"));
+	dlg.SetProjection(m_proj);
+
+	if (dlg.ShowModal() == wxID_CANCEL)
+		return;
+	vtProjection proj;
+	dlg.GetProjection(proj);
+
+	// create the new layers
+	vtUtilityLayer *pUL = new vtUtilityLayer;
+	if (pUL->ImportFromSHP(strDirName.mb_str(wxConvUTF8), proj))
+	{
+		pUL->SetLayerFilename(strDirName);
+		pUL->SetModified(true);
+
+		if (!AddLayerWithCheck(pUL, true))
+			delete pUL;
+	}
+	else
+		delete pUL;
 }
 
 //
@@ -1342,7 +1352,7 @@ void MainFrame::OnLayerImportPoint(wxCommandEvent &event)
 void MainFrame::OnLayerImportXML(wxCommandEvent &event)
 {
 	wxFileDialog loadFile(NULL, _("Import XML Data"), _T(""), _T(""),
-		FSTRING_XML, wxFD_OPEN);
+		_("XML files (*.xml)|*.xml"), wxFD_OPEN);
 
 	if (loadFile.ShowModal() != wxID_OK)
 		return;
@@ -1364,7 +1374,7 @@ void MainFrame::OnLayerImportXML(wxCommandEvent &event)
 void MainFrame::OnLayerImportDXF(wxCommandEvent &event)
 {
 	wxFileDialog loadFile(NULL, _("Import DXF Data"), _T(""), _T(""),
-		FSTRING_DXF, wxFD_OPEN);
+		_("DXF files (*.dxf)|*.dxf"), wxFD_OPEN);
 
 	if (loadFile.ShowModal() != wxID_OK)
 		return;
@@ -1922,6 +1932,32 @@ void MainFrame::OnRoadGuess(wxCommandEvent &event)
 	m_pView->Refresh();
 }
 
+void MainFrame::OnRoadFlatten(wxCommandEvent &event)
+{
+	if (m_proj.IsGeographic())
+	{
+		wxMessageBox(_("Sorry, but precise grid operations require a non-geographic coordinate\n system (meters as horizontal units, not degrees.)"),
+			_("Info"), wxOK);
+		return;
+	}
+
+	float margin = 2.0;
+	wxString str;
+	str.Printf(_T("%g"), margin);
+	str = wxGetTextFromUser(_("How many meters for the margin at the edge of each road?"),
+		_("Flatten elevation grid under roads"), str, this);
+	if (str == _T(""))
+		return;
+
+	margin = atof(str.mb_str(wxConvUTF8));
+
+	vtRoadLayer *pR = (vtRoadLayer *)GetMainFrame()->FindLayerOfType(LT_ROAD);
+	vtElevLayer *pE = (vtElevLayer *)GetMainFrame()->FindLayerOfType(LT_ELEVATION);
+
+	pR->CarveRoadway(pE, margin);
+	m_pView->Refresh();
+}
+
 void MainFrame::OnUpdateRoadFlatten(wxUpdateUIEvent& event)
 {
 	vtElevLayer *pE = (vtElevLayer *)GetMainFrame()->FindLayerOfType(LT_ELEVATION);
@@ -2262,8 +2298,8 @@ void MainFrame::OnElevExportBitmap(wxCommandEvent& event)
 	pEL->GetGrid()->GetDimensions(cols, rows);
 
 	RenderDlg dlg(this, -1, _("Render Elevation to Bitmap"));
-	dlg.m_Size.x = cols;
-	dlg.m_Size.y = rows;
+	dlg.m_iSizeX = cols;
+	dlg.m_iSizeY = rows;
 
 	if (dlg.ShowModal() == wxID_CANCEL)
 		return;
@@ -2281,13 +2317,6 @@ void MainFrame::OnElevToTin(wxCommandEvent& event)
 	vtTin2d *tin = new vtTin2d(grid);
 	vtElevLayer *pEL = new vtElevLayer;
 	pEL->SetTin(tin);
-
-	// Inherit the name
-	wxString name = pEL1->GetLayerFilename();
-	name = name.BeforeLast('.');
-	name += _T(".itf");
-	pEL->SetLayerFilename(name);
-
 	AddLayer(pEL);
 	SetActiveLayer(pEL);
 
@@ -2375,38 +2404,6 @@ void MainFrame::OnElevContours(wxCommandEvent& event)
 
 	m_pView->Refresh();
 #endif // SUPPORT_QUIKGRID
-}
-
-void MainFrame::OnElevCarve(wxCommandEvent &event)
-{
-	if (m_proj.IsGeographic())
-	{
-		wxMessageBox(_("Sorry, but precise grid operations require a non-geographic coordinate\n system (meters as horizontal units, not degrees.)"),
-			_("Info"), wxOK);
-		return;
-	}
-
-	// Must have at least some culture to carve
-	vtRoadLayer *pR = (vtRoadLayer *) FindLayerOfType(LT_ROAD);
-	vtStructureLayer *pS = (vtStructureLayer *) FindLayerOfType(LT_STRUCTURE);
-	if (!pR && !pS)
-		return;
-
-	vtElevLayer *pEL = GetActiveElevLayer();
-	vtElevationGrid *grid = pEL->GetGrid();
-
-	float margin = 2.0;
-	wxString str;
-	str.Printf(_T("%g"), margin);
-	str = wxGetTextFromUser(_("How many meters for the margin at the edge of each feature?"),
-		_("Carve elevation grid under culture"), str, this);
-	if (str == _T(""))
-		return;
-
-	margin = atof(str.mb_str(wxConvUTF8));
-
-	CarveWithCulture(pEL, margin);
-	m_pView->Refresh();
 }
 
 void MainFrame::OnElevMergeTin(wxCommandEvent& event)
@@ -2818,6 +2815,8 @@ void MainFrame::OnVegPlants(wxCommandEvent& event)
 	// if SpeciesList has not previously been open, get the data from file first
 	if (m_strSpeciesFilename == "")
 	{
+		wxString filter = _("Plant Species List Files (*.xml)|*.xml");
+
 		// To make it easier for the user, look for a species.xml on the path and
 		// suggest that as the folder to look in.
 		wxString default_dir;
@@ -2838,7 +2837,6 @@ void MainFrame::OnVegPlants(wxCommandEvent& event)
 			default_file.Replace("/", "\\");
 #endif
 		}
-		wxString filter = _("Plant Species List Files (*species.xml)|*.xml");
 
 		// Use file dialog to open plant list text file.
 		wxFileDialog loadFile(NULL, _("Load Plant Info"), default_dir,
@@ -2928,7 +2926,7 @@ void MainFrame::OnVegRemap(wxCommandEvent& event)
 	float size;
 	short species_id;
 	int count = 0;
-	for (i = 0; i < pPIA->NumEntities(); i++)
+	for (i = 0; i < pPIA->GetNumEntities(); i++)
 	{
 		pPIA->GetPlant(i, size, species_id);
 		if (species_id == species_from)
@@ -2951,7 +2949,7 @@ void MainFrame::OnVegExportSHP(wxCommandEvent& event)
 
 	// Open File Save Dialog
 	wxFileDialog saveFile(NULL, _("Export vegetation to SHP"), _T(""), _T(""),
-		FSTRING_SHP, wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+		_("Vegetation Files (*.shp)|*.shp"), wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
 	if (saveFile.ShowModal() == wxID_CANCEL)
 		return;
 	wxString strPathName = saveFile.GetPath();
@@ -2967,7 +2965,7 @@ void MainFrame::OnVegHTML(wxCommandEvent& event)
 
 	// Open File Save Dialog
 	wxFileDialog saveFile(NULL, _("Export vegetation to SHP"), _T(""), _T("plant_list.html"),
-		FSTRING_SHP, wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+		_("Vegetation Files (*.shp)|*.shp"), wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
 	if (saveFile.ShowModal() == wxID_CANCEL)
 		return;
 	wxString strPathName = saveFile.GetPath();
@@ -2985,7 +2983,7 @@ void MainFrame::OnAreaGenerateVeg(wxCommandEvent& event)
 {
 	// Open File Save Dialog
 	wxFileDialog saveFile(NULL, _("Save Vegetation File"), _T(""), _T(""),
-		FSTRING_VF, wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+		_("Vegetation Files (*.vf)|*.vf"), wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
 
 	if (saveFile.ShowModal() == wxID_CANCEL)
 		return;
@@ -3023,7 +3021,7 @@ void MainFrame::OnAreaVegDensity(wxCommandEvent& event)
 	if (!vlay) return;
 	vtPlantInstanceArray *pia = vlay->GetPIA();
 	if (!pia) return;
-	uint ent = pia->NumEntities();
+	uint ent = pia->GetNumEntities();
 	vtSpeciesList *list = GetMainFrame()->GetSpeciesList();
 
 	// Put the results in a biotype as well
@@ -3252,7 +3250,7 @@ void MainFrame::OnStructureSelectUsingPolygons(wxCommandEvent &event)
 			vtFeatureSetPolygon *pFeatureSetPolygon = dynamic_cast<vtFeatureSetPolygon*>(pRawLayer->GetFeatureSet());
 			if (NULL != pFeatureSetPolygon)
 			{
-				uint iNumEntities = pFeatureSetPolygon->NumEntities();
+				uint iNumEntities = pFeatureSetPolygon->GetNumEntities();
 				uint iIndex;
 				for (iIndex = 0; iIndex < iNumEntities; iIndex++)
 				{
@@ -3321,7 +3319,7 @@ void MainFrame::OnStructureColourSelectedRoofs(wxCommandEvent& event)
 
 			vtBuilding* pBuilding = pStructure->GetBuilding();
 			if (pBuilding)
-				pBuilding->GetLevel(pBuilding->NumLevels() - 1)->SetEdgeColor(RoofColour);
+				pBuilding->GetLevel(pBuilding->GetNumLevels() - 1)->SetEdgeColor(RoofColour);
 		}
 	}
 }
@@ -3393,7 +3391,7 @@ void MainFrame::OnStructureExportFootprints(wxCommandEvent& event)
 {
 	// Open File Save Dialog
 	wxFileDialog saveFile(NULL, _("Export footprints to SHP"), _T(""), _T(""),
-		FSTRING_SHP, wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+		_("SHP Files (*.shp)|*.shp"), wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
 
 	if (saveFile.ShowModal() == wxID_CANCEL)
 		return;
@@ -3407,7 +3405,7 @@ void MainFrame::OnStructureExportCanoma(wxCommandEvent& event)
 {
 	// Open File Save Dialog
 	wxFileDialog saveFile(NULL, _("Export footprints to Canoma3DV"), _T(""), _T(""),
-		FSTRING_3DV, wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+		_("Canoma3DV Files (*.3dv)|*.3dv"), wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
 
 	if (saveFile.ShowModal() == wxID_CANCEL)
 		return;
@@ -3457,21 +3455,6 @@ void MainFrame::OnUpdateRawIsPolygon(wxUpdateUIEvent& event)
 	// if the current layer is polygon
 	vtRawLayer *pRL = GetActiveRawLayer();
 	event.Enable(pRL != NULL && pRL->GetGeomType() == wkbPolygon);
-}
-
-void MainFrame::OnUpdateRawIsPoint(wxUpdateUIEvent& event)
-{
-	// if the current layer is polygon
-	vtRawLayer *pRL = GetActiveRawLayer();
-	event.Enable(pRL != NULL && (pRL->GetGeomType() == wkbPoint ||
-								 pRL->GetGeomType() == wkbPoint25D));
-}
-
-void MainFrame::OnUpdateRawHasPolylines(wxUpdateUIEvent& event)
-{
-	vtRawLayer *pRL = GetActiveRawLayer();
-	event.Enable(pRL != NULL && (pRL->GetGeomType() == wkbPolygon ||
-		pRL->GetGeomType() == wkbLineString));
 }
 
 void MainFrame::OnRawSetType(wxCommandEvent& event)
@@ -3536,10 +3519,11 @@ void MainFrame::OnRawAddPointText(wxCommandEvent& event)
 			_("Enter coordinate"));
 	if (str == _T(""))
 		return;
-	DPoint2 p;
-	int num = sscanf(str.mb_str(wxConvUTF8), "%lf, %lf", &p.x, &p.y);
+	double x, y;
+	int num = sscanf(str.mb_str(wxConvUTF8), "%lf, %lf", &x, &y);
 	if (num != 2)
 		return;
+	DPoint2 p(x, y);
 
 	vtRawLayer *pRL = GetActiveRawLayer();
 	pRL->AddPoint(p);
@@ -3606,7 +3590,7 @@ void MainFrame::OnRawSelectCondition(wxCommandEvent& event)
 	vtRawLayer *pRL = GetActiveRawLayer();
 	vtFeatureSet *pFS = pRL->GetFeatureSet();
 
-	if (!pFS || pFS->NumFields() == 0)
+	if (!pFS || pFS->GetNumFields() == 0)
 	{
 		DisplayAndLog("Can't select by condition because the current\n"
 					  "layer has no fields defined.");
@@ -3637,10 +3621,8 @@ void MainFrame::OnRawSelectCondition(wxCommandEvent& event)
 	}
 }
 
-void MainFrame::OnRawGenerateTIN(wxCommandEvent& event)
+void MainFrame::OnRawConvertToTIN(wxCommandEvent& event)
 {
-	VTLOG1("OnRawGenerateTIN\n");
-
 	vtRawLayer *pRaw = GetActiveRawLayer();
 	vtFeatureSet *pSet = pRaw->GetFeatureSet();
 	vtTin2d *tin;
@@ -3650,7 +3632,7 @@ void MainFrame::OnRawGenerateTIN(wxCommandEvent& event)
 		tin = new vtTin2d(setpo3);
 	else if (setpg)
 	{
-		uint n = setpg->NumFields();
+		uint n = setpg->GetNumFields();
 
 		int field_num = -1;
 		float height = 0.0f;
@@ -3713,7 +3695,7 @@ void MainFrame::OnRawConvertToPolygons(wxCommandEvent& event)
 	{
 		vtFeatureSetPolygon *polys = new vtFeatureSetPolygon;
 
-		for (uint i = 0; i < setls2->NumEntities(); i++)
+		for (uint i = 0; i < setls2->GetNumEntities(); i++)
 		{
 			const DLine2 &polyline = setls2->GetPolyLine(i);
 			int npoints = polyline.GetSize();
@@ -3728,7 +3710,7 @@ void MainFrame::OnRawConvertToPolygons(wxCommandEvent& event)
 				polys->AddPolygon(dpoly);
 			}
 		}
-		if (polys->NumEntities() == 0)
+		if (polys->GetNumEntities() == 0)
 		{
 			DisplayAndLog("Didn't find any closed polylines");
 			delete polys;
@@ -3792,20 +3774,21 @@ void MainFrame::OnRawExportImageMap(wxCommandEvent& event)
 
 	// First grab image
 	BuilderView *view = GetView();
-	IPoint2 size;
-	view->GetClientSize(&size.x, &size.y);
+	int xsize, ysize;
+	view->GetClientSize(&xsize, &ysize);
 
 	wxClientDC dc(view);
 	view->PrepareDC(dc);
 
 	vtDIB dib;
-	dib.Create(size, 24);
+	dib.Create(xsize, ysize, 24);
 
+	int x, y;
 	int xx, yy;
 	wxColour color;
-	for (int x = 0; x < size.x; x++)
+	for (x = 0; x < xsize; x++)
 	{
-		for (int y = 0; y < size.y; y++)
+		for (y = 0; y < ysize; y++)
 		{
 			view->CalcUnscrolledPosition(x, y, &xx, &yy);
 			dc.GetPixel(xx, yy, &color);
@@ -3844,7 +3827,7 @@ void MainFrame::OnRawExportImageMap(wxCommandEvent& event)
 	fprintf(fp, "<map name=\"ImageMap\">\n");
 
 	vtFeatureSetPolygon *polyset = (vtFeatureSetPolygon *) fset;
-	uint i, num = polyset->NumEntities();
+	uint i, num = polyset->GetNumEntities();
 	wxPoint sp;		// screen point
 
 	for (i = 0; i < num; i++)
@@ -3882,7 +3865,7 @@ void MainFrame::OnRawExportImageMap(wxCommandEvent& event)
 	}
 	fprintf(fp, "</map>\n");
 	fprintf(fp, "<img border=\"0\" src=\"%s\" usemap=\"#ImageMap\" width=\"%d\" height=\"%d\">\n",
-		(const char *) filename, size.x, size.y);
+		(const char *) filename, xsize, ysize);
 	fprintf(fp, "</body>\n");
 	fprintf(fp, "</html>\n");
 	fclose(fp);
@@ -3923,8 +3906,8 @@ void MainFrame::OnRawGenElevation(wxCommandEvent& event)
 	GenGridDlg dlg(this, -1, _("Generate Grid from 3D Points"), bIsGeo);
 	dlg.m_fAreaX = extent.Width();
 	dlg.m_fAreaY = extent.Height();
-	dlg.m_Size.x = 512;
-	dlg.m_Size.y = 512;
+	dlg.m_iSizeX = 512;
+	dlg.m_iSizeY = 512;
 	dlg.RecomputeSize();
 	dlg.m_fDistanceCutoff = 1.5f;
 
@@ -3937,7 +3920,8 @@ void MainFrame::OnRawGenElevation(wxCommandEvent& event)
 	OpenProgressDialog(_T("Creating Grid"), true);
 	int xsize = 800;
 	int ysize = 300;
-	if (el->CreateFromPoints(pSet, dlg.m_Size, dlg.m_fDistanceCutoff))
+	if (el->CreateFromPoints(pSet, dlg.m_iSizeX, dlg.m_iSizeY,
+			dlg.m_fDistanceCutoff))
 		AddLayerWithCheck(el);
 	else
 		delete el;
@@ -4089,7 +4073,7 @@ void MainFrame::OnHelpAbout(wxCommandEvent &event)
 #endif
 
 	wxString str2 = _("About ");
-	str2 += wxString("VTBuilder", wxConvUTF8);
+	str2 += wxString(APPNAME, wxConvUTF8);
 	wxMessageBox(str, str2);
 }
 

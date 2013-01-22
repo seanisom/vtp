@@ -49,6 +49,7 @@ public:
 	bool SelectArea(const DRECT &box, bool nodemode, bool crossSelect);
 	void DoClean();
 	void MoveSelectedNodes(const DPoint2 &offset);
+	void CarveRoadway(class vtElevLayer *pElev, float margin);
 
 	//edit a single node
 	bool EditNodeProperties(BuilderView *pView, const DPoint2 &point, float error, DRECT &bound);

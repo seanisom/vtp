@@ -1,111 +1,15 @@
 //
 // TerrainLayers.cpp
 //
-// Copyright (c) 2006-2013 Virtual Terrain Project
+// Copyright (c) 2006-2007 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
 #include "vtlib/vtlib.h"
-#include "vtlib/vtosg/MultiTexture.h"
-#include "vtlib/core/Light.h"
-
-#include "vtdata/DataPath.h"
-
-#include "TParams.h"
 #include "TerrainLayers.h"
-#include "vtTin3d.h"
-#include "SurfaceTexture.h"
-
 
 ////////////////////////////////////////////////////////////////////////////
-// Structures
-
-vtStructureLayer::vtStructureLayer() : vtLayer(LT_STRUCTURE)
-{
-	m_Props.SetValueString("Type", TERR_LTYPE_STRUCTURE);
-}
-
-
-////////////////////////////////////////////////////////////////////////////
-// Vegetation
-
-vtVegLayer::vtVegLayer() : vtLayer(LT_VEG)
-{
-	m_Props.SetValueString("Type", TERR_LTYPE_VEGETATION);
-}
-
-
-////////////////////////////////////////////////////////////////////////////
-// Imagery
-
-vtImageLayer::vtImageLayer() : vtLayer(LT_IMAGE)
-{
-	m_Props.SetValueString("Type", TERR_LTYPE_IMAGE);
-
-	m_pImage = new vtImageGeo;
-	m_pMultiTexture = NULL;
-}
-
-vtImageLayer::~vtImageLayer()
-{
-	m_pMultiTexture = NULL;
-}
-
-void vtImageLayer::SetVisible(bool vis)
-{
-	if (m_pMultiTexture)
-		m_pMultiTexture->Enable(vis);
-	vtLayerBase::SetVisible(vis);
-}
-
-
-////////////////////////////////////////////////////////////////////////////
-// Elevation Surfaces
-
-vtElevLayer::vtElevLayer() : vtLayer(LT_ELEVATION)
-{
-	m_Props.SetValueString("Type", TERR_LTYPE_ELEVATION);
-}
-
-void vtElevLayer::SetLayerName(const vtString &fname)
-{
-	m_Props.SetValueString("Filename", fname);
-}
-
-vtString vtElevLayer::GetLayerName()
-{
-	return m_Props.GetValueString("Filename");
-}
-
-void vtElevLayer::SetVisible(bool vis)
-{
-	if (m_pTin.get() && m_pTin->GetGeometry())
-	{
-		m_pTin->GetGeometry()->SetEnabled(vis);
-	}
-	vtLayerBase::SetVisible(vis);
-}
-
-bool vtElevLayer::Load(const vtString &path, bool progress_callback(int))
-{
-	m_pTin = new vtTin3d;
-	if (!m_pTin->Read(path))
-		return false;
-
-	vtGeode *geode = m_pTin->CreateGeometry(false);
-	geode->SetCastShadow(false);
-//	m_pTerrainGroup->addChild(geode);
-
-	return true;
-}
-
-void vtElevLayer::MakeMaterials()
-{
-	m_pTin->MakeMaterialsFromOptions(m_Props);
-}
-
-////////////////////////////////////////////////////////////////////////////
-// LayerSet
+// Layers
 
 void LayerSet::Remove(vtLayer *lay)
 {
@@ -156,3 +60,25 @@ vtStructureLayer *LayerSet::FindStructureFromNode(osg::Node *pNode, int &iOffset
 	return NULL;
 }
 
+vtImageLayer::vtImageLayer() : vtLayer(LT_IMAGE)
+{
+	m_pImage = new vtImageGeo;
+	m_pMultiTexture = NULL;
+}
+
+vtImageLayer::~vtImageLayer()
+{
+	delete m_pMultiTexture;
+}
+
+void vtImageLayer::SetVisible(bool vis)
+{
+	if (m_pMultiTexture)
+		EnableMultiTexture(m_pMultiTexture->m_pNode, m_pMultiTexture, vis);
+}
+bool vtImageLayer::GetVisible()
+{
+	if (m_pMultiTexture)
+		return MultiTextureIsEnabled(m_pMultiTexture->m_pNode, m_pMultiTexture);
+	return false;
+}

@@ -4,12 +4,13 @@
 // Terrain implementation specific to the Big Island of Hawai'i.
 //  Actually, this is a place where a lot of test and example code lives.
 //
-// Copyright (c) 2001-2013 Virtual Terrain Project
+// Copyright (c) 2001-2011 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
 #include "vtlib/vtlib.h"
 #include "vtlib/core/Content3d.h"
+#include "vtlib/core/TerrainScene.h"	// for vtGetContent
 #include "vtdata/Features.h"
 #include "vtdata/vtLog.h"
 #include "vtdata/FilePath.h"
@@ -25,7 +26,6 @@ IslandTerrain::IslandTerrain()
 	m_pSA = NULL;
 }
 
-#if 0
 void IslandTerrain::PaintDib(bool progress_callback(int))
 {
 	if (g_bLineOfSightTest)
@@ -37,14 +37,16 @@ void IslandTerrain::PaintDib(bool progress_callback(int))
 
 		vtImageWrapper wrap(m_pUnshadedImage);
 	
-		const IPoint2 size = wrap.GetSize();
+		int width = wrap.GetWidth();
+		int height = wrap.GetHeight();
 
 		FPoint3 tpos;
-		for (int i = 0; i < size.x; i++)
+		int i, j;
+		for (i = 0; i < width; i++)
 		{
-			for (int j = 0; j < size.y; j++)
+			for (j = 0; j < height; j++)
 			{
-				pGrid->GetWorldLocation(i, size.y-1-j, tpos);
+				pGrid->GetWorldLocation(i, height-1-j, tpos);
 				tpos.y += 1;
 				if (pGrid->LineOfSight(campos, tpos))
 					wrap.SetPixel24(i, j, RGBi(255,128,128));
@@ -56,7 +58,6 @@ void IslandTerrain::PaintDib(bool progress_callback(int))
 	else
 		vtTerrain::PaintDib(progress_callback);
 }
-#endif
 
 class SpinEngine: public vtEngine
 {
@@ -274,7 +275,6 @@ void IslandTerrain::create_state_park()
 #endif
 	}
 
-#if 0
 	// An example of how to add the content definitions from a content
 	//	file (vtco) to the global content manager.
 	vtContentManager3d &con = vtGetContent();
@@ -287,7 +287,6 @@ void IslandTerrain::create_state_park()
 		string str = e.getFormattedMessage();
 		VTLOG("Error: '%s'\n", str.c_str());
 	}
-#endif
 
 	// Here is an example of how to create a structure instance which
 	//	references a content item.  It is planted automatically at the
@@ -600,6 +599,41 @@ void MyGeom::DoCalcBoundBox(FBox3 &box)
 
 void IslandTerrain::do_test_code()
 {
+#if 0
+	vtElevationGrid grid;
+	grid.LoadFromBT("C:/VTP/TerrainApps/Data/Elevation/crater_0513.bt");
+	grid.SetupConversion(1.0);
+	FPoint3 p;
+	grid.GetWorldLocation(200, 200, p);
+
+	float alt;
+	grid.FindAltitudeAtPoint(p, alt);
+#endif
+
+#if 0
+	float x, y;
+	DPoint3 p;
+	int meter_height;
+	char string[80];
+	vtFeatures feat;
+	feat.SetEntityType(SHPT_POINTZ);
+	feat.AddField("Text", FTString);
+	feat.GetAtProjection() = m_proj;
+	vtString labels_path = FindFileOnPaths(s_DataPaths, "PointData/places.txt");
+	FILE *fp = vtFileOpen(labels_path, "r");
+	while( !feof(fp) )
+	{
+		int ret = fscanf(fp, "%f %f %d %s\n", &x, &y, &meter_height, string);
+		if (!ret) break;
+		p.x = x;
+		p.y = y;
+		p.z = meter_height;
+		int rec = feat.AddPoint(p);
+		feat.SetValue(rec, 0, string);
+	}
+	fclose(fp);
+	feat.SaveToSHP("../Data/PointData/hawai`i.shp");
+#endif
 }
 
 void IslandTerrain::create_airplanes(float fSpeed)
@@ -631,7 +665,7 @@ void IslandTerrain::create_airplane(int i, float fSpeed)
 	AirportCodes code;
 	code = KOA;
 
-	PlaneEngine *pEng = new PlaneEngine(GetLocalConversion(), fSpeedExag, code);
+	PlaneEngine *pEng = new PlaneEngine(fSpeedExag, code);
 	pEng->setName("Airplane Engine");
 	pEng->AddTarget(trans);
 	pEng->SetHoop(i);
@@ -671,8 +705,7 @@ float utm_points_koa[5][2] = {
 	{ 180281, 2180278 }		// 4, 800m elev
 };
 
-PlaneEngine::PlaneEngine(const vtLocalConversion &conv, float fSpeedExag,
-	AirportCodes code) : vtEngine()
+PlaneEngine::PlaneEngine(float fSpeedExag, AirportCodes code) : vtEngine()
 {
 	m_fSpeedExag = fSpeedExag;
 
@@ -710,7 +743,7 @@ PlaneEngine::PlaneEngine(const vtLocalConversion &conv, float fSpeedExag,
 
 	// begin approach
 	utm_points[0].z = 600.0f;
-	conv.ConvertFromEarth(utm_points[0], m_hoop_pos[1]);
+	g_Conv.ConvertFromEarth(utm_points[0], m_hoop_pos[1]);
 	m_hoop_speed[1] = 100.0f;
 
 	// touchdown
@@ -720,22 +753,22 @@ PlaneEngine::PlaneEngine(const vtLocalConversion &conv, float fSpeedExag,
 	double ground_offset = 12.5f + 7.0f;
 
 	utm_points[1].z = ground_offset1;
-	conv.ConvertFromEarth(utm_points[1], m_hoop_pos[2]);
+	g_Conv.ConvertFromEarth(utm_points[1], m_hoop_pos[2]);
 	m_hoop_speed[2] = 25.0f;
 
 	// speeding up to takeoff point
 	utm_points[2].z = ground_offset;
-	conv.ConvertFromEarth(utm_points[2], m_hoop_pos[3]);
+	g_Conv.ConvertFromEarth(utm_points[2], m_hoop_pos[3]);
 	m_hoop_speed[3] = 5.0f;
 
 	// takeoff to this point
 	utm_points[3].z = ground_offset;
-	conv.ConvertFromEarth(utm_points[3], m_hoop_pos[4]);
+	g_Conv.ConvertFromEarth(utm_points[3], m_hoop_pos[4]);
 	m_hoop_speed[4] = 25.0f;
 
 	// point to loop to
 	utm_points[4].z = 800.0f;
-	conv.ConvertFromEarth(utm_points[4], m_hoop_pos[5]);
+	g_Conv.ConvertFromEarth(utm_points[4], m_hoop_pos[5]);
 	m_hoop_speed[5] = 100.0f;
 
 	// saving last hoop info

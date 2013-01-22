@@ -2,7 +2,7 @@
 // EnviroGUI.cpp
 // GUI-specific functionality of the Enviro class
 //
-// Copyright (c) 2003-2013 Virtual Terrain Project
+// Copyright (c) 2003-2011 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -15,7 +15,6 @@
 
 #include "vtlib/vtlib.h"
 #include "vtlib/core/Terrain.h"
-#include "vtdata/FileFilters.h"
 #include "vtdata/vtLog.h"
 #include "vtui/Helper.h"
 #include "vtui/InstanceDlg.h"
@@ -172,6 +171,11 @@ void EnviroGUI::UpdateProgress(const char *msg1, const char *msg2, int amount1, 
 	UpdateProgressDialog2(amount1, amount2, ws1 + ws2);
 }
 
+void EnviroGUI::ExtendStructure(vtStructInstance *si)
+{
+	GetFrame()->ExtendStructure(si);
+}
+
 void EnviroGUI::AddVehicle(CarEngine *eng)
 {
 	GetFrame()->GetDriveDlg()->SetCarEngine(eng);
@@ -289,7 +293,7 @@ bool EnviroGUI::SaveVegetation(bool bAskFilename)
 
 		EnableContinuousRendering(false);
 		wxFileDialog saveFile(NULL, _("Save Vegetation Data"), default_dir,
-			default_file, FSTRING_VF, wxFD_SAVE);
+			default_file, _("Vegetation Files (*.vf)|*.vf"), wxFD_SAVE);
 		bool bResult = (saveFile.ShowModal() == wxID_OK);
 		EnableContinuousRendering(true);
 		if (!bResult)
@@ -323,7 +327,7 @@ bool EnviroGUI::SaveStructures(bool bAskFilename)
 
 		EnableContinuousRendering(false);
 		wxFileDialog saveFile(NULL, _("Save Built Structures Data"),
-			default_dir, default_file, FSTRING_VTST,
+			default_dir, default_file, _("Structure Files (*.vtst)|*.vtst"),
 			wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
 		bool bResult = (saveFile.ShowModal() == wxID_OK);
 		EnableContinuousRendering(true);
@@ -381,8 +385,6 @@ void EnviroGUI::ShowMessage(const vtString &str)
 }
 
 ///////////////////////////////////////////////////////////////////////
-
-#if wxUSE_JOYSTICK || WIN32
 
 vtJoystickEngine::vtJoystickEngine()
 {
@@ -442,8 +444,6 @@ void vtJoystickEngine::Eval()
 	m_fLastTime = fTime;
 }
 
-#endif  // wxUSE_JOYSTICK || WIN32
-
 
 ///////////////////////////////////////////////////////////////////////
 // Helpers
@@ -455,9 +455,6 @@ vtAbstractLayer *CreateNewAbstractPointLayer(vtTerrain *pTerr, bool bAskStyle)
 	pSet->SetFilename("Untitled.shp");
 	pSet->AddField("Label", FT_String);
 
-	// Inherit projection
-	pSet->SetProjection(pTerr->GetProjection());
-
 	// Ask style for the new point layer
 	vtTagArray props;
 	props.SetValueBool("ObjectGeometry", false, true);
@@ -465,7 +462,6 @@ vtAbstractLayer *CreateNewAbstractPointLayer(vtTerrain *pTerr, bool bAskStyle)
 	props.SetValueRGBi("LabelColor", RGBi(255,255,0), true);
 	props.SetValueFloat("LabelHeight", 10.0f, true);
 	props.SetValueInt("TextFieldIndex", 0, true);
-	props.SetValueBool("LabelOutline", true, true);
 
 	if (bAskStyle)
 	{
@@ -481,21 +477,18 @@ vtAbstractLayer *CreateNewAbstractPointLayer(vtTerrain *pTerr, bool bAskStyle)
 	}
 
 	// wrap the features in an abstract layer
-	vtAbstractLayer *ab_layer = new vtAbstractLayer;
-	ab_layer->SetFeatureSet(pSet);
-	ab_layer->AddProps(props);
+	vtAbstractLayer *pLay = new vtAbstractLayer(pTerr);
+	pLay->SetFeatureSet(pSet);
+	pLay->SetProperties(props);
 
 	// add the new layer to the terrain
-	pTerr->GetLayers().push_back(ab_layer);
-	pTerr->SetActiveLayer(ab_layer);
-
-	// Construct it once so it is set up for future visuals.
-	pTerr->CreateAbstractLayerVisuals(ab_layer);
+	pTerr->GetLayers().push_back(pLay);
+	pTerr->SetActiveLayer(pLay);
 
 	// and show it in the layers dialog
 	GetFrame()->m_pLayerDlg->RefreshTreeContents();	// full refresh
 
-	return ab_layer;
+	return pLay;
 }
 
 vtAbstractLayer *CreateNewAbstractLineLayer(vtTerrain *pTerr, bool bAskStyle)
@@ -528,19 +521,16 @@ vtAbstractLayer *CreateNewAbstractLineLayer(vtTerrain *pTerr, bool bAskStyle)
 	}
 
 	// wrap the features in an abstract layer
-	vtAbstractLayer *ab_layer = new vtAbstractLayer();
-	ab_layer->SetFeatureSet(pSet);
-	ab_layer->SetProps(props);
+	vtAbstractLayer *pLay = new vtAbstractLayer(pTerr);
+	pLay->SetFeatureSet(pSet);
+	pLay->SetProperties(props);
 
 	// add the new layer to the terrain
-	pTerr->GetLayers().push_back(ab_layer);
-	pTerr->SetActiveLayer(ab_layer);
-
-	// Construct it once so it is set up for future visuals.
-	pTerr->CreateAbstractLayerVisuals(ab_layer);
+	pTerr->GetLayers().push_back(pLay);
+	pTerr->SetActiveLayer(pLay);
 
 	// and show it in the layers dialog
 	GetFrame()->m_pLayerDlg->RefreshTreeContents();	// full refresh
 
-	return ab_layer;
+	return pLay;
 }

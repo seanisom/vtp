@@ -135,7 +135,7 @@ public:
 	FPoint3 operator *(float s) const { return FPoint3(x*s, y*s, z*s); }
 	FPoint3 operator *(double s) const { return FPoint3((float)(x*s), (float)(y*s), (float)(z*s)); }
 	FPoint3 operator /(float s) const { return FPoint3(x/s, y/s, z/s); }
-	FPoint3 operator -() const { return FPoint3(-x, -y, -z); }
+	FPoint3 operator -() { return FPoint3(-x, -y, -z); }
 	bool operator==(const FPoint3 &v2) const
 	{ return (x == v2.x && y == v2.y && z == v2.z); }
 	bool operator!=(const FPoint3 &v2) const
@@ -145,6 +145,7 @@ public:
 	void operator -=(const FPoint3 &v) { x-=v.x; y-=v.y; z-=v.z; }
 	void operator *=(float s) { x*=s; y*=s; z*=s; }
 	void operator /=(float s) { x/=s; y/=s; z/=s; }
+	FPoint3 operator -() const { return FPoint3 (-x, -y, -z); }
 
 	// also allow array-like access, such that x,y,z components are 0,1,2
 	float &operator[](int nIndex) { return *(&x+nIndex); }
@@ -321,7 +322,6 @@ public:
 	DPoint2 operator -(const DPoint2 &v) const { return DPoint2(x-v.x, y-v.y); }
 	DPoint2 operator *(double s) const { return DPoint2(x*s, y*s); }
 	DPoint2 operator /(double s) const { return DPoint2(x/s, y/s); }
-	DPoint2 operator -() const { return DPoint2(-x, -y); }
 
 	void operator +=(const DPoint2 &v) { x+=v.x; y+=v.y; }
 	void operator -=(const DPoint2 &v) { x-=v.x; y-=v.y; }
@@ -835,10 +835,6 @@ public:
 	DPoint2 GetCenter() const
 	{
 		return DPoint2((left + right) / 2.0, (bottom + top) / 2);
-	}
-	DPoint2 SizeExtents() const
-	{
-		return DPoint2(right - left, top - bottom);
 	}
 	DPoint2 LowerLeft() const
 	{
@@ -1470,12 +1466,6 @@ float random_offset(float x);
 float random(float x);
 int vt_log2(int n);
 float vt_log2f(float n);
-
-double AngleSideVector(const DPoint2 &p0, const DPoint2 &p1, const DPoint2 &p2,
-					   DPoint2 &sideways);
-float AngleSideVector(const FPoint3 &p0, const FPoint3 &p1, const FPoint3 &p2,
-					  FPoint3 &sideways);
-
 bool CrossingsTest(const DPoint2 *pgon, int numverts, const DPoint2 &point);
 bool CrossingsTest(const DPoint3 *pgon, int numverts, const DPoint2 &point);
 bool PointInTriangle(const FPoint2 &p, const FPoint2 &p1, const FPoint2 &p2,
@@ -1488,7 +1478,6 @@ bool BarycentricCoords(const DPoint2 &p1, const DPoint2 &p2,
 					   const DPoint2 &p3, const DPoint2 &p, double fBary[3]);
 bool PlaneIntersection(const FPlane &plane1, const FPlane &plane2,
 					   const FPlane &plane3, FPoint3 &result);
-
 double DistancePointToLine(const DPoint2 &p1, const DPoint2 &p2, const DPoint2 &p3);
 float DistanceLineToLine(const FPoint3 &A1, const FPoint3 &A2,
 						 const FPoint3 &B1, const FPoint3 &B2,
@@ -1498,7 +1487,6 @@ float DistanceSegmentToSegment(const FPoint3 &A1, const FPoint3 &A2,
 						 FPoint3 &result1, FPoint3 &result2);
 int LineSegmentsIntersect(const DPoint2 &p1, const DPoint2 &p2,
 						 const DPoint2 &p3, const DPoint2 &p4, DPoint2 *result = NULL);
-
 void vtLogMatrix(const FMatrix4 &mat);
 void vtLogMatrix(const FMatrix3 &mat);
 bool RaySphereIntersection(const FPoint3 &rkOrigin, const FPoint3 &rkDirection,

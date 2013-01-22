@@ -113,7 +113,7 @@ public:
 		const FPoint2 &min1, const FPoint2 &max1, float fLevel, float fTiling);
 
 	// Access vertex properties
-	uint NumVertices() const;
+	uint GetNumVertices() const;
 
 	void SetVtxPos(uint, const FPoint3&);
 	FPoint3 GetVtxPos(uint i) const;
@@ -145,8 +145,8 @@ public:
 	void AllowOptimize(bool bAllow);
 
 	// Access values
-	int NumPrims() const;
-	int NumIndices() const { return getVertexIndices()->getNumElements(); }
+	int GetNumPrims() const;
+	int GetNumIndices() const { return getVertexIndices()->getNumElements(); }
 	short GetIndex(int i) const { return getIndices()->at(i); }
 	int GetPrimLen(int i) const { return dynamic_cast<const osg::DrawArrayLengths*>(getPrimitiveSet(0))->at(i); }
 

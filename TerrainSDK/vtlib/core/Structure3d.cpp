@@ -14,6 +14,7 @@
 #include "Building3d.h"
 #include "Fence3d.h"
 #include "Terrain.h"
+#include "TerrainScene.h"	// For content manager
 #include "PagedLodGrid.h"
 
 // Static members
@@ -94,7 +95,7 @@ void vtStructInstance3d::ShowBounds(bool bShow)
 				FSphere sphere;
 				s2v(m_pModel->getBound(), sphere);
 
-				m_pHighlight = CreateBoundSphereGeode(sphere);
+				m_pHighlight = CreateBoundSphereGeom(sphere);
 				m_pHighlight->SetCastShadow(false);		// no shadow
 				m_pContainer->addChild(m_pHighlight);
 			}
@@ -179,15 +180,12 @@ bool vtStructInstance3d::CreateNode(vtTerrain *pTerr)
 	if (GetValueFloat("scale", sc))
 		m_fScale = sc;
 
+	// Allow the terrain to extend the structure with custom functionality
+	const char *extend = GetValueString("extend", true);
+	if (extend)
+		pTerr->ExtendStructure(this);
+
 	UpdateTransform(pTerr->GetHeightField());
-
-	// Remember the radius for later
-	FSphere sphere;
-	s2v(m_pModel->getBound(), sphere);
-	DPoint2 evector;
-	pTerr->GetLocalConversion().ConvertVectorToEarth(sphere.radius, 0, evector);
-	m_RadiusInEarthCoords = evector.x;
-
 	return true;
 }
 
@@ -225,11 +223,19 @@ double vtStructInstance3d::DistanceToPoint(const DPoint2 &p, float fMaxRadius) c
 		//  from the given point to the edge of the bounding sphere.  This
 		//  makes objects easier to select, because their selectable zone
 		//  is larger for larger objects.  This is a little messy, because
-		//  it's a world-coord operation applied to a earth-coord value.
-		if (m_RadiusInEarthCoords < fMaxRadius)
+		//  it's a world-coord operation applied to a earth-coord result.
+		FSphere sphere;
+		s2v(m_pModel->getBound(), sphere);
+		FPoint3 trans = m_pContainer->GetTrans();
+		sphere.center += trans;
+		if (sphere.radius < fMaxRadius)
 		{
-			double dist_to_center = vtStructInstance::DistanceToPoint(p, fMaxRadius);
-			return dist_to_center - m_RadiusInEarthCoords;
+			DPoint2 ecenter;
+			DPoint2 evector;
+			g_Conv.ConvertToEarth(sphere.center.x, sphere.center.z, ecenter);
+			g_Conv.ConvertVectorToEarth(sphere.radius, 0, evector);
+			double dist = (ecenter - p).Length();
+			return (dist - evector.x);
 		}
 		else
 			return 1E9;	// Ignore instances with such a large radius

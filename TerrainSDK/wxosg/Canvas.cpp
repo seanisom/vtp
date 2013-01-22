@@ -60,19 +60,21 @@ static vtGLCanvas *s_canvas = NULL;
 
 vtGLCanvas::vtGLCanvas(wxWindow *parent, wxWindowID id, const wxPoint &pos,
 					   const wxSize &size, long style, const wxString &name, int *gl_attrib):
+#ifdef __WXMAC__
+		wxGLCanvas(parent, id, pos, size, style, name, gl_attrib)
+#else
 		wxGLCanvas(parent, id, gl_attrib, pos, size, style, name)
+#endif
 {
 	VTLOG1("vtGLCanvas constructor\n");
 
-#if 0	// __WXMAC__
-	// Do we still need this?  Has trouble compiling on recent Macs.
+#ifdef __WXMAC__
 	const GLint Value = 1;
 	aglSetInteger(GetContext()->m_glContext, AGL_SWAP_INTERVAL, &Value); // Force VSYNC on
-#endif
-
+#else
 	m_bFirstPaint = true;
 	m_bPainting = false;
-
+#endif
 	m_bRunning = true;
 	m_bCapture = false;
 

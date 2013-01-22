@@ -65,9 +65,10 @@ void TNode::Copy(TNode *node)
 
 TLink *TNode::GetLink(uint n) const
 {
-	if (n >= m_connect.size())	// safety check
+	if (n >= 0 && n < m_connect.size())	// safety check
+		return m_connect[n];
+	else
 		return NULL;
-	return m_connect[n];
 }
 
 int TNode::FindLink(int linkID)
@@ -178,7 +179,7 @@ int TNode::GetLinkNum(TLink *link)
 //traffic control
 bool TNode::SetIntersectType(uint linkNum, IntersectionType type)
 {
-	if (linkNum >= m_connect.size())
+	if (linkNum < 0 || linkNum >= m_connect.size())
 		return false;
 
 	m_connect[linkNum]->SetIntersectionType(this, type);
@@ -187,7 +188,7 @@ bool TNode::SetIntersectType(uint linkNum, IntersectionType type)
 
 IntersectionType TNode::GetIntersectType(uint linkNum)
 {
-	if (linkNum >= m_connect.size())
+	if (linkNum < 0 || linkNum >= m_connect.size())
 		return IT_NONE;
 
 	return m_connect[linkNum]->GetIntersectionType(this);
@@ -259,8 +260,8 @@ void TNode::AdjustForLights()
 						newAngle = -newAngle;
 					}
 					printf("%i:%f, %i:%f, %f, %f",
-						(int) i, m_fLinkAngle[i],
-						(int) j, m_fLinkAngle[j],
+						i, m_fLinkAngle[i],
+						j, m_fLinkAngle[j],
 						newAngle, bestAngle);
 					if (newAngle < bestAngle) {
 						bestChoiceA = i;
@@ -349,22 +350,6 @@ void TLink::SetFlag(int flag, bool value)
 int TLink::GetFlag(int flag)
 {
 	return (m_iFlags & flag) != 0;
-}
-
-int TLink::GetSidewalk()
-{
-	int value = 0;
-	if (m_iFlags & RF_SIDEWALK_LEFT) value |= 1;
-	if (m_iFlags & RF_SIDEWALK_RIGHT) value |= 2;
-	return value;
-}
-
-int TLink::GetParking()
-{
-	int value = 0;
-	if (m_iFlags & RF_PARKING_LEFT) value |= 1;
-	if (m_iFlags & RF_PARKING_RIGHT) value |= 2;
-	return value;
 }
 
 /**
@@ -469,22 +454,12 @@ float TLink::Length()
 float TLink::EstimateWidth(bool bIncludeSidewalk)
 {
 	float width = m_iLanes * m_fLaneWidth;
-
-	if (GetFlag(RF_PARKING_LEFT))
-		width += m_fParkingWidth;
-	if (GetFlag(RF_PARKING_RIGHT))
-		width += m_fParkingWidth;
-
+	if (GetFlag(RF_PARKING))
+		width += (m_fParkingWidth * 2);
 	if (GetFlag(RF_MARGIN))
 		width += (m_fMarginWidth * 2);
-
-	if (bIncludeSidewalk)
-	{
-		if (GetFlag(RF_SIDEWALK_LEFT))
-			width += m_fSidewalkWidth;
-		if (GetFlag(RF_SIDEWALK_RIGHT))
-			width += m_fSidewalkWidth;
-	}
+	if (bIncludeSidewalk && GetFlag(RF_SIDEWALK))
+		width += (m_fSidewalkWidth * 2);
 	return width;
 }
 

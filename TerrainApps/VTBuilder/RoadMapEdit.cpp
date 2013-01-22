@@ -236,7 +236,7 @@ void LinkEdit::ComputeDisplayedLinkWidth(const DPoint2 &ToMeters)
 	}
 }
 
-bool LinkEdit::OverlapsExtent(const DRECT &target)
+bool LinkEdit::WithinExtent(const DRECT &target)
 {
 	return (target.left < m_extent.right && target.right > m_extent.left &&
 		target.top > m_extent.bottom && target.bottom < m_extent.top);
@@ -402,14 +402,12 @@ bool LinkEdit::EditProperties(vtRoadLayer *pLayer)
 	return (dlg.ShowModal() == wxID_OK);
 }
 
-// override because we need to update width when flags change
+	// override because we need to update width when flags change
 void LinkEdit::SetFlag(int flag, bool value)
 {
-	const int flags = RF_SIDEWALK_LEFT | RF_SIDEWALK_RIGHT |
-					  RF_PARKING_LEFT | RF_PARKING_RIGHT | RF_MARGIN;
-	const int before = m_iFlags & flags;
+	int before = m_iFlags & (RF_SIDEWALK | RF_PARKING | RF_MARGIN);
 	TLink::SetFlag(flag, value);
-	const int after = m_iFlags & flags;
+	int after = m_iFlags & (RF_SIDEWALK | RF_PARKING | RF_MARGIN);
 	if (before != after)
 		m_bSidesComputed = false;
 }
@@ -561,7 +559,7 @@ DRECT *RoadMapEdit::DeleteSelected(int &nDeleted)
 	return array;
 }
 
-bool RoadMapEdit::SelectLink(const DPoint2 &point, float error, DRECT &bound)
+bool RoadMapEdit::SelectLink(DPoint2 point, float error, DRECT &bound)
 {
 	LinkEdit *link = FindLink(point, error);
 	if (link)
@@ -573,7 +571,7 @@ bool RoadMapEdit::SelectLink(const DPoint2 &point, float error, DRECT &bound)
 	return false;
 }
 
-int RoadMapEdit::SelectLinks(const DRECT &bound, bool bval)
+int RoadMapEdit::SelectLinks(DRECT bound, bool bval)
 {
 	int found = 0;
 	for (LinkEdit* curLink = GetFirstLink(); curLink; curLink = curLink->GetNext())
@@ -803,18 +801,17 @@ DRECT *RoadMapEdit::DeSelectAll(int &numRegions)
 }
 
 
-LinkEdit *RoadMapEdit::FindLink(const DPoint2 &point, float error)
+LinkEdit *RoadMapEdit::FindLink(DPoint2 point, float error)
 {
 	LinkEdit *bestSoFar = NULL;
 	double dist = error;
 	double b;
 
-	// A buffer rectangle, to make it easier to click a link.
+	//a backwards rectangle, to provide greater flexibility for finding the link.
 	DRECT target(point.x-error, point.y+error, point.x+error, point.y-error);
-
-	for (LinkEdit *curLink = GetFirstLink(); curLink; curLink = curLink->GetNext())
+	for (LinkEdit* curLink = GetFirstLink(); curLink; curLink = curLink->GetNext())
 	{
-		if (curLink->OverlapsExtent(target))
+		if (curLink->WithinExtent(target))
 		{
 			b = curLink->DistanceToPoint(point);
 			if (b < dist)
@@ -830,7 +827,7 @@ LinkEdit *RoadMapEdit::FindLink(const DPoint2 &point, float error)
 void RoadMapEdit::DeleteSingleLink(LinkEdit *pDeleteLink)
 {
 	LinkEdit *prev = NULL;
-	for (LinkEdit *curLink = GetFirstLink(); curLink; curLink = curLink->GetNext())
+	for (LinkEdit* curLink = GetFirstLink(); curLink; curLink = curLink->GetNext())
 	{
 		if (curLink == pDeleteLink)
 		{

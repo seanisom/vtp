@@ -7,7 +7,7 @@
 
 #include "vtlib/vtlib.h"
 #include <osg/PolygonMode>
-#include <osg/Texture1D>
+
 
 ///////////////////////////////////
 
@@ -20,6 +20,9 @@ vtMaterial::vtMaterial() : osg::StateSet()
 {
 	m_pMaterial = new osg::Material;
 	setAttributeAndModes(m_pMaterial.get());
+
+	// Not sure why this is required (should be the default!)
+	setMode(GL_DEPTH_TEST, SA_ON);
 }
 
 /**
@@ -239,12 +242,16 @@ bool vtMaterial::GetWireframe() const
 /**
  * Set the texture for this material.
  */
-void vtMaterial::SetTexture2D(osg::Image *pImage, int unit)
+void vtMaterial::SetTexture(osg::Image *pImage)
 {
-	osg::Texture2D *texture2d = new osg::Texture2D;
+	if (!m_pTexture)
+		m_pTexture = new osg::Texture2D;
 
 	// this stores a reference so that it won't get deleted without this material's permission
-	texture2d->setImage(pImage);
+	m_pTexture->setImage(pImage);
+
+	// also store a reference pointer
+	m_Image = pImage;
 
 	/** "Note, If the mode is set USE_IMAGE_DATA_FORMAT, USE_ARB_COMPRESSION,
 	 * USE_S3TC_COMPRESSION the internalFormat is automatically selected, and
@@ -252,7 +259,7 @@ void vtMaterial::SetTexture2D(osg::Image *pImage, int unit)
 //	m_pTexture->setInternalFormatMode(osg::Texture::USE_S3TC_DXT1_COMPRESSION);
 	if (s_bTextureCompression)
 		//m_pTexture->setInternalFormatMode(osg::Texture::USE_ARB_COMPRESSION);
-		texture2d->setInternalFormatMode(osg::Texture::USE_S3TC_DXT3_COMPRESSION);
+		m_pTexture->setInternalFormatMode(osg::Texture::USE_S3TC_DXT3_COMPRESSION);
 
 	// From the OSG list: "Why doesn't the OSG deallocate image buffer right
 	// *after* a glTextImage2D?
@@ -265,168 +272,89 @@ void vtMaterial::SetTexture2D(osg::Image *pImage, int unit)
 	//  footprint:
 //	m_pTexture->setUnRefImageDataAfterApply(true);
 
-	setTextureAttributeAndModes(unit, texture2d, SA_ON);
-
-	// Remember for later
-	if (unit >= (int) m_Textures.size())
-		m_Textures.resize(unit+1);
-	m_Textures[unit] = texture2d;
-
-	// also store a refpointer to the image
-	if (unit >= (int) m_Images.size())
-		m_Images.resize(unit+1);
-	m_Images[unit] = pImage;
-}
-
-/**
- * Set the texture for this material.
- */
-void vtMaterial::SetTexture1D(osg::Image *pImage, int unit)
-{
-	osg::Texture1D *texture1d = new osg::Texture1D;
-
-	texture1d->setImage(pImage);
-
-	// Remember for later
-	if (unit >= (int) m_Textures.size())
-		m_Textures.resize(unit+1);
-	m_Textures[unit] = texture1d;
-
-	// also store a refpointer to the image
-	if (unit >= (int) m_Images.size())
-		m_Images.resize(unit+1);
-	m_Images[unit] = pImage;
-
-	setTextureAttributeAndModes(unit, texture1d, SA_ON);
+	setTextureAttributeAndModes(0, m_pTexture.get(), SA_ON);
 }
 
 /**
  * Returns the texture (image) associated with a material.
  */
-osg::Image *vtMaterial::GetTextureImage(int unit) const
+osg::Image *vtMaterial::GetTexture() const
 {
 	// It is valid to return a non-const pointer to the image, since the image
 	//  can be modified entirely independently of the material.
-	return m_Images[unit].get();
+	return m_Image.get();
 }
 
 /**
  * Call this method to tell vtlib that you have modified the contents of a
  *  texture so it needs to be sent again to the graphics card.
  */
-void vtMaterial::ModifiedTexture(int unit)
+void vtMaterial::ModifiedTexture()
 {
-	if (m_Textures[unit] == NULL)
+	if (!m_pTexture)
 		return;
 
 	// Two steps: first we tell the Texture it's changed, then we tell the
 	//  Image it's changed.
-	m_Textures[unit]->dirtyTextureObject();
+	m_pTexture->dirtyTextureObject();
 
 	// OSG calls a modified image 'dirty'
-	osg::Texture *texture = m_Textures[unit];
-	osg::Texture1D *texture1D = dynamic_cast<osg::Texture1D *>(texture);
-	osg::Texture2D *texture2D = dynamic_cast<osg::Texture2D *>(texture);
-	if (texture1D)
-		texture1D->getImage()->dirty();
-	if (texture2D)
-		texture2D->getImage()->dirty();
-}
-
-void vtMaterial::SetTexGen1D(const FPoint3 &scale, float offset, int unit)
-{
-	osg::ref_ptr<osg::TexGen> pTexgen = new osg::TexGen;
-
-	pTexgen->setMode(osg::TexGen::EYE_LINEAR);
-	pTexgen->setPlane(osg::TexGen::S, osg::Vec4(scale.x, scale.y, scale.z, offset));
-	
-	setTextureAttributeAndModes(unit, pTexgen.get(), osg::StateAttribute::ON);
-	setTextureMode(unit, GL_TEXTURE_GEN_S,  osg::StateAttribute::ON);
-}
-
-void vtMaterial::SetTexGen2D(const FPoint2 &scale, const FPoint2 &offset,  int unit)
-{
-	osg::ref_ptr<osg::TexGen> pTexgen = new osg::TexGen;
-
-	pTexgen->setMode(osg::TexGen::EYE_LINEAR);
-	pTexgen->setPlane(osg::TexGen::S, osg::Vec4(scale.x, 0.0f, 0.0f, offset.x));
-	pTexgen->setPlane(osg::TexGen::T, osg::Vec4(0.0f, 0.0f, scale.y, offset.y));
-	
-	setTextureAttributeAndModes(unit, pTexgen.get(), osg::StateAttribute::ON);
-	setTextureMode(unit, GL_TEXTURE_GEN_S,  osg::StateAttribute::ON);
-	setTextureMode(unit, GL_TEXTURE_GEN_T,  osg::StateAttribute::ON);
-}
-
-void vtMaterial::SetTextureMode(int iTextureMode, int unit)
-{
-	osg::TexEnv::Mode mode;
-	if (iTextureMode == GL_ADD) mode = osg::TexEnv::ADD;
-	if (iTextureMode == GL_BLEND) mode = osg::TexEnv::BLEND;
-	if (iTextureMode == GL_REPLACE) mode = osg::TexEnv::REPLACE;
-	if (iTextureMode == GL_MODULATE) mode = osg::TexEnv::MODULATE;
-	if (iTextureMode == GL_DECAL) mode = osg::TexEnv::DECAL;
-	osg::ref_ptr<osg::TexEnv> pTexEnv = new osg::TexEnv(mode);
-	setTextureAttributeAndModes(unit, pTexEnv.get(), osg::StateAttribute::ON);
-}
-
-uint vtMaterial::NextAvailableTextureUnit()
-{
-	return m_Textures.size();
+	m_pTexture->getImage()->dirty();
 }
 
 
 /**
  * Set the texture clamping property for this material.
  */
-void vtMaterial::SetClamp(bool bClamp, int unit)
+void vtMaterial::SetClamp(bool bClamp)
 {
-	if (m_Textures[unit] == NULL)
+	if (!m_pTexture)
 		return;
 	if (bClamp)
 	{
 		// TODO: try   texture->setWrap(osg::Texture::WRAP_T, osg::Texture::CLAMP_TO_EDGE);
-		m_Textures[unit]->setWrap(osg::Texture::WRAP_S, osg::Texture::CLAMP_TO_BORDER);
-		m_Textures[unit]->setWrap(osg::Texture::WRAP_T, osg::Texture::CLAMP_TO_BORDER);
+		m_pTexture->setWrap(osg::Texture::WRAP_S, osg::Texture::CLAMP);
+		m_pTexture->setWrap(osg::Texture::WRAP_T, osg::Texture::CLAMP);
 	}
 	else
 	{
-		m_Textures[unit]->setWrap(osg::Texture::WRAP_S, osg::Texture::REPEAT);
-		m_Textures[unit]->setWrap(osg::Texture::WRAP_T, osg::Texture::REPEAT);
+		m_pTexture->setWrap(osg::Texture::WRAP_S, osg::Texture::REPEAT);
+		m_pTexture->setWrap(osg::Texture::WRAP_T, osg::Texture::REPEAT);
 	}
 }
 
 /**
  * Get the texture clamping property of this material.
  */
-bool vtMaterial::GetClamp(int unit) const
+bool vtMaterial::GetClamp() const
 {
-	if (m_Textures[unit] == NULL)
+	if (!m_pTexture)
 		return false;
-	osg::Texture::WrapMode w = m_Textures[unit]->getWrap(osg::Texture::WRAP_S);
+	osg::Texture::WrapMode w = m_pTexture->getWrap(osg::Texture::WRAP_S);
 	return (w == osg::Texture::CLAMP);
 }
 
 /**
  * Set the texture mipmapping property for this material.
  */
-void vtMaterial::SetMipMap(bool bMipMap, int unit)
+void vtMaterial::SetMipMap(bool bMipMap)
 {
-	if (m_Textures[unit] == NULL)
+	if (!m_pTexture)
 		return;
 	if (bMipMap)
-		m_Textures[unit]->setFilter(osg::Texture::MIN_FILTER, osg::Texture::LINEAR_MIPMAP_LINEAR);
+		m_pTexture->setFilter(osg::Texture::MIN_FILTER, osg::Texture::LINEAR_MIPMAP_LINEAR);
 	else
-		m_Textures[unit]->setFilter(osg::Texture::MIN_FILTER, osg::Texture::LINEAR);
+		m_pTexture->setFilter(osg::Texture::MIN_FILTER, osg::Texture::LINEAR);
 }
 
 /**
  * Get the texture mipmapping property of this material.
  */
-bool vtMaterial::GetMipMap(int unit) const
+bool vtMaterial::GetMipMap() const
 {
-	if (m_Textures[unit] == NULL)
+	if (!m_pTexture)
 		return false;
-	osg::Texture::FilterMode m = m_Textures[unit]->getFilter(osg::Texture::MIN_FILTER);
+	osg::Texture::FilterMode m = m_pTexture->getFilter(osg::Texture::MIN_FILTER);
 	return (m == osg::Texture::LINEAR_MIPMAP_LINEAR);
 }
 
@@ -490,6 +418,10 @@ int vtMaterialArray::Find(vtMaterial *mat)
  *		is brighter than the existing light level, such as illuminated
  *		objects at night.
  *
+ * \param bTexGen	true for materials whose texture mapping will be generated
+ *		automatically.  false if you will provide explicit UV values to
+ *		drape your texture.  Default is false.
+ *
  * \param bClamp	true for Texture Clamping, which prevents sub-texel
  *		interpolation at the edge of the texture.  Default is false.
  *
@@ -505,10 +437,11 @@ int vtMaterialArray::AddTextureMaterial(osg::Image *pImage,
 						 bool bTransp, bool bAdditive,
 						 float fAmbient, float fDiffuse,
 						 float fAlpha, float fEmissive,
-						 bool bClamp, bool bMipMap)
+						 bool bTexGen, bool bClamp,
+						 bool bMipMap)
 {
 	vtMaterial *pMat = new vtMaterial;
-	pMat->SetTexture2D(pImage);
+	pMat->SetTexture(pImage);
 	pMat->SetCulling(bCulling);
 	pMat->SetLighting(bLighting);
 	pMat->SetTransparent(bTransp, bAdditive);
@@ -525,7 +458,7 @@ int vtMaterialArray::AddTextureMaterial(osg::Image *pImage,
  * Create and add a simple textured material.  This method takes a a filename
  * of the texture image to use.
  *
- * See the other AddTextureMaterial() for a description of the parameters, which
+ * See AddTextureMaterial() for a description of the parameters, which
  * lets you control many other aspects of the material.
  *
  * \return The index of the added material if successful, or -1 on failure.
@@ -535,7 +468,8 @@ int vtMaterialArray::AddTextureMaterial(const char *fname,
 						 bool bTransp, bool bAdditive,
 						 float fAmbient, float fDiffuse,
 						 float fAlpha, float fEmissive,
-						 bool bClamp, bool bMipMap)
+						 bool bTexGen, bool bClamp,
+						 bool bMipMap)
 {
 	// check for common mistake
 	if (*fname == 0)
@@ -546,7 +480,7 @@ int vtMaterialArray::AddTextureMaterial(const char *fname,
 		return -1;
 
 	int index = AddTextureMaterial(image, bCulling, bLighting,
-		bTransp, bAdditive, fAmbient, fDiffuse, fAlpha, fEmissive,
+		bTransp, bAdditive, fAmbient, fDiffuse, fAlpha, fEmissive, bTexGen,
 		bClamp, bMipMap);
 
 	return index;
@@ -693,7 +627,7 @@ int vtMaterialArray::FindByImage(const osg::Image *image) const
 {
 	for (uint i = 0; i < size(); i++)
 	{
-		const osg::Image *tex = at(i)->GetTextureImage();
+		const osg::Image *tex = at(i)->GetTexture();
 		if (tex == image)
 			return i;
 	}
