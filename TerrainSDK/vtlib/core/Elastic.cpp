@@ -1,7 +1,7 @@
 //
 // Elastic.cpp
 //
-// Copyright (c) 2012 Virtual Terrain Project
+// Copyright (c) 2011 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -12,9 +12,8 @@
 ElasticPolyline::ElasticPolyline()
 {
 	m_Materials = new vtMaterialArray;
-	m_Materials->AddRGBMaterial(RGBf(1, 0.5, 0), true, true);			// orange solid
-	m_Materials->AddRGBMaterial(RGBf(1, 1, 0.5), false, false, true);	// light yellow wireframe
-	m_Materials->AddRGBMaterial(RGBf(1, 0.7, 1), false, false, false, 0.4);	// translucent
+	m_Materials->AddRGBMaterial1(RGBf(1, 0.5, 0), true, true);			// orange solid
+	m_Materials->AddRGBMaterial1(RGBf(1, 1, 0.5), false, false, true);	// light yellow wireframe
 
 	// Create a marker post to use for each corner of the polyline
 	int matidx = 0;		// orange
@@ -42,7 +41,7 @@ void ElasticPolyline::SetTerrain(vtTerrain *pTerr)
 
 void ElasticPolyline::SetLineColor(const RGBAf &color)
 {
-	m_Materials->at(1)->SetDiffuse(color);
+	m_Materials->at(1)->SetDiffuse1(color);
 }
 
 void ElasticPolyline::SetPolyline(const DLine2 &line)
@@ -108,37 +107,8 @@ void ElasticPolyline::EnforceRightAngles()
 
 void ElasticPolyline::Clear()
 {
-	m_Line.Clear();
+	m_Line.Empty();
 	Realize();
-}
-
-float vtTerrain::EstimateGroundSpacingAtPoint(const DPoint2 &p) const
-{
-	// try to guess how finely to tessellate a feature that will be draped on the surface.
-	if (m_pDynGeom)
-	{
-		const FPoint2 &spacing = m_pDynGeom->GetWorldSpacing();
-		return std::min(spacing.x, spacing.y) / 2;
-	}
-	else if (m_pTin)
-	{
-		// TINs don't have a grid spacing.  In lieu of using a completely
-		//  different (more correct) algorithm for draping, just estimate.
-		DRECT ext = m_pTin->GetEarthExtents();
-		FPoint2 p1, p2;
-		m_pHeightField->m_Conversion.convert_earth_to_local_xz(ext.left, ext.bottom, p1.x, p1.y);
-		m_pHeightField->m_Conversion.convert_earth_to_local_xz(ext.right, ext.top, p2.x, p2.y);
-		return (p2 - p1).Length() / 1000.0f;
-	}
-	else if (m_pTiledGeom)
-	{
-		// There is no ideal way to drape a line on a tileset of tiles
-		//  with varying resolution.  For now, just use the highest (LOD0)
-		//  grid density.
-		const FPoint2 spacing = m_pTiledGeom->GetWorldSpacingAtPoint(p);
-		return std::min(spacing.x, spacing.y);
-	}
-	return 1.0;		// Should not get here.
 }
 
 void ElasticPolyline::Realize()
@@ -150,45 +120,22 @@ void ElasticPolyline::Realize()
 	m_Container->removeChildren(0, m_Container->getNumChildren());
 
 	// Make markers
-	for (uint i = 0; i < m_Line.GetSize(); i++)
+	for (unsigned int i = 0; i < m_Line.GetSize(); i++)
 	{
 		vtTransform *xform = new vtTransform;
 		m_pTerr->PlantModelAtPoint(xform, m_Line[i]);
-		xform->Scale(1.0f, m_fPostHeight, 1.0f);
+		xform->Scale3(1.0f, m_fPostHeight, 1.0f);
 
 		m_Container->addChild(xform);
 		xform->addChild(m_Marker);
 	}
 
-	const DPoint2 first_point = m_Line[0];
-	const float fSpacing = m_pTerr->EstimateGroundSpacingAtPoint(first_point);
-	FLine3 tessellated;
-	float fTotalLength = m_pTerr->GetHeightFieldGrid3d()->LineOnSurface(m_Line, fSpacing, 0.0f, true,
-		false, false, tessellated);
-
 	// Make lines between them
 	vtGeode *LineGeode = new vtGeode;
 	LineGeode->SetMaterials(m_Materials);
 	m_Container->addChild(LineGeode);
-	vtGeomFactory mf(LineGeode, osg::PrimitiveSet::LINE_STRIP, 0, 30000, 1);
-
-	mf.PrimStart();
-	for (uint i = 0; i < tessellated.GetSize(); i++)
-		mf.AddVertex(tessellated[i] + FPoint3(0, m_fLineHeight, 0));
-	mf.PrimEnd();
-
-	// Make strips between them
-	vtGeode *StripGeode = new vtGeode;
-	StripGeode->SetMaterials(m_Materials);
-	m_Container->addChild(StripGeode);
-	vtGeomFactory mf2(StripGeode, osg::PrimitiveSet::TRIANGLE_STRIP, 0, 30000, 2);
-
-	mf2.PrimStart();
-	for (uint i = 0; i < tessellated.GetSize(); i++)
-	{
-		mf2.AddVertex(tessellated[i]);
-		mf2.AddVertex(tessellated[i] + FPoint3(0, m_fLineHeight * 0.99f, 0));
-	}
-	mf2.PrimEnd();
+	int matidx = 1;		// yellow
+	vtGeomFactory mf(LineGeode, osg::PrimitiveSet::LINE_STRIP, 0, 30000, matidx);
+	m_pTerr->AddSurfaceLineToMesh(&mf, m_Line, m_fLineHeight, true);
 }
 

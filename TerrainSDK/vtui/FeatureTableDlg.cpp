@@ -95,8 +95,8 @@ void FeatureTableDlg::SetFeatureSet(vtFeatureSet *pFeatures)
 	GetTextVertical()->Enable(type == SHPT_POINTZ);
 	GetChoiceVertical()->Enable(type == SHPT_POINTZ);
 
-	uint i;
-	for (i = 0; i < m_pFeatures->NumFields(); i++)
+	unsigned int i;
+	for (i = 0; i < m_pFeatures->GetNumFields(); i++)
 	{
 		Field *pField = m_pFeatures->GetField(i);
 		wxString name(pField->m_name, wxConvUTF8);
@@ -148,7 +148,7 @@ void FeatureTableDlg::ShowSelected()
 	bool bProgress = (selected > 500);
 	if (bProgress)
 		OpenProgressDialog(_("Populating table"), false, this);
-	int i, num = m_pFeatures->NumEntities();
+	int i, num = m_pFeatures->GetNumEntities();
 	for (i = 0; i < num; i++)
 	{
 		if (bProgress && (i%20)==0)
@@ -169,7 +169,7 @@ void FeatureTableDlg::ShowPicked()
 	TransferDataToWindow();
 	Clear();
 
-	int i, num = m_pFeatures->NumEntities();
+	int i, num = m_pFeatures->GetNumEntities();
 
 	for (i = 0; i < num; i++)
 	{
@@ -187,7 +187,7 @@ void FeatureTableDlg::ShowAll()
 	TransferDataToWindow();
 	Clear();
 
-	int i, num = m_pFeatures->NumEntities();
+	int i, num = m_pFeatures->GetNumEntities();
 	if (num > 2000)
 	{
 		wxString msg;
@@ -254,7 +254,7 @@ void FeatureTableDlg::UpdateFeatureText(int iItem, int iFeat)
 		GetList()->SetItem(iItem, field++, str);
 	}
 
-	for (uint i = 0; i < m_pFeatures->NumFields(); i++)
+	for (unsigned int i = 0; i < m_pFeatures->GetNumFields(); i++)
 	{
 		vtString vs;
 		m_pFeatures->GetValueAsString(iFeat, i, vs);
@@ -349,7 +349,7 @@ void FeatureTableDlg::OnDeleteHighlighted( wxCommandEvent &event )
 		VTLOG("Set %d items to delete, removing visuals..\n", iDeleted);
 
 		// Delete high-level features first
-		for (uint i = 0; i < m_pFeatures->NumEntities(); i++)
+		for (unsigned int i = 0; i < m_pFeatures->GetNumEntities(); i++)
 		{
 			if (m_pFeatures->IsDeleted(i))
 			{
@@ -364,8 +364,8 @@ void FeatureTableDlg::OnDeleteHighlighted( wxCommandEvent &event )
 		OnEditEnd();
 
 		OnModified();
+
 		RefreshItems();
-		RefreshViz();
 	}
 }
 
@@ -392,7 +392,7 @@ void FeatureTableDlg::OnListRightClick( wxListEvent &event )
 		return; */
 	int iItem = event.GetIndex();
 	int iFeat = (int) GetList()->GetItemData(iItem);
-/*	for (int i = 0; i < m_pFeatures->NumFields(); i++)
+/*	for (int i = 0; i < m_pFeatures->GetNumFields(); i++)
 	{
 		vtString vs;
 		m_pFeatures->GetValueAsString(iFeat, i, vs);

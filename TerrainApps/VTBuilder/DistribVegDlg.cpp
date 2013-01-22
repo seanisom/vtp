@@ -85,11 +85,11 @@ void DistribVegDlg::OnInitDialog(wxInitDialogEvent& event)
 {
 	// Populate the Choice controls with necessary values
 	wxString str;
-	uint i;
+	unsigned int i;
 
 	// Single species
 	GetChoiceSpecies()->Clear();
-	vtSpeciesList *pl = g_bld->GetSpeciesList();
+	vtSpeciesList *pl = g_bld->GetPlantList();
 	if (pl != NULL)
 	{
 		for (i = 0; i < pl->NumSpecies(); i++)
@@ -119,7 +119,7 @@ void DistribVegDlg::OnInitDialog(wxInitDialogEvent& event)
 
 	// Biotype layers
 	GetChoiceBiotypeLayer()->Clear();
-	for (uint i = 0; i < g_bld->NumLayers(); i++)
+	for (int i = 0; i < g_bld->NumLayers(); i++)
 	{
 		vtLayer *lp = g_bld->GetLayer(i);
 		if (lp->GetType() == LT_VEG)
@@ -133,7 +133,7 @@ void DistribVegDlg::OnInitDialog(wxInitDialogEvent& event)
 
 	// Density layers
 	GetChoiceDensityLayer()->Clear();
-	for (uint i = 0; i < g_bld->NumLayers(); i++)
+	for (int i = 0; i < g_bld->NumLayers(); i++)
 	{
 		vtLayer *lp = g_bld->GetLayer(i);
 		if (lp->GetType() == LT_VEG)
@@ -149,7 +149,7 @@ void DistribVegDlg::OnInitDialog(wxInitDialogEvent& event)
 
 	// Count layers of each type
 	int iDensityLayers = 0, iBiotypeLayers = 0;
-	for (uint i = 0; i < g_bld->NumLayers(); i++)
+	for (int i = 0; i < g_bld->NumLayers(); i++)
 	{
 		vtLayer *lp = g_bld->GetLayer(i);
 		if (lp->GetType() == LT_VEG)

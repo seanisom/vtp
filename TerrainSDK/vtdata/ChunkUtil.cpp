@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include "ChunkUtil.h"
 
-int WriteUint32(FILE *fp, uint val)
+int WriteUint32(FILE *fp, unsigned int val)
 {
 	return fwrite(&val, 4, 1, fp);
 }
@@ -20,14 +20,14 @@ int WriteFloat32(FILE *fp, float val)
 	return fwrite(&val, 4, 1, fp);
 }
 
-void WriteByte(FILE *fp, uchar b)
+void WriteByte(FILE *fp, unsigned char b)
 {
 	fwrite(&b, 1, 1, fp);
 }
 
-uint ReadUint32(FILE *fp)
+unsigned int ReadUint32(FILE *fp)
 {
-	uint i;
+	unsigned int i;
 	fread(&i, 4, 1, fp);
 	return i;
 }

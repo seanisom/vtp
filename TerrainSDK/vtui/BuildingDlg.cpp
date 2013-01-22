@@ -14,11 +14,9 @@
 
 #include <wx/colordlg.h>
 #include <wx/numdlg.h>
-
 #include "BuildingDlg.h"
 #include "vtui/Helper.h"
 #include "vtdata/DataPath.h"
-#include "vtdata/MaterialDescriptor.h"
 
 // WDR: class implementations
 
@@ -153,136 +151,11 @@ void BuildingDlg::EditColor()
 		if (m_bEdges)
 			m_pEdge->m_Color = result;
 		else
-		{
-			// Handle roofs specially.
-			int num_levels = m_pBuilding->NumLevels();
-			if (m_iLevel == num_levels - 1)
-			{
-				// It's a roof.  Only set non-vertical edges.
-				for (int i = 0; i < m_pLevel->NumEdges(); i++)
-				{
-					if (m_pLevel->GetEdge(i)->m_iSlope != 90)
-						m_pLevel->GetEdge(i)->m_Color = result;
-				}
-			}
-			else
-			{
-				m_pLevel->SetEdgeColor(result);
-
-				if (m_iLevel == num_levels - 2)
-				{
-					// It's the level below the roof. Extend the color up to the
-					// vertical edges of the roof above it.
-					vtLevel *roof = m_pBuilding->GetLevel(num_levels - 1);
-					for (int i = 0; i < m_pLevel->NumEdges() && i < roof->NumEdges(); i++)
-					{
-						if (roof->GetEdge(i)->m_iSlope == 90)
-							roof->GetEdge(i)->m_Color = result;
-					}
-				}
-			}
-		}
+			m_pLevel->SetEdgeColor(result);
 
 		UpdateColorControl();
 	}
 	EnableRendering(true);
-}
-
-void BuildingDlg::OnSetMaterial( wxCommandEvent &event )
-{
-	int i, j;
-	int iInitialSelection = -1;
-	int iNumberofMaterials = GetGlobalMaterials()->size();
-
-	wxString *matstring;
-	if (m_bEdges)
-		matstring = &m_strMaterial2;
-	else
-		matstring = &m_strMaterial1;
-
-	*matstring = wxString(m_pLevel->GetOverallEdgeMaterial(), wxConvUTF8);
-
-	wxString *pChoices = new wxString[iNumberofMaterials];
-
-	int iShown = 0;
-	for (i = 0; i < iNumberofMaterials; i++)
-	{
-		vtMaterialDescriptor *mat = GetGlobalMaterials()->at(i);
-
-		// only show surface materials, not typed feature materials
-		if (mat->GetMatType() > 0)
-			continue;
-
-		const vtString& MaterialName = mat->GetName();
-		wxString matname(MaterialName, wxConvUTF8);
-
-		// for multiple materials with the same name, only show them once
-		bool bFound = false;
-		for (j = 0; j < iShown; j++)
-		{
-			if (pChoices[j] == matname) bFound = true;
-		}
-		if (bFound)
-			continue;
-
-		pChoices[iShown] = matname;
-		if (pChoices[iShown] == *matstring)
-			iInitialSelection = iShown;
-		iShown++;
-	}
-
-	wxSingleChoiceDialog dialog(this, _T("Choice"),
-		_("Set Building Material for All Edges"), iShown, pChoices);
-
-	if (iInitialSelection != -1)
-		dialog.SetSelection(iInitialSelection);
-
-	if (dialog.ShowModal() != wxID_OK)
-		return;
-
-	*matstring = pChoices[dialog.GetSelection()];
-
-	delete[] pChoices;
-
-	vtString matname = (const char *) matstring->mb_str(wxConvUTF8);
-	const vtString *matname2 = GetGlobalMaterials()->FindName(matname);
-	if (m_bEdges)
-		m_pEdge->m_pMaterial = matname2;
-	else
-	{
-		// Handle roofs specially.
-		int num_levels = m_pBuilding->NumLevels();
-		if (m_iLevel == num_levels - 1)
-		{
-			// It's a roof.  Only set non-vertical edges.
-			for (int i = 0; i < m_pLevel->NumEdges(); i++)
-			{
-				if (m_pLevel->GetEdge(i)->m_iSlope != 90)
-					m_pLevel->GetEdge(i)->m_pMaterial = matname2;
-			}
-		}
-		else
-		{
-			m_pLevel->SetEdgeMaterial(matname2);
-
-			if (m_iLevel == num_levels - 2)
-			{
-				// It's the level below the roof. Extend the color up to the
-				// vertical edges of the roof above it.
-				vtLevel *roof = m_pBuilding->GetLevel(num_levels - 1);
-				for (int i = 0; i < m_pLevel->NumEdges() && i < roof->NumEdges(); i++)
-				{
-					if (roof->GetEdge(i)->m_iSlope == 90)
-						roof->GetEdge(i)->m_pMaterial = matname2;
-				}
-			}
-		}
-	}
-
-	m_bSetting = true;
-	TransferDataToWindow();
-	m_bSetting = false;
-	Modified();
 }
 
 void BuildingDlg::HighlightSelectedLevel()
@@ -377,7 +250,7 @@ void BuildingDlg::OnLevelUp( wxCommandEvent &event )
 
 void BuildingDlg::OnLevelDown( wxCommandEvent &event )
 {
-	if (m_iLevel < (int) m_pBuilding->NumLevels() - 1)
+	if (m_iLevel < (int) m_pBuilding->GetNumLevels() - 1)
 	{
 		m_pBuilding->SwapLevels(m_iLevel, m_iLevel+1);
 		RefreshLevelsBox();
@@ -405,7 +278,7 @@ void BuildingDlg::OnLevelCopy( wxCommandEvent &event )
 void BuildingDlg::DeleteCurrentLevel()
 {
 	m_pBuilding->DeleteLevel(m_iLevel);
-	if (m_iLevel == m_pBuilding->NumLevels())
+	if (m_iLevel == m_pBuilding->GetNumLevels())
 		m_iLevel--;
 	RefreshLevelsBox();
 	SetLevel(m_iLevel);
@@ -468,7 +341,7 @@ void BuildingDlg::SetupControls()
 	if (NULL != GetFacadeChoice())
 	{
 		GetFacadeChoice()->Clear();
-		for (uint i = 0; i < vtGetDataPath().size(); i++)
+		for (unsigned int i = 0; i < vtGetDataPath().size(); i++)
 		{
 			vtString Directory = vtGetDataPath()[i] + "Facade";
 			for (dir_iter it((const char *)Directory); it != dir_iter(); ++it)
@@ -516,7 +389,7 @@ void BuildingDlg::RefreshLevelsBox()
 {
 	m_pLevelListBox->Clear();
 	wxString str;
-	int i, levels = m_pBuilding->NumLevels();
+	int i, levels = m_pBuilding->GetNumLevels();
 	for (i = 0; i < levels; i++)
 	{
 		vtLevel *pLev = m_pBuilding->GetLevel(i);
@@ -614,8 +487,8 @@ void BuildingDlg::SetLevel(int iLev)
 
 	// enable up/down
 	GetLevelUp()->Enable(m_iLevel > 0);
-	GetLevelDown()->Enable(m_iLevel < (int) m_pBuilding->NumLevels()-1);
-	GetLevelDel()->Enable(m_pBuilding->NumLevels() > 1);
+	GetLevelDown()->Enable(m_iLevel < (int) m_pBuilding->GetNumLevels()-1);
+	GetLevelDel()->Enable(m_pBuilding->GetNumLevels() > 1);
 	GetLevelCopy()->Enable(true);
 }
 
@@ -810,6 +683,75 @@ void BuildingDlg::UpdateFacade()
 	if (pFacadeChoice->FindString(Facade) == wxNOT_FOUND)
 		pFacadeChoice->Append(Facade);
 	pFacadeChoice->SetStringSelection(Facade);
+}
+
+void BuildingDlg::OnSetMaterial( wxCommandEvent &event )
+{
+	int i, j;
+	int iInitialSelection = -1;
+	int iNumberofMaterials = GetGlobalMaterials()->GetSize();
+
+	wxString *matstring;
+	if (m_bEdges)
+		matstring = &m_strMaterial2;
+	else
+		matstring = &m_strMaterial1;
+
+	*matstring = wxString(m_pLevel->GetOverallEdgeMaterial(), wxConvUTF8);
+
+	wxString *pChoices = new wxString[iNumberofMaterials];
+
+	int iShown = 0;
+	for (i = 0; i < iNumberofMaterials; i++)
+	{
+		vtMaterialDescriptor *mat = GetGlobalMaterials()->GetAt(i);
+
+		// only show surface materials, not typed feature materials
+		if (mat->GetMatType() > 0)
+			continue;
+
+		const vtString& MaterialName = mat->GetName();
+		wxString matname(MaterialName, wxConvUTF8);
+
+		// for multiple materials with the same name, only show them once
+		bool bFound = false;
+		for (j = 0; j < iShown; j++)
+		{
+			if (pChoices[j] == matname) bFound = true;
+		}
+		if (bFound)
+			continue;
+
+		pChoices[iShown] = matname;
+		if (pChoices[iShown] == *matstring)
+			iInitialSelection = iShown;
+		iShown++;
+	}
+
+	wxSingleChoiceDialog dialog(this, _T("Choice"),
+		_("Set Building Material for All Edges"), iShown, pChoices);
+
+	if (iInitialSelection != -1)
+		dialog.SetSelection(iInitialSelection);
+
+	if (dialog.ShowModal() != wxID_OK)
+		return;
+
+	*matstring = pChoices[dialog.GetSelection()];
+
+	delete[] pChoices;
+
+	vtString matname = (const char *) matstring->mb_str(wxConvUTF8);
+	const vtString *matname2 = GetGlobalMaterials()->FindName(matname);
+	if (m_bEdges)
+		m_pEdge->m_pMaterial = matname2;
+	else
+		m_pLevel->SetEdgeMaterial(*matname2);
+
+	m_bSetting = true;
+	TransferDataToWindow();
+	m_bSetting = false;
+	Modified();
 }
 
 void BuildingDlg::OnEdges( wxCommandEvent &event )

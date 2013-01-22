@@ -16,22 +16,25 @@
 #include "vtlib/core/TerrainLayers.h"
 #include "vtlib/core/Globe.h"
 
+enum LayerType
+{
+	LT_UNKNOWN = -1,
+	LT_ABSTRACT,
+	LT_ROAD,
+	LT_STRUCTURE,
+	LT_VEG,
+	LT_IMAGE,
+//	LT_ELEVATION,	// these aren't layer types in enviro.. yet :)
+//	LT_WATER,
+//	LT_TRANSIT,
+//	LT_UTILITY,
+	LAYER_TYPES
+};
+
 // WDR: class declarations
 class LayerItemData : public wxTreeItemData
 {
 public:
-	LayerItemData(vtElevLayer *elay)
-	{
-		Defaults();
-		m_type = LT_ELEVATION;
-		m_layer = m_elay = elay;
-	}
-	LayerItemData(vtVegLayer *vlay)
-	{
-		Defaults();
-		m_type = LT_VEG;
-		m_layer = m_vlay = vlay;
-	}
 	LayerItemData(vtStructureLayer *slay, int index, int item)
 	{
 		Defaults();
@@ -69,7 +72,6 @@ public:
 	{
 		m_layer = NULL;
 		m_alay = NULL;
-		m_vlay = NULL;
 		m_slay = NULL;
 		m_glay = NULL;
 		m_fset = NULL;
@@ -80,15 +82,11 @@ public:
 	vtLayer *m_layer;
 	vtAbstractLayer *m_alay;
 	vtImageLayer *m_ilay;
-	vtVegLayer *m_vlay;
-	vtElevLayer *m_elay;
 	vtStructureLayer *m_slay;
 	vtFeatureSet *m_fset;
 	GlobeLayer *m_glay;
 	int m_index;
 	int m_item;
-	wxString m_text;	// We cache the text label to detect when it changes.
-	int m_icon;			// We cache the icon to detect when it changes.
 };
 
 
@@ -114,7 +112,6 @@ public:
 
 	void SetShowAll(bool bTrue);
 	void UpdateEnabling();
-	void SetTerrain(class vtTerrain *pTerr) { m_pTerrain = pTerr; }
 
 	// Public handler declarations for LayerDlg
 	void OnLayerCreate( wxCommandEvent &event );
@@ -132,7 +129,6 @@ private:
 	wxAuiManager m_mgr;
 	wxPanel *m_main;
 	wxToolBar *m_pToolbar;
-	class vtTerrain *m_pTerrain;
 
 	osg::Node *GetNodeFromItem(wxTreeItemId item, bool bContainer = false);
 	vtStructureLayer *GetStructureLayerFromItem(wxTreeItemId item);
@@ -152,7 +148,6 @@ private:
 	void OnShadowVisible( wxCommandEvent &event );
 	void OnShowAll( wxCommandEvent &event );
 	void OnSelChanged( wxTreeEvent &event );
-	void OnItemActived( wxTreeEvent &event );
 
 	void OnUpdateCreate(wxUpdateUIEvent& event);
 	void OnUpdateVisible(wxUpdateUIEvent& event);

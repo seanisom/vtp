@@ -45,12 +45,12 @@ CSimpleInterimShadowTechnique::CSimpleInterimShadowTechnique(const CSimpleInteri
 {
 }
 
-void CSimpleInterimShadowTechnique::SetLightNumber(const uint Light)
+void CSimpleInterimShadowTechnique::SetLightNumber(const unsigned int Light)
 {
     m_LightNumber = Light;
 }
 
-void CSimpleInterimShadowTechnique::SetShadowTextureUnit(const uint Unit)
+void CSimpleInterimShadowTechnique::SetShadowTextureUnit(const unsigned int Unit)
 {
     m_ShadowTextureUnit = Unit;
 }
@@ -72,12 +72,12 @@ void CSimpleInterimShadowTechnique::SetShadowDarkness(const float Darkness)
 	}
 }
 
-void CSimpleInterimShadowTechnique::AddMainSceneTextureUnit(const uint Unit, const uint Mode)
+void CSimpleInterimShadowTechnique::AddMainSceneTextureUnit(const unsigned int Unit, const unsigned int Mode)
 {
 	m_MainSceneTextureUnits[Unit] = Mode;
 }
 
-void CSimpleInterimShadowTechnique::RemoveMainSceneTextureUnit(const uint Unit)
+void CSimpleInterimShadowTechnique::RemoveMainSceneTextureUnit(const unsigned int Unit)
 {
 	m_MainSceneTextureUnits.erase(Unit);
 }
@@ -181,9 +181,9 @@ void CSimpleInterimShadowTechnique::init()
 			pFakeTex->setImage(pImage);
 
 			osg::ref_ptr<osg::IntArray> UnitArray = new osg::IntArray;
-			for (std::map<uint, uint>::iterator iTr = m_MainSceneTextureUnits.begin(); iTr != m_MainSceneTextureUnits.end(); iTr++)
+			for (std::map<unsigned int, unsigned int>::iterator iTr = m_MainSceneTextureUnits.begin(); iTr != m_MainSceneTextureUnits.end(); iTr++)
 			{
-				uint Unit = (*iTr).first;
+				unsigned int Unit = (*iTr).first;
 				UnitArray->push_back(Unit);
 				m_pStateset->setTextureAttribute(Unit, pFakeTex, osg::StateAttribute::ON);
 				m_pStateset->setTextureMode(Unit,GL_TEXTURE_1D, osg::StateAttribute::OFF);
@@ -378,7 +378,7 @@ void CSimpleInterimShadowTechnique::cull(osgUtil::CullVisitor& cv)
 			}
 
 
-			uint traversalMask = cv.getTraversalMask();
+			unsigned int traversalMask = cv.getTraversalMask();
 
 			cv.setTraversalMask( traversalMask &
 								 getShadowedScene()->getCastsShadowTraversalMask() );
@@ -425,7 +425,7 @@ std::string CSimpleInterimShadowTechnique::GenerateFragmentShaderSource()
 		<< "{" << std::endl
 		<< "    vec4 Colour = gl_Color;" << std::endl
 		<< "    vec4 TexColour;" << std::endl;
-	for (std::map<uint, uint>::iterator iTr = m_MainSceneTextureUnits.begin(); iTr != m_MainSceneTextureUnits.end(); iTr++)
+	for (std::map<unsigned int, unsigned int>::iterator iTr = m_MainSceneTextureUnits.begin(); iTr != m_MainSceneTextureUnits.end(); iTr++)
 	{
 		int Unit = (*iTr).first;
 		int Mode = (*iTr).second;

@@ -90,7 +90,7 @@ void VegFieldsDlg::RefreshEnabled()
 
 void VegFieldsDlg::OnInitDialog(wxInitDialogEvent& event)
 {
-	uint i;
+	unsigned int i;
 
 	// SHPOpen doesn't yet support utf-8 or wide filenames, so convert
 	vtString fname_local = UTF8ToLocal(m_filename.mb_str(wxConvUTF8));
@@ -117,7 +117,7 @@ void VegFieldsDlg::OnInitDialog(wxInitDialogEvent& event)
 	// Fill species names into the SpeciesChoice control
 	wxString str;
 	GetSpeciesChoice()->Clear();
-	vtSpeciesList* pl = g_bld->GetSpeciesList();
+	vtSpeciesList* pl = g_bld->GetPlantList();
 	for (i = 0; i < pl->NumSpecies(); i++)
 	{
 		vtPlantSpecies *spe = pl->GetSpecies(i);

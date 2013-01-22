@@ -75,7 +75,7 @@ public:
 	vtTag *GetTag(int index);
 	const vtTag *GetTag(int index) const;
 
-	uint NumTags() const;
+	unsigned int NumTags() const;
 	void RemoveTag(int index);
 	void RemoveTag(const char *szTagName);
 	void Clear();
@@ -163,11 +163,11 @@ public:
 	vtItem();
 	virtual ~vtItem();
 
-	void DeleteModels();
+	void Empty();
 	void AddModel(vtModel *item) { m_models.Append(item); }
 	void RemoveModel(vtModel *model);
-	uint NumModels() { return m_models.GetSize(); }
-	vtModel *GetModel(int i) { return m_models[i]; }
+	unsigned int NumModels() { return m_models.GetSize(); }
+	vtModel *GetModel(int i) { return m_models.GetAt(i); }
 
 	vtString	m_name;
 	FRECT		m_extents;
@@ -196,12 +196,12 @@ public:
 	void ReadXML(const char *filename);
 	void WriteXML(const char *filename) const;
 
-	void Clear();
+	void Empty();
 	void AddItem(vtItem *item) { m_items.Append(item); }
 	void RemoveItem(vtItem *item);
-	uint NumItems() { return m_items.GetSize(); }
+	unsigned int NumItems() { return m_items.GetSize(); }
 	virtual vtItem *NewItem() { return new vtItem; }
-	vtItem *GetItem(int i) { return m_items[i]; }
+	vtItem *GetItem(int i) { return m_items.GetAt(i); }
 	vtItem *FindItemByName(const char *name);
 	vtItem *FindItemByType(const char *type, const char *subtype);
 	vtString GetFilename() { return m_strFilename; }

@@ -240,7 +240,7 @@ bool Triangulate_f::Process(const FLine3 &contour,FLine3 &result)
 	return true;
 }
 
-bool Triangulate_f::Process(const FLine3 &contour, std::vector<int> &result)
+bool Triangulate_f::Process(const FLine3 &contour, vtArray<int> &result)
 {
 	/* allocate and initialize list of Vertices in polygon */
 
@@ -284,9 +284,9 @@ bool Triangulate_f::Process(const FLine3 &contour, std::vector<int> &result)
 			a = V[u]; b = V[v]; c = V[w];
 
 			/* output Triangle */
-			result.push_back( a );
-			result.push_back( b );
-			result.push_back( c );
+			result.Append( a );
+			result.Append( b );
+			result.Append( c );
 
 			m++;
 
@@ -602,7 +602,7 @@ void CallTriangle(const DPolygon2 &contour, DLine2 &result)
 	in.numberofpoints = contour.NumTotalVertices();
 	in.pointlist = (REAL *) malloc(in.numberofpoints * 2 * sizeof(REAL));
 	int counter = 0;
-	for (uint ring = 0; ring < contour.size(); ring++)
+	for (unsigned int ring = 0; ring < contour.size(); ring++)
 	{
 		const DLine2 &polyline = contour[ring];
 		for (unsigned i = 0; i < polyline.GetSize(); i++)
@@ -619,7 +619,7 @@ void CallTriangle(const DPolygon2 &contour, DLine2 &result)
 	// segment list: each ring of N points has N edges, each of those
 	//  edges is a "segment" passed to Triangle
 	in.numberofsegments = 0;
-	for (uint ring = 0; ring < contour.size(); ring++)
+	for (unsigned int ring = 0; ring < contour.size(); ring++)
 		in.numberofsegments += contour[ring].GetSize();
 
 	in.segmentlist = (int *) malloc(in.numberofsegments * 2 * sizeof(int));
@@ -627,7 +627,7 @@ void CallTriangle(const DPolygon2 &contour, DLine2 &result)
 
 	counter = 0;
 	int start = 0;
-	for (uint ring = 0; ring < contour.size(); ring++)
+	for (unsigned int ring = 0; ring < contour.size(); ring++)
 	{
 		int num_points = contour[ring].GetSize();
 		for (int i = 0; i < num_points; i++)
@@ -643,7 +643,7 @@ void CallTriangle(const DPolygon2 &contour, DLine2 &result)
 	in.holelist = (REAL *) malloc(in.numberofholes * 2 * sizeof(REAL));
 
 	counter = 0;
-	for (uint ring = 1; ring < contour.size(); ring++)
+	for (unsigned int ring = 1; ring < contour.size(); ring++)
 	{
 		// We must provide a 2D point inside each hole.  However, the hole itself
 		//  might have concavities, so we cannot simply use the hole's centroid.
@@ -720,8 +720,8 @@ void CallPoly2Tri(const DLine2 &contour, DLine2 &result)
 	std::vector<p2t::Triangle*> triangles;
 	std::vector<p2t::Point*> polyline;
 
-	for (uint i = 0; i < contour.GetSize(); i++)
-		polyline.push_back(new p2t::Point(contour[i].x, contour[i].y));
+	for (unsigned int i = 0; i < contour.GetSize(); i++)
+		polyline.push_back(new p2t::Point(contour.GetAt(i).x, contour.GetAt(i).y));
 
 	/*
 	* STEP 1: Create CDT and add primary polyline
@@ -763,11 +763,11 @@ void CallPoly2Tri(const DPolygon2 &contour, DLine2 &result)
 	std::vector<p2t::Point*> polyline;
 
 	const DLine2 &outer = contour[0];
-	DPoint2 origin = outer[0];
+	DPoint2 origin = outer.GetAt(0);
 
-	for (uint i = 0; i < outer.GetSize(); i++)
+	for (unsigned int i = 0; i < outer.GetSize(); i++)
 	{
-		DPoint2 p = outer[i] - origin;
+		DPoint2 p = outer.GetAt(i) - origin;
 		polyline.push_back(new p2t::Point(p.x, p.y));
 	}
 
@@ -787,12 +787,12 @@ void CallPoly2Tri(const DPolygon2 &contour, DLine2 &result)
 		const DLine2 &inner = contour[r];
 		std::vector<p2t::Point*> hole;
 
-		uint npoints = inner.GetSize();
-		for (uint i = 0; i < npoints; i++)
+		unsigned int npoints = inner.GetSize();
+		for (unsigned int i = 0; i < npoints; i++)
 		{
-			//hole.push_back(new p2t::Point(inner[i].x, inner[i].y));
+			//hole.push_back(new p2t::Point(inner.GetAt(i).x, inner.GetAt(i).y));
 
-			DPoint2 p = inner[npoints-1-i] - origin;
+			DPoint2 p = inner.GetAt(npoints-1-i) - origin;
 
 			hole.push_back(new p2t::Point(p.x, p.y));
 		}

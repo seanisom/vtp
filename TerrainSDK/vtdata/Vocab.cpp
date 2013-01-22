@@ -29,7 +29,6 @@
 */
 
 #include "Vocab.h"
-#include "MaterialDescriptor.h"
 
 struct ColorEntry
 {
@@ -340,7 +339,7 @@ int TestParser::IsMaterial(int index)
 
 void TestParser::ParseInput(const char *string)
 {
-	sen.Clear();
+	sen.Empty();
 
 	InputToken *t;
 	char *word = strtok((char *)string, " ");
@@ -389,9 +388,9 @@ void TestParser::Apply()
  */
 bool TestParser::Matches(SentenceMatch &pattern)
 {
-	uint i, j;
+	unsigned int i, j;
 	int pos = 0;	// position in the array of input tokens
-	uint pat_toks = pattern.GetSize();
+	unsigned int pat_toks = pattern.GetSize();
 
 	// rather than iterate through the words of the input, interate
 	// through the words of the pattern

@@ -9,26 +9,24 @@
 #include "Engine.h"
 #include "Event.h"
 
-#include <algorithm>
-
 vtEngine::vtEngine() : vtEnabledBase()
 {
 	m_pWindow = NULL;
 }
 
-osg::Referenced *vtEngine::GetTarget(uint which)
+osg::Referenced *vtEngine::GetTarget(unsigned int which)
 {
 	if (which < NumTargets())
-		return m_Targets[which];
+		return m_Targets.GetAt(which);
 	else
 		return NULL;
 }
 
 void vtEngine::RemoveTarget(osg::Referenced *ptr)
 {
-	std::vector<ReferencePtr>::iterator it = std::find(m_Targets.begin(), m_Targets.end(), ptr);
-	if (it != m_Targets.end())
-		m_Targets.erase(it);
+	int index = m_Targets.Find(ptr);
+	if (index != -1)
+		m_Targets.RemoveAt(index);
 }
 
 void vtEngine::Eval()
@@ -37,19 +35,19 @@ void vtEngine::Eval()
 
 void vtEngine::RemoveChild(vtEngine *pEngine)
 {
-	for (uint i = 0; i < NumChildren(); i++)
+	for (unsigned int i = 0; i < NumChildren(); i++)
 	{
 		if (m_Children[i] == pEngine)
 			m_Children.erase(m_Children.begin()+i);
 	}
 }
 
-void vtEngine::AddChildrenToList(vtEngineArray &list, bool bEnabledOnly)
+void vtEngine::AddChildrenToList(vtArray<vtEngine*> &list, bool bEnabledOnly)
 {
 	if (bEnabledOnly && !GetEnabled())
 		return;
-	list.push_back(this);
-	for (uint i = 0; i < NumChildren(); i++)
+	list.Append(this);
+	for (unsigned int i = 0; i < NumChildren(); i++)
 		GetChild(i)->AddChildrenToList(list, bEnabledOnly);
 }
 
@@ -83,9 +81,6 @@ void vtLastMouse::OnMouse(vtMouseEvent &event)
 		break;
 	case VT_DOWN:
 		m_buttons |= (int)event.button;
-		break;
-	default:
-		// Keep picky compilers quiet.
 		break;
 	}
 	m_pos = event.pos;
@@ -138,7 +133,7 @@ void vtSimpleBillboardEngine::Eval()
 	// Potential optimization: store last camera pos and only update on change
 
 	//get the target and it's location
-	for (uint i = 0; i < NumTargets(); i++)
+	for (unsigned int i = 0; i < NumTargets(); i++)
 	{
 		vtCamera *cam = vtGetScene()->GetCamera();
 		vtTransform* pTarget = (vtTransform*) GetTarget(i);

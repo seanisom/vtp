@@ -1,7 +1,7 @@
 //
 // Name: CameraDlg.h
 //
-// Copyright (c) 2001-2012 Virtual Terrain Project
+// Copyright (c) 2001-2011 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -43,7 +43,6 @@ public:
 	void TransferToWindow();
 	void SetSliderControls();
 
-	void SetTerrain(class vtTerrain *pTerr) { m_pTerrain = pTerr; }
 	void CameraChanged();
 	void CheckAndUpdatePos();
 
@@ -57,7 +56,6 @@ private:
 	int m_iEyeSep;
 	int m_iFusionDist;
 	int m_iSpeed;
-	int m_iDamping;
 	int m_iDistVeg;
 	int m_iDistStruct;
 	int m_iDistRoad;
@@ -71,22 +69,19 @@ private:
 	float m_fEyeSep;
 	float m_fFusionDist;
 	float m_fSpeed;
-	float m_fDamping;
 	float m_fDistVeg;
 	float m_fDistStruct;
 	float m_fDistRoad;
 
 	bool m_bSet;
-	DPoint3 m_EarthPos;
+	DPoint3 m_pos;
 	bool m_bOrtho;
-	class vtTerrain *m_pTerrain;
 
 private:
 	// WDR: handler declarations for CameraDlg
 	void OnAccel( wxCommandEvent &event );
 	void OnSpeedUnits( wxCommandEvent &event );
 	void OnSpeedSlider( wxCommandEvent &event );
-	void OnDampingSlider( wxCommandEvent &event );
 	void OnFarSlider( wxCommandEvent &event );
 	void OnEyeSepSlider( wxCommandEvent &event );
 	void OnFusionDistSlider( wxCommandEvent &event );

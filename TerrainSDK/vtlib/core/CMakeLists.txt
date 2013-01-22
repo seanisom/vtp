@@ -8,6 +8,7 @@ set(VTLIB_CORE_SOURCE_FILES
 		../core/Content3d.cpp
 		../core/Contours.cpp
 		../core/BruteTerrain.cpp
+		../core/DemeterTerrain.cpp
 		../core/DynTerrain.cpp
 		../core/Elastic.cpp
 		../core/Engine.cpp
@@ -15,20 +16,19 @@ set(VTLIB_CORE_SOURCE_FILES
 		../core/GeomUtil.cpp
 		../core/Globe.cpp
 		../core/ImageSprite.cpp
+		../core/IntersectionEngine.cpp
 		../core/Location.cpp
 		../core/LodGrid.cpp
 		../core/MapOverviewEngine.cpp
-		../core/MaterialDescriptor3d.cpp
 		../core/NavEngines.cpp
 		../core/PagedLodGrid.cpp
 		../core/PickEngines.cpp
-		../core/Plants3d.cpp
 		../core/Roads.cpp
+		../core/Route.cpp
 		../core/SkyDome.cpp
 		../core/SMTerrain.cpp
 		../core/SRTerrain.cpp
 		../core/Structure3d.cpp
-		../core/SurfaceTexture.cpp
 		../core/TemporaryGraphicsContext.cpp
 		../core/Terrain.cpp
 		../core/TerrainLayers.cpp
@@ -37,8 +37,10 @@ set(VTLIB_CORE_SOURCE_FILES
 		../core/TiledGeom.cpp
 		../core/TimeEngines.cpp
 		../core/TParams.cpp
-		../core/UtilityMap3d.cpp
+		../core/Trees.cpp
+		../core/TVTerrain.cpp 
 		../core/Vehicles.cpp
+		../core/vtSOG.cpp 
 		../core/vtTin3d.cpp
 		PARENT_SCOPE)
 
@@ -58,6 +60,7 @@ set(VTLIB_CORE_HEADER_FILES
 		../core/Content3d.h
 		../core/Contours.h
 		../core/BruteTerrain.h
+		../core/DemeterTerrain.h
 		../core/DynTerrain.h
 		../core/Elastic.h
 		../core/Engine.h
@@ -70,22 +73,21 @@ set(VTLIB_CORE_HEADER_FILES
 		../core/GeomUtil.h
 		../core/Globe.h
 		../core/ImageSprite.h
+		../core/IntersectionEngine.h
 		../core/Light.h
 		../core/Location.h
 		../core/LodGrid.h
 		../core/MapOverviewEngine.h
-		../core/MaterialDescriptor3d.h
 		../core/NavEngines.h
-		../core/PagedLodGrid.h
 		../core/PickEngines.h
-		../core/Plants3d.h
+		../core/PagedLodGrid.h
 		../core/Roads.h
+		../core/Route.h
 		../core/SkyDome.h
 		../core/SMTerrain.h
 		../core/SpaceNav.h
 		../core/SRTerrain.h
 		../core/Structure3d.h
-		../core/SurfaceTexture.h
 		../core/TemporaryGraphicsContext.h
 		../core/Terrain.h
 		../core/TerrainLayers.h
@@ -94,8 +96,10 @@ set(VTLIB_CORE_HEADER_FILES
 		../core/TiledGeom.h
 		../core/TimeEngines.h
 		../core/TParams.h
-		../core/UtilityMap3d.h
+		../core/Trees.h
+		../core/TVTerrain.h
 		../core/Vehicles.h
 		../vtlib.h
+		../core/vtSOG.h
 		../core/vtTin3d.h
 		PARENT_SCOPE)

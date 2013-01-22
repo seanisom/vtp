@@ -1,7 +1,7 @@
 //
 // class Enviro: Main functionality of the Enviro application
 //
-// Copyright (c) 2001-2013 Virtual Terrain Project
+// Copyright (c) 2001-2011 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -10,7 +10,6 @@
 
 #include "vtlib/core/TerrainScene.h"
 
-#include "vtdata/Building.h"
 #include "vtdata/Fence.h"
 #include "vtdata/Projections.h"
 #include "vtlib/core/AnimPath.h"
@@ -27,8 +26,7 @@ class vtTerrainScene;
 class vtTerrain;
 class TerrainPicker;
 class vtIcoGlobe;
-class vtLine3d;
-class vtPole3d;
+class vtRoute;
 class vtUtilNode;
 class vtFence3d;
 class vtAbstractLayer;
@@ -45,11 +43,10 @@ class vtSpriteSizer;
 // Plants
 class vtSpeciesList3d;
 
-struct ControlEngine : public vtEngine
+class ControlEngine : public vtEngine
 {
-	ControlEngine() : m_pEnvironment(NULL) { }
+public:
 	void Eval();
-	class Enviro *m_pEnvironment;
 };
 
 /**
@@ -78,8 +75,7 @@ public:
 	void DoControl();
 	void DoControlOrbit();
 	void DoControlTerrain();
-	void SwitchToTerrain(vtTerrain *pTerrain);
-	void SelectInitialViewpoint(vtTerrain *pTerrain);
+	void SetTerrain(vtTerrain *pTerrain);
 	vtGroup *GetRoot() { return m_pRoot; }
 	void StoreTerrainParameters();
 	osgText::Font *GetArial() { return m_pArial; }
@@ -95,8 +91,6 @@ public:
 	// navigation and camera
 	virtual void SetFlightSpeed(float speed);
 	float GetFlightSpeed();
-	virtual void SetNavDamping(float factor);
-	float GetNavDamping();
 	void SetFlightAccel(bool bAccel);
 	bool GetFlightAccel();
 	void SetTopDown(bool bTopDown);
@@ -112,15 +106,12 @@ public:
 	void DumpCameraInfo();
 	void SetSpeed(float x);
 	float GetSpeed();
-	void GetStatusString(int which, vtString &str1, vtString &str2);
-
-	void ActivateAStructureLayer();
-	void ActivateAVegetationLayer();
+	vtString GetStatusString(int which);
 
 	// go to space or a terrain
 	void FlyToSpace();
-	bool RequestTerrain(const char *name);
-	void RequestTerrain(vtTerrain *pTerr);
+	bool SwitchToTerrain(const char *name);
+	void SwitchToTerrain(vtTerrain *pTerr);
 
 	// these work in space
 	vtIcoGlobe *GetGlobe() { return m_pIcoGlobe; }
@@ -144,12 +135,11 @@ public:
 	void ShowEarthLines(bool bShow);
 	vtTerrain *FindTerrainOnEarth(const DPoint2 &p);
 
-	vtString GetMessage1() { return m_strMessage1; }
-	vtString GetMessage2() { return m_strMessage2; }
-	void SetMessage(const vtString &str1, const vtString &str2 = "", float time = 0.0f);
+	vtString GetMessage() { return m_strMessage; }
+	void SetMessage(const vtString &msg, float time = 0.0f);
 	void FormatCoordString(vtString &str, const DPoint3 &coord, LinearUnits units, bool seconds = false);
-	void DescribeCoordinatesEarth(vtString &str1, vtString &str2);
-	void DescribeCoordinatesTerrain(vtString &str1, vtString &str2);
+	void DescribeCoordinatesEarth(vtString &str);
+	void DescribeCoordinatesTerrain(vtString &str);
 	void DescribeCLOD(vtString &str);
 
 	// location of 3d cursor on the ground, in earth coordinates
@@ -186,35 +176,21 @@ public:
 	void OnMouseSelectCursorPick(vtMouseEvent &event);
 	bool OnMouseCompass(vtMouseEvent &event);
 
-	// Elastic geometry useful for drawing polylines, such as for building or linears
-	void AddElasticPoint(const DPoint2 &p);
-	bool IsMakingElastic();
-	void CancelElastic();
-
-	// linear structure methods
-	void FinishLinear();
+	// fence methods
+	void start_new_fence();
+	void finish_fence();
+	void close_fence();
 	void SetFenceOptions(const vtLinearParams &param, bool bProfileChanged = false);
 
-	// building methods
-	void FinishBuilding();
-	void FlipBuildingFooprints();
-	void SetBuildingEaves(float fLength);
-	void CopyBuildingStyle();
-	void PasteBuildingStyle();
-	bool HaveBuildingStyle();
-
-	// instance methods
-	void CreateInstance();
-	void CreateInstanceAt(const DPoint2 &pos, vtTagArray *tags);
-
-	// UtilityMap methods
-	void StartPowerline();
-	void FinishPowerline();
-	void SetPowerOptions(const vtString &sStructType);
+	// route methods
+	void start_new_route();
+	void finish_route();
+	void close_route();
+	void SetRouteOptions(const vtString &sStructType);
 
 	// plants
 	void LoadSpeciesList();
-	vtSpeciesList3d	*GetSpeciesList() { return m_pSpeciesList; }
+	vtSpeciesList3d	*GetPlantList() { return m_pPlantList; }
 	PlantingOptions &GetPlantOptions() { return m_PlantOpt; }
 	bool PlantATree(const DPoint2 &epos);
 	void SetPlantOptions(const PlantingOptions &opt);
@@ -229,8 +205,8 @@ public:
 	bool ImportModelFromKML(const char *kmlfile);
 
 	// abstract layers
-	vtAbstractLayer *GetLabelLayer() const;
-	int NumSelectedAbstractFeatures() const;
+	vtAbstractLayer *GetLabelLayer();
+	int NumSelectedAbstractFeatures();
 
 	// distance tool
 	void SetDistanceToolMode(bool bPath);
@@ -243,16 +219,13 @@ public:
 
 	// UI
 	void UpdateCompass();
-	void SetHUDMessageText(const char *message);
-	void ShowVerticalLine(bool bShow);
-	bool GetShowVerticalLine();
 
 	// global state
 	AppState	m_state;
 	MouseMode	m_mode;
 	NavType		m_nav;
 	bool		m_bOnTerrain;
-	vtString	m_strMessage1, m_strMessage2;
+	vtString	m_strMessage;
 
 	// used for mouse interaction
 	bool		m_bDragging;
@@ -266,12 +239,15 @@ public:
 	int			m_iDraggingFencePoint;
 	DPoint3		m_EarthPosDown;
 	DPoint3		m_EarthPosLast;
-	vtLine3d	*m_pCurUtilLine;
-	vtPole3d	*m_pSelUtilPole;
+	vtRoute		*m_pCurRoute;
+	vtUtilNode	*m_pSelUtilNode;
+	vtRoute		*m_pSelRoute;
 	IPoint2		m_MouseDown, m_MouseLast;
 	float		m_StartRotation;
 	bool		m_bConstrainAngles;
-	bool		m_bShowVerticalLine;
+
+	// handle to the singleton
+	static Enviro *s_pEnviro;
 
 	// The following can be overridden by GUI code, to handle situations
 	//  in which the GUI may need to be informed of what happens.
@@ -296,7 +272,8 @@ public:
 	virtual vtString GetStringFromUser(const vtString &title, const vtString &msg) = 0;
 	virtual void ShowProgress(bool bShow) {}
 	virtual void SetProgressTerrain(vtTerrain *pTerr) {}
-	virtual void UpdateProgress(const char *msg1, const char *msg2, int amount1, int amount2) {}
+	virtual void UpdateProgress(const char *msg, int amount1, int amount2) {}
+	virtual void ExtendStructure(vtStructInstance *si) {}
 	virtual void AddVehicle(CarEngine *eng) {}
 	virtual void RemoveVehicle(CarEngine *eng) {}
 
@@ -321,7 +298,7 @@ protected:
 	void SetupGlobe();
 	void LookUpTerrainLocations();
 	void SetupTerrain(vtTerrain *pTerr);
-	void SetupArcMaterials();
+	void CreateInstance();
 	void SetupArcMesh();
 	void FreeArc();
 	void FreeArcMesh();
@@ -333,13 +310,10 @@ protected:
 	void StartFlyIn();
 	void FlyInStage1();
 	void FlyInStage2();
-	bool IsFlyingInFromSpace() { return (m_iFlightStage != 0); }
 	void SetWindowBox(const IPoint2 &ul, const IPoint2 &lr);
-	void MakeVerticalLine();
-	void UpdateVerticalLine();
 
 	// plants
-	vtSpeciesList3d	*m_pSpeciesList;
+	vtSpeciesList3d	*m_pPlantList;
 	PlantingOptions m_PlantOpt;
 	bool		m_bPlantsLoaded;
 
@@ -347,16 +321,15 @@ protected:
 	VehicleOptions m_VehicleOpt;
 
 	// fence members
+	bool		m_bActiveFence, m_bFenceClosed;
+	vtFence3d	*m_pCurFence;
 	vtLinearParams m_FenceParams;
 
-	// buildings
-	vtBuilding m_BuildingStyle;
-
-	// a visible, dynamic line for making buildings, and other uses
+	// line for making buildings and other uses
 	ElasticPolyline m_Elastic;
 
-	// utility map members
-	bool		m_bActiveUtilLine;
+	// route members
+	bool		m_bActiveRoute;
 	vtString	m_sStructType;
 
 	// linear arc on Earth (or Distance Tool on the Terrain)
@@ -366,9 +339,6 @@ protected:
 	float		m_fDistToolHeight;
 	bool		m_bMeasurePath;
 	DLine2		m_distance_path;
-
-	// vertical line
-	vtGeode		*m_pVertLine;
 
 	// view and navigation
 	vtCameraPtr	m_pNormalCamera;
@@ -397,27 +367,25 @@ protected:
 	FPQ			m_SpaceLoc;
 	FPQ			m_FlatLoc;
 
+	float			m_fMessageStart, m_fMessageTime;
 	ControlEngine	*m_pControlEng;
+	vtHUD		*m_pHUD;
+	vtTextMesh	*m_pHUDMessage;
+	vtFontPtr	 m_pArial;
 
 	int			m_iInitStep;			// initialization stage
 	vtTerrain	*m_pTargetTerrain;		// terrain we are switching to
-	FPoint3		m_SpaceTrackballState[3];
-
-	// Animated fly-in from space
 	bool		m_bFlyIn;
 	int			m_iFlightStage;		// 1, 2
 	int			m_iFlightStep;		// 0-100
 	FPoint3		m_TrackStart[3], m_TrackPosDiff;
+	FPoint3		m_SpaceTrackballState[3];
 	vtAnimPath	m_FlyInAnim;
 	DPoint2		m_FlyInCenter;
 	float		m_fTransitionHeight;	// in meters
 
 	// HUD UI
 	vtMaterialArrayPtr m_pHUDMaterials;
-	vtHUD			*m_pHUD;
-	vtTextMesh		*m_pHUDMessage;
-	vtFontPtr		m_pArial;
-	float			m_fMessageStart, m_fMessageTime;
 
 	vtGeode		*m_pLegendGeom;
 	bool		m_bCreatedLegend;
@@ -433,6 +401,9 @@ protected:
 	// mapoverviewengine
 	MapOverviewEngine *m_pMapOverview;
 };
+
+// global helper functions
+vtTerrain *GetCurrentTerrain();
 
 #endif	// ENVIROH
 

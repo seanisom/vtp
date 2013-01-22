@@ -3,7 +3,7 @@
 //
 // Navigation Engines, generally for moving the camera with mouse input.
 //
-// Copyright (c) 2001-2012 Virtual Terrain Project
+// Copyright (c) 2001-2007 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -33,28 +33,6 @@ vtFlyer::vtFlyer(float fSpeed, bool bAllowRoll) : vtLastMouse()
 void vtFlyer::SetAlwaysMove(bool bMove)
 {
 	m_bAlwaysMove = bMove;
-}
-
-void vtFlyer::OnMouse(vtMouseEvent &event)
-{
-	vtTransform *pTarget = (vtTransform*) GetTarget();
-	if (!pTarget)
-		return;
-
-	// Mouse scroll wheel moves us forward/backward, similar to first button
-	if (event.type == VT_WHEEL)
-	{
-		float trans = -(event.button / 25.0f * m_fSpeed);
-
-		// shift: move faster
-		vtScene *sc = vtGetScene();
-		if (sc->GetKeyState(VTK_SHIFT))
-			trans *= 5.0f;
-
-		if (m_bDOF[DOF_Z])
-			pTarget->TranslateLocal(FPoint3(0.0f, 0.0f, trans));
-	}
-	vtLastMouse::OnMouse(event);	// Pass up to parent
 }
 
 void vtFlyer::Eval()
@@ -87,6 +65,15 @@ void vtFlyer::Eval()
 			else
 				pTarget->RotateParent(FPoint3(0.0f, 1.0f, 0.0f), rotate);
 		}
+
+/* TEST CODE
+		static float temp = 0;
+		temp += elapsed;
+		if (temp > 1)
+		{
+			VTLOG("m_fSpeed %f, translation w/o elapsed %.1f\n", m_fSpeed, my * m_fSpeed);
+			temp = 0;
+		}*/
 	}
 
 	//  Right button: up-down, left-right
@@ -447,28 +434,6 @@ VFlyer::VFlyer(float fSpeed) : vtTerrainFlyer(fSpeed)
 	m_pConstrain = NULL;
 }
 
-void VFlyer::OnMouse(vtMouseEvent &event)
-{
-	vtTransform *pTarget = (vtTransform*) GetTarget();
-	if (!pTarget)
-		return;
-
-	// Mouse scroll wheel moves us forward/backward, similar to first button
-	if (event.type == VT_WHEEL)
-	{
-		float trans = -(event.button / 25.0f * m_fSpeed);
-
-		// shift: move faster
-		vtScene *sc = vtGetScene();
-		if (sc->GetKeyState(VTK_SHIFT))
-			trans *= 5.0f;
-
-		if (m_bDOF[DOF_Z])
-			m_Velocity.z += trans;
-	}
-	vtLastMouse::OnMouse(event);	// Pass up to parent
-}
-
 void VFlyer::Eval()
 {
 	float elapsed = vtGetFrameTime();
@@ -533,12 +498,20 @@ void VFlyer::Eval()
 	}
 
 	// dampen velocity based on elapsed time
-	if (m_fDamping != 0 && elapsed != 0)
+	if (m_fDamping != 1 && elapsed > 0)
 	{
-		double damp = powf(0.5, elapsed * m_fDamping);
+		float damp = powf(m_fDamping, elapsed);
 		m_Velocity *= damp;
 	}
 	pTarget->TranslateLocal(m_Velocity * elapsed);
+
+	static float temp = 0;
+	temp += elapsed;
+	if (temp > .2)
+	{
+		VTLOG("m_fSpeed %f, m_Velocity %.1f %.1f, %.1f\n", m_fSpeed, m_Velocity.x, m_Velocity.y, m_Velocity.z);
+		temp = 0;
+	}
 }
 
 void VFlyer::SetVerticalVelocity(float velocity)
@@ -600,19 +573,19 @@ void QuakeFlyer::Eval()
 		return;
 	}
 
-	pTarget->Rotate(FPoint3(0,1,0), leftright);
-	pTarget->Rotate(FPoint3(1,0,0), updown);
+	pTarget->Rotate2(FPoint3(0,1,0), leftright);
+	pTarget->Rotate2(FPoint3(1,0,0), updown);
 
 	//  Left button down
 	if ((m_buttons & VT_LEFT) && !(m_buttons & VT_RIGHT))
 	{
-		pTarget->Translate(FPoint3(0.0f, -0.1f, 0.0f));
+		pTarget->Translate1(FPoint3(0.0f, -0.1f, 0.0f));
 	}
 
 	//  Right button down
 	if ((m_buttons & VT_RIGHT) && !(m_buttons & VT_LEFT))
 	{
-		pTarget->Translate(FPoint3(0.0f, 0.1f, 0.0f));
+		pTarget->Translate1(FPoint3(0.0f, 0.1f, 0.0f));
 	}
 }
 
@@ -683,9 +656,6 @@ void QuakeFlyer::OnKey(int key, int flags)
 	}
 }
 
-
-/////////////////////////////////////////////////////////////////////////////
-//
 vtHeightConstrain::vtHeightConstrain(float fMinHeight)
 {
 	m_pHF = NULL;
@@ -1055,10 +1025,10 @@ void vtTrackball::Eval()
 	_ApplyLimits();
 
 	pTarget->Identity();
-	pTarget->Translate(FPoint3(0.0, 0.0, m_Pos.z));
-	pTarget->Rotate(FPoint3(1.0f, 0.0f, 0.0f), -m_Pos.y);
-	pTarget->Rotate(FPoint3(0.0f, 1.0f, 0.0f), -m_Pos.x);
-	pTarget->Translate(m_Pivot);
+	pTarget->Translate1(FPoint3(0.0, 0.0, m_Pos.z));
+	pTarget->Rotate2(FPoint3(1.0f, 0.0f, 0.0f), -m_Pos.y);
+	pTarget->Rotate2(FPoint3(0.0f, 1.0f, 0.0f), -m_Pos.x);
+	pTarget->Translate1(m_Pivot);
 
 	pTarget->TranslateLocal(m_Trans);
 }

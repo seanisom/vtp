@@ -36,7 +36,6 @@ public:
 	wxCheckBox* GetFog()  { return (wxCheckBox*) FindWindow( ID_FOG ); }
 	wxStaticBitmap* GetColorBitmap()  { return (wxStaticBitmap*) FindWindow( ID_COLOR3 ); }
 
-	void SetTerrain(class vtTerrain *pTerr) { m_pTerrain = pTerr; }
 	void UpdateEnableState();
 	void UpdateColorControl();
 	void ValuesToSliders();
@@ -48,6 +47,7 @@ public:
 	wxString m_strSkyTexture;
 	bool m_bOceanPlane;
 	float m_fOceanPlaneLevel;
+	bool m_bHorizon;
 	// fog
 	bool m_bFog;
 	float m_fFogDistance;
@@ -70,7 +70,6 @@ private:
 	int m_iFogDistance;
 	int m_iWindDirSlider;
 	int m_iWindSpeedSlider;
-	class vtTerrain *m_pTerrain;
 
 private:
 	// WDR: handler declarations for EphemDlg

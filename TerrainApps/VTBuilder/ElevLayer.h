@@ -32,7 +32,7 @@ class vtElevLayer : public vtLayer
 {
 public:
 	vtElevLayer();
-	vtElevLayer(const DRECT &area, const IPoint2 &size,
+	vtElevLayer(const DRECT &area, int iColumns, int iRows,
 		bool bFloats, float fScale, const vtProjection &proj);
 	vtElevLayer(vtElevationGrid *grid);
 	virtual ~vtElevLayer();
@@ -78,7 +78,8 @@ public:
 	float GetElevation(const DPoint2 &p);
 	bool GetHeightExtents(float &fMinHeight, float &fMaxHeight) const;
 	bool ImportFromFile(const wxString &strFileName, bool progress_callback(int) = NULL);
-	bool CreateFromPoints(vtFeatureSet *set, const IPoint2 &size, float fDistanceRatio);
+	bool CreateFromPoints(vtFeatureSet *set, int iXSize, int iYSize,
+		float fDistanceRatio);
 
 	// grid operations
 	void SetGrid(vtElevationGrid *grid);
@@ -86,7 +87,7 @@ public:
 	int RemoveElevRange(float zmin, float zmax, const DRECT *area = NULL);
 	int SetUnknown(float fValue, const DRECT *area = NULL);
 	void DetermineMeterSpacing();
-	bool WriteElevationTileset(TilingOptions &opts, BuilderView *pView);
+	bool WriteGridOfElevTilePyramids(TilingOptions &opts, BuilderView *pView);
 	bool ImportFromDB(const char *szFileName, bool progress_callback(int));
 
 	// TIN operations
@@ -120,7 +121,7 @@ protected:
 	float	m_fSpacing;
 	bool	m_bPreferGZip;	// user wants their elevation treated as a .gz file
 
-	IPoint2 m_ImageSize;
+	int m_iImageWidth, m_iImageHeight;
 
 	vtBitmap	*m_pBitmap;
 	wxMask		*m_pMask;

@@ -1,7 +1,7 @@
 //
 // Options.cpp
 //
-// Copyright (c) 2001-2012 Virtual Terrain Project
+// Copyright (c) 2001-2007 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -25,7 +25,6 @@ EnviroOptions g_Options;
 #define STR_FULLSCREEN "FullScreen"
 #define STR_STEREO "Stereo"
 #define STR_STEREO_MODE "StereoMode"
-#define STR_MULTISAMPLES "Multisamples"
 #define STR_WINLOC "WindowLocation"
 #define STR_LOCINSIDE "LocationIsInside"
 #define STR_HTMLPANE "HTMLPane"
@@ -144,8 +143,6 @@ void EnviroOptionsVisitor::endElement(const char *name)
 		s2b(m_data, m_opt.m_bStereo);
 	else if (strcmp(name, STR_STEREO_MODE) == 0)
 		m_opt.m_iStereoMode = atoi(str);
-	else if (strcmp(name, STR_MULTISAMPLES) == 0)
-		m_opt.m_iMultiSamples = atoi(str);
 	else if (strcmp(name, STR_WINLOC) == 0)
 	{
 		sscanf(str, "%d %d %d %d", &m_opt.m_WinPos.x, &m_opt.m_WinPos.y,
@@ -269,7 +266,7 @@ bool EnviroOptions::WriteXML()
 	output << "<EnviroOptions>" << std::endl;
 
 	// Don't write data paths here, they are now written to vtp.xml
-	//for (uint i = 0; i < m_oldDataPaths.size(); i++)
+	//for (unsigned int i = 0; i < m_oldDataPaths.size(); i++)
 	//	WriteElem(output, STR_DATAPATH, m_oldDataPaths[i]);
 
 	WriteElemB(output, STR_EARTHVIEW, m_bEarthView);
@@ -278,7 +275,6 @@ bool EnviroOptions::WriteXML()
 	WriteElemB(output, STR_FULLSCREEN, m_bFullscreen);
 	WriteElemB(output, STR_STEREO, m_bStereo);
 	WriteElemI(output, STR_STEREO_MODE, m_iStereoMode);
-	WriteElemI(output, STR_MULTISAMPLES, m_iMultiSamples);
 
 	vtString winpos;
 	winpos.Format("%d %d %d %d", m_WinPos.x, m_WinPos.y, m_WinSize.x, m_WinSize.y);

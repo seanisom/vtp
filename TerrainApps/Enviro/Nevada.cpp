@@ -61,10 +61,8 @@ void NevadaTerrain::CreateCustomCulture()
 
 	m_pMats = new vtMaterialArray;
 
-#if 0
 	if (m_Params.GetValueBool(STR_DETAILTEXTURE))
 		CreateDetailTextures();
-#endif
 
 	CreatePast();
 	CreatePresent();
@@ -75,7 +73,7 @@ void NevadaTerrain::CreateCustomCulture()
 	EpochEngine *pEE = new EpochEngine(this, m_fLow, m_fHigh,
 		m_pDetailMat2, m_pDetailMat);
 	pEE->setName("Epoch Engine");
-	pEE->AddTarget(vtGetScene()->GetCamera());
+	pEE->SetTarget(vtGetScene()->GetCamera());
 	AddEngine(pEE);
 //	addNode(pEE->m_pSprite);
 
@@ -107,7 +105,7 @@ void NevadaTerrain::CreateWater()
 
 	int id;
 
-	id = m_pMats->AddTextureMaterial(str,
+	id = m_pMats->AddTextureMaterial2(str,
 		false, true,	// cull, light
 		false, false,	// transp, add
 		TERRAIN_AMBIENT, TERRAIN_DIFFUSE, 1.0f, TERRAIN_EMISSIVE);
@@ -120,7 +118,7 @@ void NevadaTerrain::CreateWater()
 	m_pWaterShape->setName("WaterSurface");
 	addNode(m_pWaterShape);
 
-	id = m_pMats->AddTextureMaterial(str,
+	id = m_pMats->AddTextureMaterial2(str,
 		false, true,	// cull, light
 		true, false,	// transp, add
 		TERRAIN_AMBIENT, TERRAIN_DIFFUSE, 0.6f, TERRAIN_EMISSIVE);
@@ -129,7 +127,7 @@ void NevadaTerrain::CreateWater()
 	geode = CreatePlaneGeom(m_pMats, id,  0, 2, 1, org, org+size, 260.3f, 10);
 	m_pWaterShape2 = new vtMovGeode(geode);
 	m_pWaterShape2->setName("WaterSurface2");
-	m_pWaterShape2->Translate(FPoint3(0.0f, .01f, 0.0f));
+	m_pWaterShape2->Translate1(FPoint3(0.0f, .01f, 0.0f));
 	addNode(m_pWaterShape2);
 }
 
@@ -138,7 +136,6 @@ void NevadaTerrain::CreateWater()
 
 void NevadaTerrain::CreateDetailTextures()
 {
-#if 0
 	vtString str;
 
 	str = FindFileOnPaths(vtGetDataPath(), "Nevada/playa3.png");
@@ -157,7 +154,8 @@ void NevadaTerrain::CreateDetailTextures()
 						 true,	// transp: blend
 						 false,	// add
 						 0.3f, 0.6f,	// ambient, diffuse
-						 1.0f, 0.1f);
+						 1.0f, 0.1f,	// alpha, emmisive
+						 true);			// texgen
 	m_pDetailMat = m_pMats->at(id);
 	m_pDetailMat->SetMipMap(true);
 
@@ -168,11 +166,11 @@ void NevadaTerrain::CreateDetailTextures()
 					 true,	// transp: blend
 					 false, // add
 					 0.3f, 0.6f,	// ambient, diffuse
-					 1.0f, 0.1f);	// alpha, emmisive
+					 1.0f, 0.1f,	// alpha, emmisive
+					 true);			// texgen
 	m_pDetailMat2 = m_pMats->at(id);
 	m_pDynGeom->SetDetailMaterial(m_pDetailMat,
 		DETAIL_TILING, DETAIL_DISTANCE);
-#endif
 }
 
 
@@ -186,7 +184,36 @@ void NevadaTerrain::CreatePast()
 	m_pPast->SetEnabled(false);
 
 	FPoint3 center;
-	GetLocalConversion().convert_earth_to_local_xz(MAN_LON, MAN_LAT, center.x, center.z);
+	g_Conv.convert_earth_to_local_xz(MAN_LON, MAN_LAT, center.x, center.z);
+
+#if 0
+	//butterfly: circle radius, speed, height above ground, center, size_exag
+	float height = 80.0f;
+
+	vtGeode *bfly = new Butterfly(this, 0.2f, 50.0f, height, center, 200.0);
+	m_pPast->addChild(bfly);
+	vtGeode *bfly2 = new Butterfly(this, 0.3f, 50.0f, height, center, 200.0);
+	m_pPast->addChild(bfly2);
+	vtGeode *bfly3 = new Butterfly(this, 0.4f, 50.0f, height, center, 200.0);
+	m_pPast->addChild(bfly3);
+#endif
+
+#if 0
+	{
+		typedef vtGeode *shapeptr;
+		int x, y;
+		FPoint3 location;
+		for (x = 0; x < 8; x++)
+		for (y = 0; y < 8; y++)
+		{
+			int num = x*8+y;
+			location.x = center.x - 8 + (x * 2.0f);
+			location.z = center.z - 8 + (y * 2.0f);
+			Butterfly *but = new Butterfly(this, 0.8f, 60 + random(40), height, location, 40);
+			m_pPast->addChild(but);
+		}
+	}
+#endif
 
 #if ENABLE_PLANTS	// enable/disable plants
 	//tree generation
@@ -269,7 +296,7 @@ void NevadaTerrain::CreatePast()
 
 		JumpingEngine *pJumper = new JumpingEngine(bigmike->GetTrans(),
 			sc, m_fGround, 100.f, i * PIf * 2.0f / MIKE_COUNT);
-		pJumper->AddTarget(bigmike);
+		pJumper->SetTarget(bigmike);
 		AddEngine(pJumper);
 	}
 #endif
@@ -430,7 +457,7 @@ bool JumpingEngine::Eval(float t)
 	if (m_vel.y > 0.0f)
 		wiggle2 += sinf(t*10.0f + PIf) * 50.0f * m_vel.y;
 //	VTLOG("wiggle %f\n", wiggle1);
-	pTarget->Scale(1.0f, wiggle1, wiggle2);
+	pTarget->Scale3(1.0f, wiggle1, wiggle2);
 
 	return true;
 }
@@ -553,9 +580,9 @@ void EpochEngine::Eval()
 				pMaterial = m_pPastMat;
 				diffuse = pMaterial->GetDiffuse();
 				diffuse.a = alpha;
-				pMaterial->SetDiffuse(diffuse);
-				//m_pNevada->GetDynTerrain()->SetDetailMaterial(m_pPastMat,
-				//	DETAIL_TILING, DETAIL_DISTANCE);
+				pMaterial->SetDiffuse1(diffuse);
+				m_pNevada->GetDynTerrain()->SetDetailMaterial(m_pPastMat,
+					DETAIL_TILING, DETAIL_DISTANCE);
 			}
 			else
 			{
@@ -564,9 +591,9 @@ void EpochEngine::Eval()
 				pMaterial = m_pPresentMat;
 				diffuse = pMaterial->GetDiffuse();
 				diffuse.a = alpha;
-				pMaterial->SetDiffuse(diffuse);
-				//m_pNevada->GetDynTerrain()->SetDetailMaterial(m_pPresentMat,
-				//	DETAIL_TILING, DETAIL_DISTANCE);
+				pMaterial->SetDiffuse1(diffuse);
+				m_pNevada->GetDynTerrain()->SetDetailMaterial(m_pPresentMat,
+					DETAIL_TILING, DETAIL_DISTANCE);
 			}
 		}
 	}

@@ -187,7 +187,7 @@ vtGeode *CreateRulers(osgText::Font *font, float fSize)
 
 	vtGeode *pGeode = new vtGeode;
 	vtMaterialArrayPtr pMats = new vtMaterialArray;
-	pMats->AddRGBMaterial(RGBf(1.0f, 1.0f, 1.0f), false, false, false);
+	pMats->AddRGBMaterial1(RGBf(1.0f, 1.0f, 1.0f), false, false, false);
 	pGeode->SetMaterials(pMats);
 
 	int up = 0;
@@ -257,6 +257,12 @@ vtGeode *CreateRulers(osgText::Font *font, float fSize)
 				str.Format("%g", j * interval);
 				vtTextMesh *text = new vtTextMesh(font, interval/2, false);
 				text->SetPosition(p);
+				if (i == 0)
+					text->SetAlignment(0);
+				if (i == 1)
+					text->SetAlignment(2);
+				if (i == 3)
+					text->SetAlignment(0);
 				text->SetText(str);
 				pGeode->AddTextMesh(text, 0);
 			}

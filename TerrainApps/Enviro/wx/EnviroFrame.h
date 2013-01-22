@@ -36,7 +36,6 @@ class ProfileDlg;
 class VehicleDlg;
 class vtAbstractLayer;
 class vtFeatureSet;
-class vtStructInstance;
 class vtTerrain;
 class vtTimeEngine;
 #ifdef NVIDIA_PERFORMANCE_MONITORING
@@ -70,7 +69,6 @@ public:
 	int GetTerrainDetail();
 	void ChangePagingRange(float prange);
 	void SetFullScreen(bool bFull);
-	void CreateInstance(const DPoint2 &pos, vtTagArray *tags);
 	ProfileDlg *ShowProfileDlg();
 	void OpenFenceDialog();
 	void ShowPopupMenu(const IPoint2 &pos);
@@ -89,6 +87,7 @@ public:
 	virtual void FrameArgument(int i, const char *str) { }
 	virtual void PostConstruction() { }
 	virtual void AddTool(int id, const wxBitmap &bmp, const wxString &tooltip, bool tog);
+	virtual void ExtendStructure(vtStructInstance *si) {}
 	virtual void SetScenario(int num) {}
 
 	void UpdateLODInfo();
@@ -131,7 +130,6 @@ protected:
 	void OnViewElevLegend(wxCommandEvent& event);
 	void OnViewCompass(wxCommandEvent& event);
 	void OnViewMapOverView(wxCommandEvent& event);
-	void OnViewVertLine(wxCommandEvent& event);
 	void OnViewDrive(wxCommandEvent& event);
 	void OnViewSettings(wxCommandEvent& event);
 	void OnViewLocations(wxCommandEvent& event);
@@ -154,7 +152,6 @@ protected:
 	void OnUpdateViewElevLegend(wxUpdateUIEvent& event);
 	void OnUpdateViewCompass(wxUpdateUIEvent& event);
 	void OnUpdateViewMapOverView(wxUpdateUIEvent& event);
-	void OnUpdateViewVertLine(wxUpdateUIEvent& event);
 	void OnUpdateViewDrive(wxUpdateUIEvent& event);
 	void OnUpdateViewLocations(wxUpdateUIEvent& event);
 	void OnUpdateViewStatusBar(wxUpdateUIEvent& event);
@@ -187,8 +184,8 @@ protected:
 	void OnUpdateToolsFences(wxUpdateUIEvent& event);
 	void OnToolsBuildings(wxCommandEvent& event);
 	void OnUpdateToolsBuildings(wxUpdateUIEvent& event);
-	void OnToolsPower(wxCommandEvent& event);
-	void OnUpdateToolsPower(wxUpdateUIEvent& event);
+	void OnToolsRoutes(wxCommandEvent& event);
+	void OnUpdateToolsRoutes(wxUpdateUIEvent& event);
 	void OnToolsPlants(wxCommandEvent& event);
 	void OnUpdateToolsPlants(wxUpdateUIEvent& event);
 	void OnToolsPoints(wxCommandEvent& event);
@@ -230,10 +227,11 @@ protected:
 	void OnTimeStop(wxCommandEvent& event);
 	void OnTimeFaster(wxCommandEvent& event);
 
-	void OnSurface(wxCommandEvent& event);
+	void OnDynamic(wxCommandEvent& event);
 	void OnCullEvery(wxCommandEvent& event);
 	void OnCullOnce(wxCommandEvent& event);
 	void OnSky(wxCommandEvent& event);
+	void OnHorizon(wxCommandEvent& event);
 	void OnOcean(wxCommandEvent& event);
 	void OnPlants(wxCommandEvent& event);
 	void OnStructures(wxCommandEvent& event);
@@ -249,9 +247,10 @@ protected:
 	void OnTerrainWriteElevation(wxCommandEvent& event);
 	void OnTerrainAddContour(wxCommandEvent& event);
 
-	void OnUpdateSurface(wxUpdateUIEvent& event);
+	void OnUpdateDynamic(wxUpdateUIEvent& event);
 	void OnUpdateCullEvery(wxUpdateUIEvent& event);
 	void OnUpdateSky(wxUpdateUIEvent& event);
+	void OnUpdateHorizon(wxUpdateUIEvent& event);
 	void OnUpdateOcean(wxUpdateUIEvent& event);
 	void OnUpdatePlants(wxUpdateUIEvent& event);
 	void OnUpdateStructures(wxUpdateUIEvent& event);
@@ -286,10 +285,7 @@ protected:
 	virtual void OnHelpDocOnline(wxCommandEvent& event);
 
 	void OnPopupProperties(wxCommandEvent& event);
-	void OnPopupCopyStyle(wxCommandEvent& event);
-	void OnPopupPasteStyle(wxCommandEvent& event);
 	void OnPopupFlip(wxCommandEvent& event);
-	void OnPopupSetEaves(wxCommandEvent& event);
 	void OnPopupReload(wxCommandEvent& event);
 	void OnPopupShadow(wxCommandEvent& event);
 	void OnPopupAdjust(wxCommandEvent& event);

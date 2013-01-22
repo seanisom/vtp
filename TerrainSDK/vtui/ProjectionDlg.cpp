@@ -1,7 +1,7 @@
 //
 // Name:		ProjectionDlg.cpp
 //
-// Copyright (c) 2002-2013 Virtual Terrain Project
+// Copyright (c) 2002-2011 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -17,9 +17,7 @@
 #include "ProjectionDlg.h"
 #include "StatePlaneDlg.h"
 #include "Helper.h"			// for GuessZoneFromGeo
-
 #include "vtdata/vtLog.h"
-#include "vtdata/FileFilters.h"
 
 //
 // Must offset the values we use for Datum because a Choice
@@ -118,7 +116,7 @@ void ProjectionDlg::RefreshDatums()
 	m_pDatumCtrl->Clear();
 
 	m_pDatumCtrl->Append(_("Unknown"), (void *) (-1+CHOICE_OFFSET));
-	for (uint i = 0; i < g_EPSGDatums.size(); i++)
+	for (unsigned int i = 0; i < g_EPSGDatums.GetSize(); i++)
 	{
 		int code = g_EPSGDatums[i].iCode;
 		wxString str(g_EPSGDatums[i].szName, wxConvUTF8);
@@ -216,7 +214,7 @@ void ProjectionDlg::UpdateControlStatus()
 	if (m_eProj == PT_DYMAX)
 		m_pHorizCtrl->Append(_("Unit Edges"), (void *) LU_UNITEDGE);
 	// manually transfer value
-	for (uint j = 0; j < m_pHorizCtrl->GetCount(); j++)
+	for (unsigned int j = 0; j < m_pHorizCtrl->GetCount(); j++)
 	{
 		if ((long int) m_pHorizCtrl->GetClientData(j) == m_proj.GetUnits())
 			m_pHorizCtrl->SetSelection(j);
@@ -230,7 +228,7 @@ void ProjectionDlg::UpdateControlStatus()
 void ProjectionDlg::UpdateDatumStatus()
 {
 	bool bIsCommon = false;
-	for (uint i = 0; i < g_EPSGDatums.size(); i++)
+	for (unsigned int i = 0; i < g_EPSGDatums.GetSize(); i++)
 	{
 		if (g_EPSGDatums[i].iCode == m_iDatum)
 			bIsCommon = g_EPSGDatums[i].bCommon;
@@ -384,7 +382,7 @@ void ProjectionDlg::GetProjection(vtProjection &proj)
 void ProjectionDlg::OnProjSave( wxCommandEvent &event )
 {
 	wxFileDialog saveFile(NULL, _("Save Projection to File"), _T(""), _T(""),
-		FSTRING_PRJ, wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+		_("Projection Files (*.prj)|*.prj"), wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
 	if (saveFile.ShowModal() == wxID_CANCEL)
 		return;
 	wxString strPathName = saveFile.GetPath();
@@ -394,7 +392,7 @@ void ProjectionDlg::OnProjSave( wxCommandEvent &event )
 void ProjectionDlg::OnProjLoad( wxCommandEvent &event )
 {
 	wxFileDialog loadFile(NULL, _("Load Projection from File"), _T(""), _T(""),
-		FSTRING_PRJ, wxFD_OPEN);
+		_("Projection Files (*.prj)|*.prj"), wxFD_OPEN);
 	if (loadFile.ShowModal() != wxID_OK)
 		return;
 	wxString strPathName = loadFile.GetPath();

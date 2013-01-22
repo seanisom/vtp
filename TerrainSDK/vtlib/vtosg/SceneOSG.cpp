@@ -3,11 +3,14 @@
 //
 // Implementation of vtScene for the OSG library
 //
-// Copyright (c) 2001-2012 Virtual Terrain Project
+// Copyright (c) 2001-2011 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
 #include "vtlib/vtlib.h"
+#if OLD_OSG_SHADOWS
+#include "StructureShadowsOSG.h"
+#endif
 
 #include <osgViewer/ViewerEventHandlers>
 
@@ -192,10 +195,6 @@ bool vtScene::Init(int argc, char** argv, bool bStereo, int iStereoMode)
 	m_pOsgViewer->setThreadingModel(osgViewer::Viewer::SingleThreaded);
 #endif
 
-	// We can't use displaySettings->setNumMultiSamples here to enable anti-
-	// aliasing, because it has to be done eariler (at the time the OpenGL
-	// context is made).
-
 #ifdef USE_OSG_STATS
 	osgViewer::StatsHandler* pStatsHandler = new osgViewer::StatsHandler;
 	pStatsHandler->setKeyEventPrintsOutStats(0);
@@ -256,7 +255,7 @@ void vtScene::Shutdown()
 
 	delete m_pDefaultWindow;
 	m_pDefaultWindow = NULL;
-	m_Windows.Clear();
+	m_Windows.Empty();
 
 	// Also clear the OSG cache
 	osgDB::Registry::instance()->clearObjectCache();
@@ -278,7 +277,7 @@ void vtScene::OnMouse(vtMouseEvent &event, vtWindow *pWindow)
 {
 	// Pass event to Engines
 	vtEngineArray list(m_pRootEngine);
-	for (uint i = 0; i < list.size(); i++)
+	for (unsigned int i = 0; i < list.GetSize(); i++)
 	{
 		vtEngine *pEng = list[i];
 		if (pEng->GetEnabled() &&
@@ -291,7 +290,7 @@ void vtScene::OnKey(int key, int flags, vtWindow *pWindow)
 {
 	// Pass event to Engines
 	vtEngineArray list(m_pRootEngine);
-	for (uint i = 0; i < list.size(); i++)
+	for (unsigned int i = 0; i < list.GetSize(); i++)
 	{
 		vtEngine *pEng = list[i];
 		if (pEng->GetEnabled() &&
@@ -319,7 +318,7 @@ void vtScene::DoEngines(vtEngine *eng)
 {
 	// Evaluate Engines
 	vtEngineArray list(eng);
-	for (uint i = 0; i < list.size(); i++)
+	for (unsigned int i = 0; i < list.GetSize(); i++)
 	{
 		vtEngine *pEng = list[i];
 		if (pEng->GetEnabled())
@@ -340,11 +339,11 @@ void vtScene::TargetRemoved(osg::Referenced *tar)
 {
 	// Look at all Engines
 	vtEngineArray list(m_pRootEngine);
-	for (uint i = 0; i < list.size(); i++)
+	for (unsigned int i = 0; i < list.GetSize(); i++)
 	{
 		// If this engine targets something that is no longer there
 		vtEngine *pEng = list[i];
-		for (uint j = 0; j < pEng->NumTargets(); j++)
+		for (unsigned int j = 0; j < pEng->NumTargets(); j++)
 		{
 			// Then remove it
 			if (pEng->GetTarget(j) == tar)
@@ -499,6 +498,11 @@ void vtScene::SetRoot(vtGroup *pRoot)
 	if (pRoot)
 		m_StateRoot->addChild(pRoot);
 
+#if OLD_OSG_SHADOWS
+	// Clear out any shadow stuff
+	m_pStructureShadowsOSG = NULL;
+#endif
+
 	// Remember it
 	m_pRoot = pRoot;
 }
@@ -620,7 +624,7 @@ void vtScene::SetWindowSize(int w, int h, vtWindow *pWindow)
 
 	// Pass event to Engines
 	vtEngineArray list(m_pRootEngine);
-	for (uint i = 0; i < list.size(); i++)
+	for (unsigned int i = 0; i < list.GetSize(); i++)
 	{
 		vtEngine *pEng = list[i];
 		if (pEng->GetEnabled() &&
@@ -628,7 +632,7 @@ void vtScene::SetWindowSize(int w, int h, vtWindow *pWindow)
 			pEng->OnWindowSize(w, h);
 	}
 
-	osgViewer::GraphicsWindow* pGW = GetGraphicsWindow();
+	osgViewer::GraphicsWindow* pGW = (osgViewer::GraphicsWindow*)GetGraphicsContext();
 	if ((NULL != pGW) && pGW->valid())
 	{
 		pGW->getEventQueue()->windowResize(0, 0, w, h);
@@ -676,20 +680,73 @@ bool vtScene::GetWindowSizeFromOSG()
 ////////////////////////////////////////
 // Shadow methods
 
+#if OLD_OSG_SHADOWS
+void vtScene::ShadowVisibleNode(osg::Node *node, bool bVis)
+{
+	if (m_pStructureShadowsOSG.valid())
+		if (bVis)
+			m_pStructureShadowsOSG->ExcludeFromShadower(node, false);
+		else
+			m_pStructureShadowsOSG->ExcludeFromShadower(node, true);
+}
+
+bool vtScene::IsShadowVisibleNode(osg::Node *node)
+{
+	if (m_pStructureShadowsOSG.valid())
+		return (m_pStructureShadowsOSG->IsExcludedFromShadower(node) == false);
+	return false;
+}
+
+void vtScene::SetShadowedNode(vtTransform *pLight, osg::Node *pShadowerNode,
+							  osg::Node *pShadowed, int iRez, float fDarkness,
+							  int iTextureUnit, const FSphere &ShadowSphere)
+{
+	m_pStructureShadowsOSG = new CStructureShadowsOSG;
+	m_pStructureShadowsOSG->Initialise(m_pOsgSceneView.get(), pShadowerNode,
+		pShadowed, iRez, fDarkness, iTextureUnit, ShadowSphere);
+	m_pStructureShadowsOSG->SetSunDirection(v2s(-pLight->GetDirection()));
+	m_pStructureShadowsOSG->ComputeShadows();
+}
+
+void vtScene::UnsetShadowedNode(vtTransform *pTransform)
+{
+	m_pStructureShadowsOSG = NULL;
+}
+
+void vtScene::UpdateShadowLightDirection(vtTransform *pLight)
+{
+	if (m_pStructureShadowsOSG.valid())
+		m_pStructureShadowsOSG->SetSunDirection(v2s(-pLight->GetDirection()));
+}
+
+void vtScene::SetShadowDarkness(float fDarkness)
+{
+	if (m_pStructureShadowsOSG.valid())
+		m_pStructureShadowsOSG->SetShadowDarkness(fDarkness);
+}
+
+void vtScene::SetShadowSphere(const FSphere &ShadowSphere, bool bForceRedraw)
+{
+	if (m_pStructureShadowsOSG.valid())
+		m_pStructureShadowsOSG->SetShadowSphere(ShadowSphere, bForceRedraw);
+}
+
+void vtScene::ComputeShadows()
+{
+	if (m_pStructureShadowsOSG.valid())
+		m_pStructureShadowsOSG->ComputeShadows();
+}
+#endif // OLD_OSG_SHADOWS
+
 void vtScene::SetGraphicsContext(osg::GraphicsContext* pGraphicsContext)
 {
 	m_pGraphicsContext = pGraphicsContext;
 	m_pOsgViewer->getCamera()->setGraphicsContext(pGraphicsContext);
 }
 
-osg::GraphicsContext *vtScene::GetGraphicsContext()
+osg::GraphicsContext* vtScene::GetGraphicsContext()
 {
 	return m_pGraphicsContext.get();
-}
-
-osgViewer::GraphicsWindow *vtScene::GetGraphicsWindow()
-{
-	return dynamic_cast<osgViewer::GraphicsWindow*>(m_pGraphicsContext.get());
 }
 
 ////////////////////////////////////////
@@ -703,7 +760,7 @@ void printnode(osg::Node *node, int tab)
 	osg::notify(osg::WARN) << node->className() << " - " << node->getName() << " @ " << node << std::endl;
 	osg::Group *group = node->asGroup();
 	if (group) {
-		for (uint i = 0; i < group->getNumChildren(); i++) {
+		for (unsigned int i = 0; i < group->getNumChildren(); i++) {
 			printnode(group->getChild(i), tab+1);
 		}
 	}

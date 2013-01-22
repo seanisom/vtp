@@ -36,10 +36,11 @@ extern "C" {
 
 void vtBitmapBase::ScalePixel8(int x, int y, float fScale)
 {
-	uint texel = (int) (GetPixel8(x, y) * fScale);
+	unsigned int texel = GetPixel8(x, y);
+	texel = (int) (texel * fScale);
 	if (texel > 255)
 		texel = 255;
-	SetPixel8(x, y, (uchar) texel);
+	SetPixel8(x, y, (unsigned char) texel);
 }
 
 void vtBitmapBase::ScalePixel24(int x, int y, float fScale)
@@ -66,25 +67,28 @@ void vtBitmapBase::ScalePixel32(int x, int y, float fScale)
 
 void vtBitmapBase::BlitTo(vtBitmapBase &target, int x, int y)
 {
-	const int depth = GetDepth();
-	const int tdepth = target.GetDepth();
+	int depth = GetDepth();
+	int tdepth = target.GetDepth();
 
-	const IPoint2 source_size = GetSize();
-	const IPoint2 target_size = target.GetSize();
+	unsigned int w = GetWidth();
+	unsigned int h = GetHeight();
+	int tw = target.GetWidth();
+	int th = target.GetHeight();
 
+	unsigned int i, j;
 	RGBi rgb;
 	RGBAi rgba;
-	for (int i = 0; i < source_size.x; i++)
+	for (i = 0; i < w; i++)
 	{
-		for (int j = 0; j < source_size.y; j++)
+		for (j = 0; j < h; j++)
 		{
-			const int tx = i+x, ty = j+y;
-			if (tx < 0 || tx > target_size.x-1 || ty < 0 || ty > target_size.y-1)
+			int tx = i+x, ty = j+y;
+			if (tx < 0 || tx > tw-1 || ty < 0 || ty > th-1)
 				continue;
 
 			if (depth == 8 && tdepth == 8)
 			{
-				const uchar value = GetPixel8(i, j);
+				unsigned char value = GetPixel8(i, j);
 				target.SetPixel8(tx, ty, value);
 			}
 			else if (tdepth == 24)
@@ -205,10 +209,10 @@ vtDIB::~vtDIB()
 /**
  * Create a new DIB in memory.
  */
-bool vtDIB::Create(const IPoint2 &size, int bitdepth, bool create_palette)
+bool vtDIB::Create(int xsize, int ysize, int bitdepth, bool create_palette)
 {
-	m_iWidth = size.x;
-	m_iHeight = size.y;
+	m_iWidth = xsize;
+	m_iHeight = ysize;
 	m_iBitCount = bitdepth;
 	m_iByteCount = m_iBitCount/8;
 
@@ -231,8 +235,8 @@ bool vtDIB::Create(const IPoint2 &size, int bitdepth, bool create_palette)
 	m_Data = ((byte *)m_Hdr) + sizeof(BITMAPINFOHEADER) + m_iPaletteSize;
 
 	m_Hdr->biSize = sizeof(BITMAPINFOHEADER);
-	m_Hdr->biWidth = size.x;
-	m_Hdr->biHeight = size.y;
+	m_Hdr->biWidth = xsize;
+	m_Hdr->biHeight = ysize;
 	m_Hdr->biPlanes = 1;
 	m_Hdr->biBitCount = (word) bitdepth;
 	m_Hdr->biCompression = BI_RGB;
@@ -245,7 +249,7 @@ bool vtDIB::Create(const IPoint2 &size, int bitdepth, bool create_palette)
 		RGBQUAD *rgb=(RGBQUAD*)((char*)m_Hdr + sizeof(BITMAPINFOHEADER));
 		for (int i=0; i<256; i++)
 			rgb[i].rgbBlue = rgb[i].rgbGreen = rgb[i].rgbRed =
-				(uchar)i;
+				(unsigned char)i;
 	}
 	m_bLeaveIt = false;
 	return true;
@@ -253,11 +257,11 @@ bool vtDIB::Create(const IPoint2 &size, int bitdepth, bool create_palette)
 
 bool vtDIB::Create24From8bit(const vtDIB &from)
 {
-	if (!Create(from.GetSize(), 24))
+	if (!Create(from.GetWidth(), from.GetHeight(), 24))
 		return false;
 
 	RGBi rgb;
-	uint i, j;
+	unsigned int i, j;
 	for (i = 0; i < m_iWidth; i++)
 	{
 		for (j = 0; j < m_iHeight; j++)
@@ -279,7 +283,7 @@ bool vtDIB::Read(const char *fname, bool progress_callback(int))
 	FILE *fp = vtFileOpen(fname, "rb");
 	if (!fp)
 		return false;
-	uchar buf[2];
+	unsigned char buf[2];
 	if (fread(buf, 2, 1, fp) != 1)
 		return false;
 	fclose(fp);
@@ -495,7 +499,7 @@ bool vtDIB::ReadJPEG(const char *fname, bool progress_callback(int))
 		bitdepth = 8;
 	else
 		bitdepth = 24;
-	if (!Create(IPoint2(cinfo.image_width, cinfo.image_height), bitdepth, bitdepth == 8))
+	if (!Create(cinfo.image_width, cinfo.image_height, bitdepth, bitdepth == 8))
 		return false;
 
 	/* Start decompressor */
@@ -508,7 +512,7 @@ bool vtDIB::ReadJPEG(const char *fname, bool progress_callback(int))
 	JSAMPARRAY buffer = (*cinfo.mem->alloc_sarray)
 		((j_common_ptr) &cinfo, JPOOL_IMAGE, row_stride, 1);
 
-	uint col;
+	unsigned int col;
 
 	/* Process data */
 	while (cinfo.output_scanline < cinfo.output_height)
@@ -598,7 +602,7 @@ bool vtDIB::WriteJPEG(const char *fname, int quality, bool progress_callback(int
 
 	int row_stride = cinfo.image_width * cinfo.input_components;
 
-	uint col;
+	unsigned int col;
 	JSAMPROW row_buffer = new JSAMPLE[row_stride];
 
 	/* Process data */
@@ -649,7 +653,7 @@ bool vtDIB::ReadPNG(const char *fname, bool progress_callback(int))
 {
 	FILE *fp = NULL;
 
-	uchar header[8];
+	unsigned char header[8];
 	png_structp png;
 	png_infop   info;
 	png_infop   endinfo;
@@ -714,7 +718,7 @@ bool vtDIB::ReadPNG(const char *fname, bool progress_callback(int))
 
 	png_read_update_info(png, info);
 
-	uchar *m_pPngData = (png_bytep) malloc(png_get_rowbytes(png, info)*height);
+	unsigned char *m_pPngData = (png_bytep) malloc(png_get_rowbytes(png, info)*height);
 	row_p = (png_bytep *) malloc(sizeof(png_bytep)*height);
 
 	bool StandardOrientation = true;
@@ -746,10 +750,10 @@ bool vtDIB::ReadPNG(const char *fname, bool progress_callback(int))
 			return false;
 	}
 
-	Create(IPoint2(width, height), iBitCount, iBitCount == 8);
+	Create(width, height, iBitCount, iBitCount == 8);
 
 	int png_stride = png_get_rowbytes(png, info);
-	uint row, col;
+	unsigned int row, col;
 	for (row = 0; row < height; row++)
 	{
 		if (progress_callback != NULL)
@@ -920,7 +924,7 @@ bool vtDIB::WritePNG(const char *fname)
 	for (k = 0; k < height; k++)
 		row_pointers[k] = image + k*width*m_iByteCount;
 
-	uint row, col;
+	unsigned int row, col;
 	for (row = 0; row < height; row++)
 	{
 		byte *adr = ((byte *)m_Data) + row*m_iByteWidth;
@@ -1048,14 +1052,15 @@ bool vtDIB::WriteTIF(const char *fname, const DRECT *area,
 
 	GByte *raster = new GByte[m_iWidth*m_iHeight];
 
+	unsigned int x, y;
 	GDALRasterBand *pBand;
 
 	if (m_iBitCount == 8)
 	{
 		pBand = pDataset->GetRasterBand(1);
-		for (uint x = 0; x < m_iWidth; x++)
+		for (x = 0; x < m_iWidth; x++)
 		{
-			for (uint y = 0; y < m_iHeight; y++)
+			for (y = 0; y < m_iHeight; y++)
 				raster[y*m_iWidth + x] = GetPixel8(x, y);
 		}
 		pBand->RasterIO( GF_Write, 0, 0, m_iWidth, m_iHeight,
@@ -1064,16 +1069,17 @@ bool vtDIB::WriteTIF(const char *fname, const DRECT *area,
 	else
 	{
 		RGBi rgb;
-		for (int i = 1; i <= 3; i++)
+		int i;
+		for (i = 1; i <= 3; i++)
 		{
 			pBand = pDataset->GetRasterBand(i);
 
-			for (uint x = 0; x < m_iWidth; x++)
+			for (x = 0; x < m_iWidth; x++)
 			{
 				if (progress_callback != NULL)
 					progress_callback((i-1)*33 + (x * 33 / m_iWidth));
 
-				for (uint y = 0; y < m_iHeight; y++)
+				for (y = 0; y < m_iHeight; y++)
 				{
 					GetPixel24(x, y, rgb);
 					if (i == 1) raster[y*m_iWidth + x] = (GByte) rgb.r;
@@ -1110,9 +1116,9 @@ void vtDIB::LeaveInternalDIB(bool bLeaveIt)
 /**
  * Get a 24-bit RGB value from a 24-bit bitmap.
  *
- * \return R,G,B as the three lowest bytes in an uint.
+ * \return R,G,B as the three lowest bytes in an unsigned int.
  */
-uint vtDIB::GetPixel24(int x, int y) const
+unsigned int vtDIB::GetPixel24(int x, int y) const
 {
 	register byte* adr;
 
@@ -1149,7 +1155,7 @@ void vtDIB::GetPixel24From8bit(int x, int y, RGBi &rgb) const
 {
 	register byte* adr;
 	adr = ((byte *)m_Data) + (m_iHeight-y-1)*m_iByteWidth + x;
-	uchar val = *adr;
+	unsigned char val = *adr;
 
 	RGBQUAD *palette=(RGBQUAD*)((char*)m_Hdr + sizeof(BITMAPINFOHEADER));
 	rgb.b = palette[val].rgbBlue;
@@ -1181,9 +1187,9 @@ void vtDIB::SetPixel24(int x, int y, dword color)
 	// note: Most processors don't support unaligned int/float writes, and on
 	//	   those that do, it's slower than unaligned writes.
 	adr = ((byte *)m_Data) + (m_iHeight-y-1)*m_iByteWidth + (x*m_iByteCount);
-	*((byte *)(adr+0)) = (uchar) (color >> 16);
-	*((byte *)(adr+1)) = (uchar) (color >>  8);
-	*((byte *)(adr+2)) = (uchar) color;
+	*((byte *)(adr+0)) = (unsigned char) (color >> 16);
+	*((byte *)(adr+1)) = (unsigned char) (color >>  8);
+	*((byte *)(adr+2)) = (unsigned char) color;
 }
 
 void vtDIB::SetPixel24(int x, int y, const RGBi &rgb)
@@ -1193,9 +1199,9 @@ void vtDIB::SetPixel24(int x, int y, const RGBi &rgb)
 	// note: Most processors don't support unaligned int/float writes, and on
 	//	   those that do, it's slower than unaligned writes.
 	adr = ((byte *)m_Data) + (m_iHeight-y-1)*m_iByteWidth + (x*m_iByteCount);
-	*((byte *)(adr+0)) = (uchar) rgb.b;
-	*((byte *)(adr+1)) = (uchar) rgb.g;
-	*((byte *)(adr+2)) = (uchar) rgb.r;
+	*((byte *)(adr+0)) = (unsigned char) rgb.b;
+	*((byte *)(adr+1)) = (unsigned char) rgb.g;
+	*((byte *)(adr+2)) = (unsigned char) rgb.r;
 }
 
 void vtDIB::SetPixel32(int x, int y, const RGBAi &rgba)
@@ -1205,17 +1211,17 @@ void vtDIB::SetPixel32(int x, int y, const RGBAi &rgba)
 	// note: Most processors don't support unaligned int/float writes, and on
 	//	   those that do, it's slower than unaligned writes.
 	adr = ((byte *)m_Data) + (m_iHeight-y-1)*m_iByteWidth + (x*m_iByteCount);
-	*((byte *)(adr+0)) = (uchar) rgba.b;
-	*((byte *)(adr+1)) = (uchar) rgba.g;
-	*((byte *)(adr+2)) = (uchar) rgba.r;
+	*((byte *)(adr+0)) = (unsigned char) rgba.b;
+	*((byte *)(adr+1)) = (unsigned char) rgba.g;
+	*((byte *)(adr+2)) = (unsigned char) rgba.r;
 	if (m_iByteCount == 4)
-		*((byte *)(adr+3)) = (uchar) rgba.a;
+		*((byte *)(adr+3)) = (unsigned char) rgba.a;
 }
 
 /**
  * Get a single byte from an 8-bit bitmap.
  */
-uchar vtDIB::GetPixel8(int x, int y) const
+unsigned char vtDIB::GetPixel8(int x, int y) const
 {
 	register byte* adr;
 
@@ -1227,7 +1233,7 @@ uchar vtDIB::GetPixel8(int x, int y) const
 /**
  * Set a single byte in an 8-bit bitmap.
  */
-void vtDIB::SetPixel8(int x, int y, uchar value)
+void vtDIB::SetPixel8(int x, int y, unsigned char value)
 {
 	register byte* adr;
 
@@ -1272,7 +1278,7 @@ void vtDIB::SetPixel1(int x, int y, bool value)
  */
 void vtDIB::SetColor(const RGBi &rgb)
 {
-	uint i, j;
+	unsigned int i, j;
 	for (i = 0; i < m_iWidth; i++)
 		for (j = 0; j < m_iHeight; j++)
 		{
@@ -1285,7 +1291,7 @@ void vtDIB::SetColor(const RGBi &rgb)
  */
 void vtDIB::Invert()
 {
-	uint i, j;
+	unsigned int i, j;
 	if (m_iBitCount == 8)
 	{
 		for (i = 0; i < m_iWidth; i++)
@@ -1315,13 +1321,13 @@ void vtDIB::Invert()
  */
 void vtDIB::Blit(vtDIB &target, int x, int y)
 {
-	uint depth = GetDepth();
+	unsigned int depth = GetDepth();
 	if (depth != target.GetDepth())
 		return;
 	int tw = target.GetWidth();
 	int th = target.GetHeight();
 
-	uint i, j;
+	unsigned int i, j;
 	for (i = 0; i < m_iWidth; i++)
 	{
 		for (j = 0; j < m_iHeight; j++)
@@ -1332,12 +1338,12 @@ void vtDIB::Blit(vtDIB &target, int x, int y)
 
 			if (depth == 8)
 			{
-				uchar value = GetPixel8(i, j);
+				unsigned char value = GetPixel8(i, j);
 				target.SetPixel8(tx, ty, value);
 			}
 			else if (depth == 24)
 			{
-				uint value2 = GetPixel24(i, j);
+				unsigned int value2 = GetPixel24(i, j);
 				target.SetPixel24(tx, ty, value2);
 			}
 		}

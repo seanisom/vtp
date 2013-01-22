@@ -113,28 +113,28 @@ public:
 		const FPoint2 &min1, const FPoint2 &max1, float fLevel, float fTiling);
 
 	// Access vertex properties
-	uint NumVertices() const;
+	unsigned int GetNumVertices() const;
 
-	void SetVtxPos(uint, const FPoint3&);
-	FPoint3 GetVtxPos(uint i) const;
+	void SetVtxPos(unsigned int, const FPoint3&);
+	FPoint3 GetVtxPos(unsigned int i) const;
 
-	void SetVtxNormal(uint, const FPoint3&);
-	FPoint3 GetVtxNormal(uint i) const;
+	void SetVtxNormal(unsigned int, const FPoint3&);
+	FPoint3 GetVtxNormal(unsigned int i) const;
 
-	void SetVtxColor(uint, const RGBAf&);
-	RGBAf GetVtxColor(uint i) const;
+	void SetVtxColor(unsigned int, const RGBAf&);
+	RGBAf GetVtxColor(unsigned int i) const;
 
-	void SetVtxTexCoord(uint, const FPoint2&);
-	FPoint2 GetVtxTexCoord(uint i) const;
+	void SetVtxTexCoord(unsigned int, const FPoint2&);
+	FPoint2 GetVtxTexCoord(unsigned int i) const;
 
 	void SetLineWidth(float fWidth);
 
-	void SetVtxPUV(uint i, const FPoint3 &pos, float u, float v)
+	void SetVtxPUV(unsigned int i, const FPoint3 &pos, float u, float v)
 	{
 		SetVtxPos(i, pos);
 		SetVtxTexCoord(i, FPoint2(u, v));
 	}
-	void SetVtxPN(uint i, const FPoint3 &pos, const FPoint3 &norm)
+	void SetVtxPN(unsigned int i, const FPoint3 &pos, const FPoint3 &norm)
 	{
 		SetVtxPos(i, pos);
 		SetVtxNormal(i, norm);
@@ -145,8 +145,8 @@ public:
 	void AllowOptimize(bool bAllow);
 
 	// Access values
-	int NumPrims() const;
-	int NumIndices() const { return getVertexIndices()->getNumElements(); }
+	int GetNumPrims() const;
+	int GetNumIndices() const { return getVertexIndices()->getNumElements(); }
 	short GetIndex(int i) const { return getIndices()->at(i); }
 	int GetPrimLen(int i) const { return dynamic_cast<const osg::DrawArrayLengths*>(getPrimitiveSet(0))->at(i); }
 

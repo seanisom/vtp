@@ -11,11 +11,10 @@
 #include "wx/wx.h"
 #endif
 
-#include <algorithm>
-
 #include "vtdata/vtLog.h"
 #include "vtui/Helper.h"
 #include "Builder.h"
+#include "Helper.h"
 
 // Layer headers
 #include "WaterLayer.h"
@@ -24,6 +23,7 @@
 #include "RoadLayer.h"
 #include "StructLayer.h"
 #include "VegLayer.h"
+#include "TransitLayer.h"
 #include "UtilityLayer.h"
 #include "RawLayer.h"
 
@@ -37,7 +37,10 @@ const wxChar *vtLayer::LayerFileExtension[LAYER_TYPES] =
 	_T(".vtst"),
 	_T(".hyd"),
 	_T(".vf"),
-	_T(".osm")
+#if SUPPORT_TRANSIT
+	_T(".utl"),
+#endif
+	_T(".xml")
 };
 
 
@@ -51,7 +54,7 @@ wxString GetLayerTypeName(const LayerType &ltype)
 
 //////////////////////////////////////////////////////////
 
-vtLayer::vtLayer(LayerType type) : vtLayerBase(type)
+vtLayer::vtLayer(LayerType type)
 {
 	m_type = type;
 	m_bVisible = true;
@@ -102,9 +105,19 @@ bool vtLayer::Load(const wxString &filename)
 	return success;
 }
 
-void vtLayer::OnModifiedChange()
+bool vtLayer::SetVisible(bool bVisible)
 {
-	g_bld->RefreshTreeStatus();
+	bool prev = m_bVisible;
+	m_bVisible = bVisible;
+	return prev;
+}
+
+void vtLayer::SetModified(bool bModified)
+{
+	bool bNeedRefresh = (m_bModified != bModified);
+	m_bModified = bModified;
+	if (bNeedRefresh)
+		g_bld->RefreshTreeStatus();
 }
 
 void vtLayer::SetLayerFilename(const wxString &fname)
@@ -163,7 +176,7 @@ bool vtLayer::AskForSaveFilename()
 	return true;
 }
 
-vtString vtLayer::GetExportFilename(const wxString &format_filter) const
+vtString vtLayer::GetExportFilename(const wxString &format_filter)
 {
 	wxString filter = _("All Files|*.*");
 	AddType(filter, format_filter);
@@ -236,47 +249,36 @@ vtLayer *vtLayer::CreateNewLayer(LayerType ltype)
 	case LT_VEG:
 		pLayer = new vtVegLayer;
 		break;
-	default:	// Keep picky compilers quiet.
+#if SUPPORT_TRANSIT
+	case LT_TRANSIT:
+		pLayer = new vtTransitLayer;
 		break;
+#endif
 	}
 	return pLayer;
 }
 
 ////////////////////////////////////////////////
 
-LayerArray::~LayerArray()
+void LayerArray::DestructItems(unsigned int first, unsigned int last)
 {
-	if (m_bOwnLayers)
-		DeleteLayers();
-}
-
-void LayerArray::Remove(vtLayer *lay)
-{
-	iterator it = std::find(begin(), end(), lay);
-	if (it != end())
-		erase(it);
-}
-
-void LayerArray::DeleteLayers()
-{
-	for (uint i = 0; i < size(); ++i)
+	for (unsigned int i = first; i <= last; ++i)
 	{
-		vtLayerPtr lp = at(i);
+		vtLayerPtr lp = GetAt(i);
 
 		// safety check
 		assert(lp->GetType() >= LT_UNKNOWN && lp->GetType() < LAYER_TYPES);
 
 		delete lp;
 	}
-	clear();
 }
 
 vtLayer *LayerArray::FindByFilename(const wxString &name)
 {
-	for (uint i = 0; i < size(); i++)
+	for (unsigned int i = 0; i < GetSize(); i++)
 	{
-		if (at(i)->GetLayerFilename() == name)
-			return at(i);
+		if (GetAt(i)->GetLayerFilename() == name)
+			return GetAt(i);
 	}
 	return NULL;
 }

@@ -1,7 +1,7 @@
 //
 // Layer.h
 //
-// Copyright (c) 2001-2013 Virtual Terrain Project
+// Copyright (c) 2001-2011 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -10,7 +10,23 @@
 
 #include "vtdata/MathTypes.h"
 #include "vtdata/vtString.h"
-#include "vtdata/LayerBase.h"
+
+enum LayerType
+{
+	LT_UNKNOWN = -1,
+	LT_RAW,
+	LT_ELEVATION,
+	LT_IMAGE,
+	LT_ROAD,
+	LT_STRUCTURE,
+	LT_WATER,
+	LT_VEG,
+	LT_UTILITY,
+#if SUPPORT_TRANSIT
+	LT_TRANSIT,
+#endif
+	LAYER_TYPES
+};
 
 class BuilderView;
 class vtScaledView;
@@ -23,18 +39,21 @@ struct UIContext;
  * vtLayer is an abstract base class for all the layer classes.
  * It defines a set of operations which each layer class may implement.
  */
-class vtLayer : public vtLayerBase
+class vtLayer
 {
 public:
 	vtLayer(LayerType type);
 	virtual ~vtLayer();
 
+	// attributes
+	LayerType GetType() { return m_type; }
+	bool SetVisible(bool bVisible);
+	bool GetVisible() { return m_bVisible; }
+	void SetModified(bool bModified);
+	bool GetModified() { return m_bModified; }
 	void SetSticky(bool bSticky) { m_bSticky = bSticky; }
 	bool GetSticky() { return m_bSticky; }
 	bool IsNative() { return m_bNative; }
-
-	// Implement LayerBase method
-	virtual void OnModifiedChange();
 
 	wxString GetImportedFrom() { return m_wsImportedFrom; }
 	void SetImportedFrom(const wxString &fname) { m_wsImportedFrom = fname; }
@@ -67,10 +86,11 @@ public:
 	virtual void GetPropertyText(wxString &str) {}
 	virtual wxString GetFileExtension();
 	virtual bool CanBeSaved() { return true; }
-	virtual wxString GetLayerFilename() const { return m_wsFilename; }
+	virtual wxString GetLayerFilename() { return m_wsFilename; }
 	virtual void SetLayerFilename(const wxString &fname);
 	virtual bool AskForSaveFilename();
-	virtual bool GetAreaExtent(DRECT &rect) { return GetExtent(rect); }
+	vtString GetExportFilename(const wxString &format_filter);
+	bool GetAreaExtent(DRECT &rect) { return GetExtent(rect); }
 
 	// UI event handlers which can be implemented if desired
 	virtual void OnLeftDown(BuilderView *pView, UIContext &ui) {}
@@ -79,8 +99,6 @@ public:
 	virtual void OnRightUp(BuilderView *pView, UIContext &ui) {}
 	virtual void OnLeftDoubleClick(BuilderView *pView, UIContext &ui) {}
 	virtual void OnMouseMove(BuilderView *pView, UIContext &ui) {}
-
-	vtString GetExportFilename(const wxString &format_filter) const;
 
 	static wxArrayString LayerTypeNames;
 	static const wxChar *LayerFileExtension[];
@@ -95,6 +113,9 @@ protected:
 	// remember what file this layer was imported from
 	wxString	m_wsImportedFrom;
 
+	LayerType	m_type;
+	bool		m_bVisible;
+	bool		m_bModified;
 	bool		m_bNative;
 	bool		m_bSticky;		// If sticky, don't page out the layer
 };
@@ -106,22 +127,12 @@ typedef vtLayer *vtLayerPtr;
 // Name: LayerArray
 // An array of layer objects.
 //
-class LayerArray : public std::vector<vtLayerPtr>
+class LayerArray : public vtArray<vtLayerPtr>
 {
 public:
-	LayerArray() : m_bOwnLayers(true) {}
-	~LayerArray();
-
-	void Remove(vtLayer *lay);
-	void DeleteLayers();
+	// don't need explicit destructor here because Empty() is always called
+	virtual void DestructItems(unsigned int first, unsigned int last);
 	vtLayer *FindByFilename(const wxString &name);
-
-	/** If true, this array owns the layers it contains, so it will delete them
-	    when the array is deleted. Default is true. */
-	void SetOwnership(bool bOwn) { m_bOwnLayers = bOwn; }
-
-private:
-	bool	m_bOwnLayers;
 };
 
 class DrawStyle

@@ -1,8 +1,8 @@
 //
 // Name:	 EnviroApp.cpp
-// Purpose:  The application class for our wxWidgets application.
+// Purpose:  The application class for our wxWindows application.
 //
-// Copyright (c) 2001-2013 Virtual Terrain Project
+// Copyright (c) 2001-2011 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -24,14 +24,15 @@
 
 #include "vtui/Helper.h"	// for LogWindowsVersion, ProgressDialog
 #include "vtui/LogCatcher.h"
+#include "wxosg/GraphicsWindowWX.h"
 
 #include "xmlhelper/easyxml.hpp"
 
 #include "../Options.h"
-#include "EnviroApp.h"
-#include "EnviroCanvas.h"
-#include "EnviroFrame.h"
 #include "EnviroGUI.h"		// for g_App
+#include "EnviroApp.h"
+#include "EnviroFrame.h"
+#include "canvas.h"
 #include "StartupDlg.h"
 #include "TParamsDlg.h"
 
@@ -108,6 +109,77 @@ void EnviroApp::Args(int argc, wxChar **argv)
 	}
 }
 
+
+void EnviroApp::SetupLocale()
+{
+	VTLOG1("SetupLocale:\n");
+
+	wxLog::SetVerbose(true);
+//	wxLog::AddTraceMask(_T("i18n"));
+
+	// Locale stuff
+	int lang = wxLANGUAGE_DEFAULT;
+	int default_lang = m_locale.GetSystemLanguage();
+
+	const wxLanguageInfo *info = wxLocale::GetLanguageInfo(default_lang);
+	VTLOG("Default language: %d (%s)\n",
+		default_lang, (const char *) info->Description.mb_str(wxConvUTF8));
+
+	// After wx2.4.2, wxWidgets looks in the application's directory for
+	//  locale catalogs, not the current directory.  Here we force it to
+	//  look in the current directory as well.
+	wxString cwd = wxGetCwd();
+	m_locale.AddCatalogLookupPathPrefix(cwd);
+
+	bool bSuccess=false;
+	if (m_locale_name != "")
+	{
+		VTLOG("Looking up language: %s\n", (const char *) m_locale_name);
+		lang = GetLangFromName(wxString(m_locale_name, wxConvUTF8));
+		if (lang == wxLANGUAGE_UNKNOWN)
+		{
+			VTLOG(" Unknown, falling back on default language.\n");
+			lang = wxLANGUAGE_DEFAULT;
+		}
+		else
+		{
+			info = m_locale.GetLanguageInfo(lang);
+			VTLOG("Initializing locale to language %d, Canonical name '%s', Description: '%s':\n",
+				lang,
+				(const char *) info->CanonicalName.mb_str(wxConvUTF8),
+				(const char *) info->Description.mb_str(wxConvUTF8));
+			bSuccess = m_locale.Init(lang);
+		}
+	}
+	if (lang == wxLANGUAGE_DEFAULT)
+	{
+		VTLOG("Initializing locale to default language:\n");
+		bSuccess = m_locale.Init(wxLANGUAGE_DEFAULT);
+		if (bSuccess)
+			lang = default_lang;
+	}
+	if (bSuccess)
+		VTLOG(" succeeded.\n");
+	else
+		VTLOG(" failed.\n");
+
+	VTLOG("Attempting to load the 'Enviro.mo' catalog for the current locale.\n");
+	bSuccess = m_locale.AddCatalog(wxT("Enviro"));
+	if (bSuccess)
+		VTLOG(" succeeded.\n");
+	else
+		VTLOG(" not found.\n");
+	VTLOG("\n");
+
+	// Load any other catalogs which may be specific to this application.
+	LoadAppCatalog(m_locale);
+
+	// Test it
+//	wxString test = _("&File");
+
+	wxLog::SetVerbose(false);
+}
+
 //
 // Initialize the app object
 //
@@ -121,15 +193,12 @@ bool EnviroApp::OnInit()
 	StartLog();
 	LoadOptions();
 
-	// Redirect the wxWidgets log messages to our own logging stream
+	// Redirect the wxWindows log messages to our own logging stream
 	wxLog *logger = new LogCatcher;
 	wxLog::SetActiveTarget(logger);
 
 	Args(argc, argv);
-	SetupLocale("Enviro");
-
-	// Load any other catalogs which may be specific to this application.
-	LoadAppCatalog(m_locale);
+	SetupLocale();
 
 	// If gdal and proj are not set with environment variables, try to set them
 	const char *gdalenv = getenv("GDAL_DATA");
@@ -148,7 +217,7 @@ bool EnviroApp::OnInit()
 		//  of them even before we call vtlib.
 		RefreshTerrainList();
 
-		VTLOG1("Opening the Startup dialog.\n");
+		VTLOG("Opening the Startup dialog.\n");
 		wxString appname(STRING_APPNAME, wxConvUTF8);
 		appname += _T(" v");
 		appname += _T(VTP_VERSION);
@@ -158,7 +227,6 @@ bool EnviroApp::OnInit()
 		StartDlg.GetOptionsFrom(g_Options);
 		StartDlg.CenterOnParent();
 		int result = StartDlg.ShowModal();
-		VTLOG1("Startup dialog returned from ShowModal.\n");
 		if (result == wxID_CANCEL)
 			return false;
 
@@ -216,7 +284,7 @@ void EnviroApp::StartLog()
 	g_App.Startup();	// starts log
 
 	VTLOG("Specific application name: %s\n", STRING_APPNAME);
-	VTLOG("Application framework: wxWidgets v" wxVERSION_NUM_DOT_STRING "\n");
+	VTLOG("Application framework: wxWindows v" wxVERSION_NUM_DOT_STRING "\n");
 #if WIN32
 	VTLOG1(" Running on: ");
 	LogWindowsVersion();
@@ -283,7 +351,7 @@ void EnviroApp::LoadOptions()
 	}
 
 	// Supply the special symbols {appdata} and {appdatacommon}
-	for (uint i = 0; i < dp.size(); i++)
+	for (unsigned int i = 0; i < dp.size(); i++)
 	{
 		dp[i].Replace("{appdata}", AppDataUser);
 		dp[i].Replace("{appdatacommon}", AppDataCommon);
@@ -301,6 +369,13 @@ void EnviroApp::LoadOptions()
 wxString EnviroApp::MakeFrameTitle(vtTerrain *terrain)
 {
 	wxString title(STRING_APPORG, wxConvUTF8);
+
+	// If we are building the standard VTP, instead of some other flavor, then
+	//  put the name of the scene graph library in the title.
+	if (!strcmp(STRING_ORGNAME, "VTP"))
+	{
+		title += _T(" OSG");
+	}
 
 	if (terrain)
 	{
@@ -334,18 +409,12 @@ EnviroFrame *EnviroApp::CreateMainFrame()
 		go = ProcessIdle();
 #endif
 
-	// Initialize the VTP scene.
-	// Get the command-line arguments from wxWidgets, so we can pass them to OSG.
+	// Initialize the VTP scene
 	int MyArgc;
 	char** MyArgv;
 	ConvertArgcArgv(wxApp::argc, wxApp::argv, &MyArgc, &MyArgv);
 	vtGetScene()->Init(MyArgc, MyArgv, g_Options.m_bStereo, g_Options.m_iStereoMode);
-
-	frame->m_canvas->InitGraphicsWindowWX();
-
-	// Only use the spacenavigator if the user wants
-	if (g_Options.m_bUseSpaceNav)
-		frame->m_canvas->EnableSpaceNav();
+	vtGetScene()->SetGraphicsContext(new GraphicsWindowWX(frame->m_canvas));
 
 #if VISUAL_IMPACT_CALCULATOR
 	// Initialise Visual Impact Calculator - this can only be done after the
@@ -355,23 +424,21 @@ EnviroFrame *EnviroApp::CreateMainFrame()
 
 	VTLOG("OSG threading model is: ");
 	osgViewer::Viewer *vw = vtGetScene()->getViewer();
-	switch (vw->getThreadingModel() == osgViewer::Viewer::AutomaticSelection ?
-			vw->suggestBestThreadingModel() : vw->getThreadingModel())
+	switch(vw->getThreadingModel() == osgViewer::Viewer::AutomaticSelection
+		? vw->suggestBestThreadingModel() : vw->getThreadingModel())
 	{
-	case osgViewer::Viewer::SingleThreaded:
-		VTLOG("singleThreaded\n");
-		break;
-	case osgViewer::Viewer::CullDrawThreadPerContext:
-		VTLOG("CullDrawThreadPerContext\n");
-		break;
-	case osgViewer::Viewer::DrawThreadPerContext:
-		VTLOG("DrawThreadPerContext\n");
-		break;
-	case osgViewer::Viewer::CullThreadPerCameraDrawThreadPerContext:
-		VTLOG("CullThreadPerCameraDrawThreadPerContext\n");
-		break;
-	default:	// Keep picky compilers quiet.
-		break;
+		case osgViewer::Viewer::SingleThreaded:
+			VTLOG("singleThreaded\n");
+			break;
+		case osgViewer::Viewer::CullDrawThreadPerContext:
+			VTLOG("CullDrawThreadPerContext\n");
+			break;
+		case osgViewer::Viewer::DrawThreadPerContext:
+			VTLOG("DrawThreadPerContext\n");
+			break;
+		case osgViewer::Viewer::CullThreadPerCameraDrawThreadPerContext:
+			VTLOG("CullThreadPerCameraDrawThreadPerContext\n");
+			break;
 	}
 
 	// Make sure the scene knows the size of the canvas
@@ -408,7 +475,7 @@ void EnviroApp::RefreshTerrainList()
 	bool bShowProgess = paths.size() > 1;
 	if (bShowProgess)
 		OpenProgressDialog(_("Scanning data paths for terrains"), false, NULL);
-	for (uint i = 0; i < paths.size(); i++)
+	for (unsigned int i = 0; i < paths.size(); i++)
 	{
 		vtString directory = paths[i] + "Terrains";
 
@@ -452,7 +519,7 @@ bool EnviroApp::AskForTerrainName(wxWindow *pParent, wxString &strTerrainName)
 	int num = 0, first_idx = 0;
 	std::vector<wxString> choices;
 
-	for (uint i = 0; i < ts->NumTerrains(); i++)
+	for (unsigned int i = 0; i < ts->NumTerrains(); i++)
 	{
 		vtTerrain *terr = ts->GetTerrain(i);
 		wxString wstr(terr->GetName(), wxConvUTF8);
@@ -483,7 +550,7 @@ bool EnviroApp::AskForTerrainName(wxWindow *pParent, wxString &strTerrainName)
 
 vtString EnviroApp::GetIniFileForTerrain(const vtString &name)
 {
-	for (uint i = 0; i < terrain_files.size(); i++)
+	for (unsigned int i = 0; i < terrain_files.size(); i++)
 	{
 		if (name == terrain_names[i])
 			return terrain_paths[i];

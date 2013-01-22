@@ -3,7 +3,7 @@
 //
 // Useful classes and functions for working with geometry and meshes.
 //
-// Copyright (c) 2001-2013 Virtual Terrain Project
+// Copyright (c) 2001-2011 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -49,17 +49,11 @@ public:
 	void SetLineWidth(float width);
 	void SetMatIndex(int iIdx);
 
-	float AddSurfaceLineToMesh(vtHeightField3d *pHF, const DLine2 &line,
-		float fSpacing, float fOffset, bool bInterp = true, bool bCurve = false,
-		bool bTrue = false);
-
-	uint Meshes() { return m_Meshes.size(); }
-	vtMesh *Mesh(int index) { return m_Meshes[index]; }
+	std::vector<vtMesh*> m_Meshes;
 
 protected:
 	void NewMesh();
 
-	std::vector<vtMesh*> m_Meshes;
 	vtGeode *m_pGeode;
 	vtMesh::PrimType m_ePrimType;
 	int m_iVertType;
@@ -97,9 +91,9 @@ public:
 };
 
 
-// Helper functions
+// helper functions
 vtGeode *Create3DCursor(float fSize, float fSmall, float fAlpha = 0.5f);
-vtGeode *CreateBoundSphereGeode(const FSphere &sphere, int res = 24);
+vtGeode *CreateBoundSphereGeom(const FSphere &sphere, int res = 24);
 vtMesh *CreateSphereMesh(const FSphere &sphere, int res = 24);
 vtGeode *CreatePlaneGeom(const vtMaterialArray *pMats, int iMatIdx,
 						int Axis1, int Axis2, int Axis3,
@@ -107,7 +101,7 @@ vtGeode *CreatePlaneGeom(const vtMaterialArray *pMats, int iMatIdx,
 						float fTiling, int steps);
 vtGeode *CreateBlockGeom(const vtMaterialArray *pMats, int iMatIdx,
 						const FPoint3 &size);
-void AddLineMesh(vtGeode *pGeode, int iMatIdx, const FPoint3 &p0, const FPoint3 &p1);
+void AddLineMesh(vtGeode *pGeode, int iMatIdx, FPoint3 &p0, FPoint3 &p1);
 vtGeode *CreateSphereGeom(const vtMaterialArray *pMats, int iMatIdx, int iVertType,
 						 float fRadius, int res);
 vtGeode *CreateCylinderGeom(const vtMaterialArray *pMats, int iMatIdx, int iVertType,

@@ -130,6 +130,8 @@ SMTerrain::SMTerrain() : vtDynTerrainGeom()
 	m_TriPool = NULL;
 	m_HypoLength = NULL;
 	m_pBlockArray = NULL;
+
+	m_bUseTriStrips = true;
 }
 
 SMTerrain::~SMTerrain()
@@ -162,18 +164,18 @@ DTErr SMTerrain::Init(const vtElevationGrid *pGrid, float fZScale)
 	if (err != DTErr_OK)
 		return err;
 
-	if (m_iSize.x != m_iSize.y)
+	if (m_iColumns != m_iRows)
 		return DTErr_NOTSQUARE;
 
 	// get size of array
-	m_iDim = m_iSize.x;
+	m_iDim = m_iColumns;
 
 	// compute n (log2 of grid size)
 	m_n = vt_log2(m_iDim - 1);
 
 	// ensure that the grid is size (1 << n) + 1
 	int required_size = (1<<m_n) + 1;
-	if (m_iSize.x != required_size || m_iSize.y != required_size)
+	if (m_iColumns != required_size || m_iRows != required_size)
 		return DTErr_NOTPOWER2;
 
 	// the triangle bintree will have (2n + 2) levels
@@ -214,7 +216,7 @@ DTErr SMTerrain::Init(const vtElevationGrid *pGrid, float fZScale)
 #endif
 
 	// allocate arrays
-	m_pData = new HeightType[m_iSize.x * m_iSize.y];
+	m_pData = new HeightType[m_iColumns * m_iRows];
 
 	// this is potentially a big chunk of memory, so it may fail
 	if (!m_pData)
@@ -222,9 +224,9 @@ DTErr SMTerrain::Init(const vtElevationGrid *pGrid, float fZScale)
 
 	// copy data from supplied elevation grid
 	float elev;
-	for (i = 0; i < m_iSize.x; i++)
+	for (i = 0; i < m_iColumns; i++)
 	{
-		for (j = 0; j < m_iSize.y; j++)
+		for (j = 0; j < m_iRows; j++)
 		{
 			elev = pGrid->GetFValue(i, j);
 			m_pData[offset(i,j)] = (HeightType)(PACK_SCALE * elev);
@@ -234,13 +236,14 @@ DTErr SMTerrain::Init(const vtElevationGrid *pGrid, float fZScale)
 
 	// find indices of corner vertices
 	m_sw = offset(0, 0);
-	m_nw = offset(0, m_iSize.y-1);
-	m_ne = offset(m_iSize.x-1, m_iSize.y-1);
-	m_se = offset(m_iSize.x-1, 0);
+	m_nw = offset(0, m_iRows-1);
+	m_ne = offset(m_iColumns-1, m_iRows-1);
+	m_se = offset(m_iColumns-1, 0);
 
 	m_iPolygonTarget = DEFAULT_POLYGON_TARGET;
 	m_fQualityConstant= 0.1f;		// safe initial value
 	m_iDrawnTriangles = -1;
+	hack_detail_pass = false;
 
 	return DTErr_OK;
 }
@@ -644,16 +647,18 @@ void SMTerrain::SplitIfNeeded(int num, BinTri *tri,
 {
 /*
 	Cull against view volume.
-	Seumas says: "For each bin tri I first use a recursive function which tests
-	whether the tri is in the frustum.  Totally out tris are dropped, totally
-	in tris switch over to a culling-free recursive function, and partway tris
-	continue with the frustum testing function."
+	Seumas says:
+	"For each bin tri I first use a
+	recursive function which tests whether the tri is in the frustum.
+	Totally out tris are dropped, totally in tris switch over to a
+	culling-free recursive function, and partway tris continue with
+	the frustum testing function."
 */
 	int vc = (v0 + v1) >> 1;
 
 	if (!bEntirelyInFrustum)
 	{
-		const FPoint3 p1(MAKE_XYZ(vc));
+		FPoint3 p1(MAKE_XYZ(vc));
 		int ret = IsVisible(p1, m_HypoLength[level]/2.0f);
 		if (ret == VT_AllVisible)
 		{
@@ -855,6 +860,7 @@ int fan_start;
 int fan_last = 0;
 int fan_count;
 
+
 void SMTerrain::render_triangle_as_fan(BinTri *pTri, int v0, int v1, int va,
 									   bool even, bool right)
 {
@@ -956,6 +962,13 @@ void SMTerrain::render_triangle_single(BinTri *pTri, int v0, int v1, int va)
 	default:			glColor3f(0.0f, 1.0f, 0.0f); break;
 	}
 #endif
+	if (hack_detail_pass)
+	{
+		float dist = (DistanceToTriangle(v0) + DistanceToTriangle(v0))/2;
+		// fade out over 1 km
+		if (dist > m_fDetailDistance) return;
+		glColor4f(1.0f, 1.0f, 1.0f, 1.0f - dist / m_fDetailDistance);
+	}
 	Begin(GL_TRIANGLES);
 
 	send_vertex(v0);
@@ -967,34 +980,36 @@ void SMTerrain::render_triangle_single(BinTri *pTri, int v0, int v1, int va)
 	if (verts_in_buffer == VERTEX_BUFFER_SIZE)
 		flush_buffer(GL_TRIANGLES);
 #endif
-	m_iDrawnTriangles++;
+	if (!hack_detail_pass) m_iDrawnTriangles++;
 }
 
 
-void SMTerrain::RenderBlock(BlockPtr block)
+void SMTerrain::RenderBlock(BlockPtr block, bool bFans)
 {
-#if 1
-	fan_start = -1;
-	render_triangle_as_fan(block->root[0],	block->v0[0],
-		block->v1[0], block->va[0], true, false);
-	render_triangle_as_fan(block->root[1],	block->v0[1],
-		block->v1[1], block->va[1], true, false);
-	End();
-	fan_count++;
-
-#else // The non-triangle-fan way of doing things.
+	if (bFans)
+	{
+		fan_start = -1;
+		render_triangle_as_fan(block->root[0],	block->v0[0],
+			block->v1[0], block->va[0], true, false);
+		render_triangle_as_fan(block->root[1],	block->v0[1],
+			block->v1[1], block->va[1], true, false);
+		End();
+		fan_count++;
+	}
+	else
+	{
 #if USE_VERTEX_BUFFER
-	glVertexPointer(3, GL_FLOAT, 0, g_vbuf_base);
+		glVertexPointer(3, GL_FLOAT, 0, g_vbuf_base);
 #endif
-	render_triangle_single(block->root[0],	block->v0[0],
-		block->v1[0], block->va[0]);
-	render_triangle_single(block->root[1],	block->v0[1],
-		block->v1[1], block->va[1]);
+		render_triangle_single(block->root[0],	block->v0[0],
+			block->v1[0], block->va[0]);
+		render_triangle_single(block->root[1],	block->v0[1],
+			block->v1[1], block->va[1]);
 #if USE_VERTEX_BUFFER
-	if (verts_in_buffer)
-		flush_buffer(GL_TRIANGLES);
+		if (verts_in_buffer)
+			flush_buffer(GL_TRIANGLES);
 #endif
-#endif
+	}
 }
 
 bool SMTerrain::BlockIsVisible(BlockPtr block)
@@ -1046,9 +1061,27 @@ void SMTerrain::RenderSurface()
 
 			LoadSingleMaterial();
 
-			RenderBlock(block);
+			hack_detail_pass = false;
+			RenderBlock(block, m_bUseTriStrips);
+
+			if (m_bDetailTexture)
+			{
+				// once again, with the detail texture
+				ApplyMaterial(m_pDetailMat);
+				SetupTexGen(m_fDetailTiling);
+				hack_detail_pass = true;
+				glPolygonOffset(-1.0f, -1.0f);
+				glEnable(GL_POLYGON_OFFSET_FILL);
+				RenderBlock(block, false);	// NOT as fans
+				glDisable(GL_POLYGON_OFFSET_FILL);
+			}
 		}
 	}
+
+	// statistics
+//	if (m_bUseTriStrips)
+//		float ratio = (float) m_iDrawnTriangles / (float) fan_count;
+
 	DisableTexGen();
 	glPopMatrix();
 }

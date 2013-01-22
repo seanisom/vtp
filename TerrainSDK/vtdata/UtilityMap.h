@@ -4,7 +4,7 @@
 // High-level representation of a utility network, currently supporting
 // power networks (poles and lines).
 //
-// Copyright (c) 2001-2013 Virtual Terrain Project
+// Copyright (c) 2001-2008 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -13,36 +13,30 @@
 
 #include "MathTypes.h"
 #include "Projections.h"
-#include "Content.h"
 
 /**
  * vtPole represent any kind of node in a power network, such as a
  * simple utility pole, a transmission tower, or simply a connection
  * point at a switch or transformer.
  */
-struct vtPole : public vtTagArray
+struct vtPole
 {
-	void Offset(const DPoint2 &delta) { m_p += delta; }
-
-	int m_id;		// More efficient than storing id in the tagarray.
+	int m_type;
 	DPoint2 m_p;
 };
 
-typedef std::vector<vtPole*> vtPoleArray;
+#define LF_UNDERGROUND	1
 
 /**
- * vtLine represent any connection between two or more poles.  It does not
+ * vtLine represent any connection between two poles.  It does not
  * explicitly specify the numer or location of each conductor, merely
  * the high-level topology of the power network.
  */
-struct vtLine : public vtTagArray
+class vtLine : public DLine2
 {
-	void MakePolyline(DLine2 &polyline);
-	uint NumPoles() const { return m_poles.size(); }
-	void AddPole(vtPole *pole) { m_poles.push_back(pole); }
-
-	int m_id;		// More efficient than storing id in the tagarray.
-	vtPoleArray m_poles;
+public:
+	int m_flags;
+	vtPole *m_src, *m_dst;
 };
 
 /**
@@ -54,39 +48,19 @@ public:
 	vtUtilityMap();
 	~vtUtilityMap();
 
-	virtual vtPole *NewPole() { return new vtPole; }
-	virtual vtLine *NewLine() { return new vtLine; }
-
-	vtPole *AddNewPole() {
-		vtPole *pole = NewPole();
-		m_Poles.push_back(pole);
-		return pole;
-	}
-	vtLine *AddNewLine() {
-		vtLine *line = NewLine();
-		m_Lines.push_back(line);
-		return line;
-	}
-
-	uint NumPoles() const { return m_Poles.size(); }
-	uint NumLines() const { return m_Lines.size(); }
-
 	void GetPoleExtents(DRECT &rect);
-	bool WriteOSM(const char *pathname);
-	bool ReadOSM(const char *pathname, bool progress_callback(int) = NULL);
-
-	void SetProjection(const vtProjection &proj);
-	bool TransformTo(vtProjection &proj);
+	bool ImportFromSHP(const char *filename, const vtProjection &proj);
+//	bool ReadXML(const char *pathname, bool progress_callback(int));
 
 protected:
+	bool ImportPolesFromSHP(const char *fname);
+	bool ImportLinesFromSHP(const char *fname);
 	vtPole *ClosestPole(const DPoint2 &p);
 
-	std::vector<vtPole *> m_Poles;
-	std::vector<vtLine *> m_Lines;
+	vtArray<vtPole *> m_Poles;
+	vtArray<vtLine *> m_Lines;
 
 	vtProjection m_proj;
-
-	int	m_iNextAvailableID;
 };
 
 #endif // UTILITYH

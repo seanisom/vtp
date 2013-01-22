@@ -245,7 +245,7 @@ void SceneGraphDlg::AddNodeItemsRecursively(wxTreeItemId hParentItem,
 	if (pNode->getName() != "")
 	{
 		str += _T(" \"");
-		str += wxString::FromUTF8(pNode->getName().c_str());
+		str += wxString::FromAscii(pNode->getName().c_str());
 		str += _T("\"");
 	}
 
@@ -261,7 +261,7 @@ void SceneGraphDlg::AddNodeItemsRecursively(wxTreeItemId hParentItem,
 	osg::Geode *geode = dynamic_cast<osg::Geode*>(pNode);
 	if (pGeode)
 	{
-		int num_mesh = pGeode->NumMeshes();
+		int num_mesh = pGeode->GetNumMeshes();
 		wxTreeItemId	hGeomItem;
 
 		for (int i = 0; i < num_mesh; i++)
@@ -273,8 +273,8 @@ void SceneGraphDlg::AddNodeItemsRecursively(wxTreeItemId hParentItem,
 
 			if (pMesh)
 			{
-				int iNumPrim = pMesh->NumPrims();
-				int iNumVert = pMesh->NumVertices();
+				int iNumPrim = pMesh->GetNumPrims();
+				int iNumVert = pMesh->GetNumVertices();
 
 				vtMesh::PrimType ptype = pMesh->getPrimType();
 				const char *mtype="";
@@ -289,8 +289,6 @@ void SceneGraphDlg::AddNodeItemsRecursively(wxTreeItemId hParentItem,
 				case osg::PrimitiveSet::QUADS: mtype = "Quads"; break;
 				case osg::PrimitiveSet::QUAD_STRIP: mtype = "QuadStrip"; break;
 				case osg::PrimitiveSet::POLYGON: mtype = "Polygon"; break;
-				default:	// Keep picky compilers quiet.
-					break;
 				}
 				str.Printf(_("%d: Mesh, %hs, %d verts, %d prims"), i, mtype, iNumVert, iNumPrim);
 				hGeomItem = m_pTree->AppendItem(hNewItem, str, 6, 6);
@@ -398,7 +396,7 @@ void SceneGraphDlg::AddEnginesRecursively(wxTreeItemId hParentItem,
 	hNewItem = m_pTree->AppendItem(hParentItem, str, 1, 1);
 	m_pTree->SetItemData(hNewItem, new MyTreeItemData(NULL, pEng));
 
-	for (uint i = 0; i < pEng->NumChildren(); i++)
+	for (unsigned int i = 0; i < pEng->NumChildren(); i++)
 	{
 		vtEngine *pChild = pEng->GetChild(i);
 		AddEnginesRecursively(hNewItem, pChild, depth+1);
@@ -480,7 +478,7 @@ void SceneGraphDlg::OnChar(wxKeyEvent& event)
 	if (key == 'd' && m_pSelectedNode)
 		vtLogGraph(m_pSelectedNode);
 
-	// Allow wxWidgets to pass the event along to other code
+	// Allow wxWindows to pass the event along to other code
 	event.Skip();
 }
 
@@ -492,7 +490,7 @@ void SceneGraphDlg::OnLog( wxCommandEvent &event )
 	wxArrayString choices;
 	choices.Add(_("The standard log file (debug.txt)"));
 	choices.Add(_("A dot file (scene.dot)"));
-	int index = wxGetSingleChoiceIndex(_("Log the scene graph to:"), _T(""), choices, this);
+	int index = wxGetSingleChoiceIndex(_("Log the scene graph to:"), _(""), choices, this);
 	if (index == 0)
 	{
 		vtLogGraph(m_pSelectedNode);

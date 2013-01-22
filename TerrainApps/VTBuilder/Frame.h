@@ -1,7 +1,7 @@
 //
 // Frame.h
 //
-// Copyright (c) 2001-2012 Virtual Terrain Project
+// Copyright (c) 2001-2011 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -13,6 +13,8 @@
 #include "wx/dnd.h"
 #include "vtdata/WFSClient.h"	// for OGCServerArray
 #include "StatusBar.h"
+
+#define APPNAME "VTBuilder"
 
 // some shortcuts
 #define ADD_TOOL(bar, id, bmp, label) \
@@ -70,7 +72,6 @@ protected:
 	void OnProjectOpen(wxCommandEvent& event);
 	void OnProjectSave(wxCommandEvent& event);
 	void OnProjectPrefs(wxCommandEvent& event);
-	void OnElevFlip(wxCommandEvent &event);
 	void OnBatchConvert(wxCommandEvent &event);
 	void OnDymaxTexture(wxCommandEvent &event);
 	void OnDymaxMap(wxCommandEvent &event);
@@ -99,8 +100,8 @@ protected:
 	void OnLayerSaveAs(wxCommandEvent& event);
 	void OnLayerImport(wxCommandEvent& event);
 	void OnLayerImportTIGER(wxCommandEvent& event);
-	void OnLayerImportOSM(wxCommandEvent& event);
 	void OnLayerImportNTF(wxCommandEvent& event);
+	void OnLayerImportUtil(wxCommandEvent& event);
 	void OnLayerImportMapSource(wxCommandEvent& event);
 	void OnLayerImportPoint(wxCommandEvent& event);
 	void OnLayerImportXML(wxCommandEvent& event);
@@ -177,19 +178,18 @@ protected:
 	void OnUpdateRoadFlatten(wxUpdateUIEvent& event);
 
 	void OnElevSelect(wxCommandEvent& event);
-	void OnElevRemoveRange(wxCommandEvent& event);
+	void OnRemoveElevRange(wxCommandEvent& event);
 	void OnElevComputeDiff(wxCommandEvent& event);
 	void OnElevSetUnknown(wxCommandEvent& event);
 	void OnFillFast(wxCommandEvent& event);
 	void OnFillSlow(wxCommandEvent& event);
 	void OnFillRegions(wxCommandEvent& event);
-	void OnElevScale(wxCommandEvent& event);
-	void OnElevVertOffset(wxCommandEvent& event);
+	void OnScaleElevation(wxCommandEvent& event);
+	void OnVertOffsetElevation(wxCommandEvent& event);
 	void OnElevExport(wxCommandEvent& event);
 	void OnElevExportBitmap(wxCommandEvent& event);
 	void OnElevToTin(wxCommandEvent& event);
 	void OnElevContours(wxCommandEvent& event);
-	void OnElevCarve(wxCommandEvent& event);
 	void OnElevExportTiles(wxCommandEvent& event);
 	void OnElevMergeTin(wxCommandEvent& event);
 	void OnElevTrimTin(wxCommandEvent& event);
@@ -265,8 +265,7 @@ protected:
 	void OnRawAddPointsGPS(wxCommandEvent& event);
 	void OnRawAddFeatureWKT(wxCommandEvent& event);
 	void OnRawSelectCondition(wxCommandEvent& event);
-	void OnRawGenerateTIN(wxCommandEvent& event);
-	void OnRawConvertToPolygons(wxCommandEvent& event);
+	void OnRawConvertToTIN(wxCommandEvent& event);
 	void OnRawExportImageMap(wxCommandEvent& event);
 	void OnRawExportKML(wxCommandEvent& event);
 	void OnRawGenElevation(wxCommandEvent& event);
@@ -284,8 +283,6 @@ protected:
 	void OnUpdateRawIsActive(wxUpdateUIEvent& event);
 	void OnUpdateRawIsActive3D(wxUpdateUIEvent& event);
 	void OnUpdateRawIsPolygon(wxUpdateUIEvent& event);
-	void OnUpdateRawIsPoint(wxUpdateUIEvent& event);
-	void OnUpdateRawHasPolylines(wxUpdateUIEvent& event);
 	void OnUpdateRawGenElevation(wxUpdateUIEvent& event);
 
 	void OnAreaClear(wxCommandEvent& event);
@@ -293,10 +290,10 @@ protected:
 	void OnAreaZoomLayer(wxCommandEvent& event);
 	void OnAreaTypeIn(wxCommandEvent& event);
 	void OnAreaMatch(wxCommandEvent& event);
-	void OnAreaSampleElev(wxCommandEvent& event);
-	void OnAreaSampleElevTileset(wxCommandEvent& event);
-	void OnAreaSampleImage(wxCommandEvent& event);
-	void OnAreaSampleImageTileset(wxCommandEvent& event);
+	void OnAreaExportElev(wxCommandEvent& event);
+	void OnAreaOptimizedElevTileset(wxCommandEvent& event);
+	void OnAreaOptimizedImageTileset(wxCommandEvent& event);
+	void OnAreaExportImage(wxCommandEvent& event);
 	void OnAreaGenerateVeg(wxCommandEvent& event);
 	void OnAreaVegDensity(wxCommandEvent& event);
 	void OnAreaRequestWFS(wxCommandEvent& event);
@@ -363,7 +360,7 @@ public:
 	void RefreshTreeView();
 	void RefreshStatusBar();
 	BuilderView *GetView() { return m_pView; }
-	virtual void UpdateFeatureDialog(vtRawLayer *raw, vtFeatureSet *set, int iEntity);
+	virtual void UpdateFeatureDialog(vtRawLayer *raw, vtFeatureSetPoint2D *set, int iEntity);
 	virtual void OnSetMode(LBMode m);
 	virtual void OnSelectionChanged();
 
@@ -384,7 +381,6 @@ public:
 	LinearStructureDlg *ShowLinearStructureDlg(bool bShow = true);
 	LinearStructureDlg2d *m_pLinearStructureDlg;
 	InstanceDlg *ShowInstanceDlg(bool bShow);
-	void CreateInstance(const DPoint2 &pos, vtTagArray *tags);
 
 	// Vegetation
 	SpeciesListDlg *m_SpeciesListDlg;

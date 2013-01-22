@@ -11,7 +11,7 @@
 #include "vtdata/vtDIB.h"
 
 struct AttribTableEntry {
-	uint rgb;
+	unsigned int rgb;
 	int attrib;
 };
 
