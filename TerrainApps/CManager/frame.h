@@ -44,6 +44,11 @@ public:
 	int m_last;
 };
 
+
+// some shortcuts
+#define ADD_TOOL(id, bmp, tooltip, tog)	 \
+	m_pToolbar->AddTool(id, bmp, wxNullBitmap, tog, -1, -1, (wxObject *)0, tooltip, tooltip)
+
 class vtFrame: public wxFrame
 {
 public:
@@ -71,9 +76,9 @@ protected:
 	void OnItemRemoveModel(wxCommandEvent& event);
 	void OnItemModelProps(wxCommandEvent& event);
 	void OnItemRotModel(wxCommandEvent& event);
-	void OnItemSetAmbient(wxCommandEvent& event);
-	void OnItemSmoothing(wxCommandEvent& event);
-	void OnItemSave(wxCommandEvent& event);
+	void OnItemSaveSOG(wxCommandEvent& event);
+	void OnItemSaveOSG(wxCommandEvent& event);
+	void OnItemSaveIVE(wxCommandEvent& event);
 	void OnSceneGraph(wxCommandEvent& event);
 	void OnViewOrigin(wxCommandEvent& event);
 	void OnUpdateViewOrigin(wxUpdateUIEvent& event);
@@ -81,21 +86,17 @@ protected:
 	void OnUpdateViewRulers(wxUpdateUIEvent& event);
 	void OnViewWireframe(wxCommandEvent& event);
 	void OnUpdateViewWireframe(wxUpdateUIEvent& event);
-	void OnViewStats(wxCommandEvent& event);
 	void OnViewLights(wxCommandEvent& event);
 	void OnHelpAbout(wxCommandEvent& event);
 
 	void OnUpdateItemAddModel(wxUpdateUIEvent& event);
 	void OnUpdateItemModelExists(wxUpdateUIEvent& event);
+	void OnUpdateItemSaveSOG(wxUpdateUIEvent& event);
 
 	void SaveContentsFile(const wxString &fname);
 	void FreeContents();
 
 	void DisplayMessageBox(const wxString &str);
-	void AddTool(int id, const wxBitmap &bmp, const wxString &tooltip, bool tog) {
-		m_pToolbar->AddTool(id, wxEmptyString, bmp, wxNullBitmap,
-			tog ? wxITEM_CHECK : wxITEM_NORMAL, tooltip, tooltip, NULL);
-	}
 
 public:
 	class vtGLCanvas *m_canvas;

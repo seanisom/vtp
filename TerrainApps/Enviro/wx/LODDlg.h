@@ -33,12 +33,11 @@ public:
 
 	// WDR: method declarations for LODDlg
 	wxTextCtrl* GetTileStatus()  { return (wxTextCtrl*) FindWindow( ID_TILE_STATUS ); }
-	wxTextCtrl* GetTarget()  { return (wxTextCtrl*) FindWindow( ID_TARGET ); }
+	wxSpinCtrl* GetTarget()  { return (wxSpinCtrl*) FindWindow( ID_TARGET ); }
 	wxTextCtrl* GetCurrent()  { return (wxTextCtrl*) FindWindow( ID_CURRENT ); }
 	wxPanel* GetPanel1()  { return (wxPanel*) FindWindow( ID_PANEL1 ); }
 	wxPanel* GetPanel2()  { return (wxPanel*) FindWindow( ID_PANEL2 ); }
 	wxPanel* GetPanel3()  { return (wxPanel*) FindWindow( ID_PANEL3 ); }
-	wxStaticBox* GetTilesetBox() { return (wxStaticBox*) FindWindow(ID_TILESET_STATUS); }
 	wxNotebook *GetNotebook() { return (wxNotebook*) FindWindow( ID_NOTEBOOK ); }
 
 	void Refresh(float res0, float res, float res1, int target, int count,
@@ -48,14 +47,12 @@ public:
 	void DrawStructureState(vtPagedStructureLodGrid *grid, float fPageOutDist);
 	void SetFrame(EnviroFrame *pFrame) { m_pFrame = pFrame; }
 	void SetPagingRange(float fmin, float fmax);
-	void SetTerrain(class vtTerrain *pTerr) { m_pTerrain = pTerr; }
 
 private:
 	// WDR: member variable declarations for LODDlg
 	bool m_bHaveRange;
 	bool m_bHaveRangeVal;
 	bool m_bSet;
-	bool m_bShowTilesetStatus;
 	int m_iTarget;
 	EnviroFrame *m_pFrame;
 	int m_iRange;
@@ -64,8 +61,6 @@ private:
 	float m_fPageout;
 	int m_iCountCur;
 	int m_iCountMax;
-
-	class vtTerrain *m_pTerrain;
 
 	void SlidersToValues();
 	void ValuesToSliders();

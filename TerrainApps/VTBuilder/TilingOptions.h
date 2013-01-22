@@ -22,7 +22,6 @@ public:
 	{
 		bCreateDerivedImages = false;
 		bMaskUnknownAreas = false;
-		bImageAlpha = false;
 		bOmitFlatTiles = false;
 		bUseTextureCompression = false;
 		eCompressionType = TC_OPENGL;
@@ -38,17 +37,10 @@ public:
 	int numlods;
 	vtString fname;
 
-	// If this is an elevation tileset, then create a corresponding derived
-	//  image tileset.
+	// If this is an elevation tileset, then optionally a corresponding
+	//  derived image tileset can be created.
 	bool bCreateDerivedImages;
-
-	// If creating a derived image tileset, then use alpha values to mask where
-	//  the elevation has NODATA.
 	bool bMaskUnknownAreas;
-
-	// If creating imagery tiles, use alpha values. Implied by bMaskUnknownAreas.
-	bool bImageAlpha;
-
 	vtString fname_images;
 	ElevDrawOptions draw;
 

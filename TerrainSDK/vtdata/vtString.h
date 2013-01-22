@@ -15,9 +15,7 @@
 
 #include "config_vtdata.h"
 
-#if SUPPORT_WSTRING
 class wstring2;
-#endif
 
 #ifdef WIN32
 #  define WIN_UNIX_CDECL __cdecl
@@ -35,7 +33,7 @@ class wstring2;
 // pointer to const char
 typedef char *pchar;
 typedef const char *pcchar;
-typedef const uchar *pcuchar;
+typedef const unsigned char *pcuchar;
 
 struct vtStringData
 {
@@ -49,7 +47,7 @@ struct vtStringData
 
 /**
  * This class encapsulates a simple string, much like the 'CString' of MFC,
- * or the 'wxString' of wxWidgets.
+ * or the 'wxString' of wxWindows.
  */
 class vtString
 {
@@ -62,8 +60,8 @@ public:
 	vtString(const vtString& stringSrc);
 	// from an ANSI string (converts to char)
 	vtString(pcchar lpsz);
-	// from ucharacters
-	vtString(const uchar* psz);
+	// from unsigned characters
+	vtString(const unsigned char* psz);
 	// subset of characters from an ANSI string (converts to char)
 	vtString(pcchar lpch, int nLength);
 
@@ -74,14 +72,12 @@ public:
 	// TRUE if zero length
 	bool IsEmpty() const;
 	// clear contents to empty
-	void Clear();
+	void Empty();
 
 	// return single character at zero-based index
 	char GetAt(int nIndex) const;
 	// return single character at zero-based index
-	const char& operator[](int nIndex) const;
-	// access single character at zero-based index
-	char& operator[](int nIndex);
+	char operator[](int nIndex) const;
 	// set a single character at zero-based index
 	void SetAt(int nIndex, char ch);
 	// return pointer to const string
@@ -93,8 +89,8 @@ public:
 	const vtString& operator=(const vtString& stringSrc);
 	// copy string content from ANSI string (converts to char)
 	const vtString& operator=(pcchar lpsz);
-	// copy string content from uchars
-	const vtString& operator=(const uchar* psz);
+	// copy string content from unsigned chars
+	const vtString& operator=(const unsigned char* psz);
 
 	// string concatenation
 
@@ -216,8 +212,8 @@ public:
 
 #if SUPPORT_WSTRING
 	wstring2 UTF8ToWideString();
-#endif
 	vtString UTF8ToLocal();
+#endif
 
 // Implementation
 public:
@@ -276,9 +272,9 @@ inline void vtString::Init()
 	{ m_pchData = vtEmptyString.m_pchData; }
 inline vtString::vtString()
 	{ m_pchData = vtEmptyString.m_pchData; }
-inline vtString::vtString(const uchar* lpsz)
+inline vtString::vtString(const unsigned char* lpsz)
 	{ Init(); *this = (pcchar)lpsz; }
-inline const vtString& vtString::operator=(const uchar* lpsz)
+inline const vtString& vtString::operator=(const unsigned char* lpsz)
 	{ *this = (pcchar)lpsz; return *this; }
 
 inline int vtString::GetLength() const
@@ -302,12 +298,7 @@ inline char vtString::GetAt(int nIndex) const
 {
 	return m_pchData[nIndex];
 }
-inline const char& vtString::operator[](int nIndex) const
-{
-	// same as GetAt
-	return m_pchData[nIndex];
-}
-inline char& vtString::operator[](int nIndex)
+inline char vtString::operator[](int nIndex) const
 {
 	// same as GetAt
 	return m_pchData[nIndex];
@@ -358,8 +349,10 @@ void EscapeStringForXML(const std::wstring &input, std::string &output);
 void EscapeStringForXML(const std::wstring &input, std::wstring &output);
 #endif
 
-vtString UTF8ToLocal(const char *string_utf8);
 
+#if SUPPORT_WSTRING
+vtString UTF8ToLocal(const char *string_utf8);
+#endif
 
 /////////////////////////////////////////////////////////////////////////////
 // wstring2
@@ -378,7 +371,7 @@ vtString UTF8ToLocal(const char *string_utf8);
  *
  * Unlike wxString, this class always uses wide characters, so it does not
  * need to be compiled in two flavors.  It also avoids a dependency on all
- * of wxWidgets as well..
+ * of wxWindows as well..
  *
  * Unlike MFC's CString, this class actually stores wide characters rather
  * than messy, multi-byte variable encodings.

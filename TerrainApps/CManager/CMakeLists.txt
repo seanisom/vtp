@@ -14,12 +14,9 @@ if(MSVC)
 	set_source_files_properties(${CMANAGER_SOURCE_FILES} PROPERTIES COMPILE_FLAGS /Yuwx/wxprec.h)
 	set_source_files_properties(pre.cpp PROPERTIES COMPILE_FLAGS /Ycwx/wxprec.h)
 else(MSVC)
-	add_executable(CManager WIN32 MACOSX_BUNDLE ${CMANAGER_SOURCE_FILES} ${CMANAGER_HEADER_FILES}
+	add_executable(CManager WIN32 ${CMANAGER_SOURCE_FILES} ${CMANAGER_HEADER_FILES}
 			${CMANAGER_RC_FILES})
 endif(MSVC)
-
-install(TARGETS CManager RUNTIME DESTINATION bin
-                         BUNDLE DESTINATION bin)
 
 # Internal library dependencies for this target
 target_link_libraries(CManager wxosg vtlib vtdata vtui xmlhelper minidata)
@@ -73,10 +70,6 @@ endif(MINI_FOUND)
 if(OPENGL_gl_LIBRARY)
 	target_link_libraries(CManager ${OPENGL_gl_LIBRARY})
 endif(OPENGL_gl_LIBRARY)
-
-if(OPENGL_glu_LIBRARY)
-	target_link_libraries(CManager ${OPENGL_glu_LIBRARY})
-endif(OPENGL_glu_LIBRARY)
 
 if(CURL_FOUND)
 	target_link_libraries(CManager ${CURL_LIBRARIES})

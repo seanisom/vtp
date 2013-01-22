@@ -87,7 +87,7 @@ void SelectDlg::OnInitDialog(wxInitDialogEvent& event)
 		m_iFauxFields = 3;
 	}
 
-	for (uint i = 0; i < pSet->NumFields(); i++)
+	for (unsigned int i = 0; i < pSet->GetNumFields(); i++)
 	{
 		Field *field = pSet->GetField(i);
 		wxString str(field->m_name, wxConvUTF8);
@@ -118,7 +118,7 @@ void SelectDlg::FillValuesControl()
 	}
 
 	vtFeatureSet *pSet = m_pLayer->GetFeatureSet();
-	for (uint i = 0; i < pSet->NumEntities(); i++)
+	for (unsigned int i = 0; i < pSet->GetNumEntities(); i++)
 	{
 		pSet->GetValueAsString(i, m_iField, str);
 		if (str == "")
@@ -164,7 +164,7 @@ void SelectDlg::OnChoiceField( wxCommandEvent &event )
 void SelectDlg::OnOK( wxCommandEvent &event )
 {
 	// Using a validator for Combo Box doesn't work perfectly in last version
-	// of wxWidgets.  Get the value directly instead.
+	// of wxWindows.  Get the value directly instead.
 	m_strValue = GetComboValue()->GetValue();
 
 	event.Skip();

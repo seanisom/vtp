@@ -14,9 +14,10 @@
 
 #include <wx/colordlg.h>
 #include "RenderDlg.h"
+#include "FileFilters.h"
+#include "Helper.h"
 
 #include "vtdata/DataPath.h"
-#include "vtdata/FileFilters.h"
 #include "vtdata/FilePath.h"
 #include "vtui/AutoDialog.h"
 #include "vtui/ColorMapDlg.h"
@@ -38,6 +39,7 @@ BEGIN_EVENT_TABLE(RenderDlg, RenderDlgBase)
 	EVT_RADIOBUTTON( ID_JPEG, RenderDlg::OnRadio )
 	EVT_BUTTON( ID_DOTDOTDOT, RenderDlg::OnDotdotdot )
 	EVT_CHECKBOX( ID_CONSTRAIN, RenderDlg::OnConstrain )
+	EVT_CHECKBOX( ID_TILING, RenderDlg::OnConstrain )
 	EVT_CHECKBOX( ID_CONSTRAIN, RenderDlg::OnConstrain )
 	EVT_BUTTON( ID_SMALLER, RenderDlg::OnSmaller )
 	EVT_BUTTON( ID_BIGGER, RenderDlg::OnBigger )
@@ -51,12 +53,13 @@ RenderDlg::RenderDlg( wxWindow *parent, wxWindowID id, const wxString &title,
 {
 	m_power = 8;
 	m_bConstraint = false;
+	m_bTiling = false;
 	m_bToFile = false;
 	m_bJPEG = false;
 	m_ColorNODATA.Set(255,0,0);
 
-	m_Size.x = 256;
-	m_Size.y = 256;
+	m_iSizeX = 256;
+	m_iSizeY = 256;
 
 	// sampling
 	AddValidator(this, ID_RADIO_TO_FILE, &m_bToFile);
@@ -66,9 +69,10 @@ RenderDlg::RenderDlg( wxWindow *parent, wxWindowID id, const wxString &title,
 	AddValidator(this, ID_CHOICE_COLORS, &m_strColorMap);
 	AddValidator(this, ID_SHADING, &m_bShading);
 
-	AddNumValidator(this, ID_SIZEX, &m_Size.x);
-	AddNumValidator(this, ID_SIZEY, &m_Size.y);
+	AddNumValidator(this, ID_SIZEX, &m_iSizeX);
+	AddNumValidator(this, ID_SIZEY, &m_iSizeY);
 	AddValidator(this, ID_CONSTRAIN, &m_bConstraint);
+	AddValidator(this, ID_TILING, &m_bTiling);
 
 	UpdateEnabling();
 
@@ -88,7 +92,13 @@ void RenderDlg::OnInitDialog(wxInitDialogEvent& event)
 void RenderDlg::RecomputeSize()
 {
 	if (m_bConstraint)  // powers of 2 + 1
-		m_Size.x = m_Size.y = (1 << m_power);
+		m_iSizeX = m_iSizeY = (1 << m_power);
+
+	if (m_bConstraint && m_bTiling)
+	{
+		m_iSizeX -= 3;
+		m_iSizeY -= 3;
+	}
 }
 
 void RenderDlg::UpdateEnabling()
@@ -100,6 +110,7 @@ void RenderDlg::UpdateEnabling()
 
 	GetSmaller()->Enable(m_bConstraint);
 	GetBigger()->Enable(m_bConstraint);
+	GetTiling()->Enable(m_bConstraint);
 	GetSizeX()->SetEditable(!m_bConstraint);
 	GetSizeY()->SetEditable(!m_bConstraint);
 }
@@ -107,7 +118,7 @@ void RenderDlg::UpdateEnabling()
 void RenderDlg::UpdateColorMapChoice()
 {
 	GetColorMap()->Clear();
-	for (uint i = 0; i < vtGetDataPath().size(); i++)
+	for (unsigned int i = 0; i < vtGetDataPath().size(); i++)
 	{
 		// fill the "colormap" control with available colormap files
 		AddFilenamesToChoice(GetColorMap(), vtGetDataPath()[i] + "GeoTypical", "*.cmt");
@@ -174,6 +185,8 @@ void RenderDlg::OnDotdotdot( wxCommandEvent &event )
 	filter += FSTRING_JPEG;
 	filter += _T("|");
 	filter += FSTRING_TIF;
+	filter += _T("|");
+	filter += FSTRING_ECW;	
 
 	// ask the user for a filename
 	wxFileDialog saveFile(NULL, _("Specify image file"), _T(""), _T(""),
@@ -235,8 +248,8 @@ void RenderDlg::OnConstrain( wxCommandEvent &event )
 	{
 		// round up to a value at least as great as the current size
 		m_power = 1;
-		while (((1 << m_power) + 1) < m_Size.x ||
-			   ((1 << m_power) + 1) < m_Size.y)
+		while (((1 << m_power) + 1) < m_iSizeX ||
+			   ((1 << m_power) + 1) < m_iSizeY)
 			m_power++;
 	}
 	RecomputeSize();

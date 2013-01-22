@@ -71,11 +71,7 @@ public:
 
 private:
 #ifdef WIN32
-#if SUPPORT_WSTRING
 	struct _wfinddata_t m_data;
-#else
-	struct _finddata_t m_data;
-#endif
 	long               m_handle;
 #else
 	DIR         *m_handle;
@@ -99,7 +95,7 @@ vtString get_line_from_stream(std::ifstream &input);
 void RemoveFileExtensions(vtString &fname, bool bAll = true);
 vtString GetExtension(const vtString &fname, bool bFull = true);
 vtString ChangeFileExtension(const char *input, const char *extension);
-bool vtFileExists(const char *fname);
+bool FileExists(const char *fname);
 int GetFileSize(const char *fname);
 
 void SetEnvironmentVar(const vtString &var, const vtString &value);

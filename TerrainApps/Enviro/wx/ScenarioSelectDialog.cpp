@@ -27,7 +27,7 @@ bool CScenarioListValidator::TransferToWindow()
 	if (NULL != pListBox)
 	{
 		pListBox->Clear();
-		for (uint i = 0; i < m_pScenarios->size(); i++)
+		for (unsigned int i = 0; i < m_pScenarios->size(); i++)
 		{
 			wxString str((*m_pScenarios)[i].GetValueString(STR_SCENARIO_NAME), wxConvUTF8);
 			pListBox->Append(str);
@@ -83,10 +83,7 @@ ScenarioSelectDialog::ScenarioSelectDialog( wxWindow *parent, wxWindowID id, con
 void ScenarioSelectDialog::SetTerrain(vtTerrain *pTerrain)
 {
 	m_pTerrain = pTerrain;
-	if (pTerrain)
-		m_Scenarios = pTerrain->GetParams().m_Scenarios;
-	else
-		m_Scenarios.clear();
+	m_Scenarios = pTerrain->GetParams().m_Scenarios;
 	m_bModified = false;
 	UpdateEnableState();
 }
@@ -105,8 +102,7 @@ void ScenarioSelectDialog::ActivateCurrent()
 	int sel = GetScenarioList()->GetSelection();
 	if (sel < 0)
 		return;
-	if (m_pTerrain)
-		m_pTerrain->ActivateScenario(sel);
+	m_pTerrain->ActivateScenario(sel);
 	g_App.SetScenario(sel);
 }
 
@@ -188,7 +184,7 @@ void ScenarioSelectDialog::OnMoveDownScenario( wxCommandEvent &event )
 		ScenarioParams TempParams = m_Scenarios[iSelected];
 		wxString TempString = pScenarioList->GetString(iSelected);
 		pScenarioList->Delete(iSelected);
-// Bug in wxWidgets
+// Bug in wxWindows
 //	  pScenarioList->SetSelection(pScenarioList->Insert(TempString, iSelected + 1));
 		pScenarioList->Insert(TempString, iSelected + 1);
 		pScenarioList->SetSelection(iSelected + 1);
@@ -209,7 +205,7 @@ void ScenarioSelectDialog::OnMoveUpScenario( wxCommandEvent &event )
 		ScenarioParams TempParams = m_Scenarios[iSelected];
 		wxString TempString = pScenarioList->GetString(iSelected);
 		pScenarioList->Delete(iSelected);
-// Bug in wxWidgets
+// Bug in wxWindows
 //	  pScenarioList->SetSelection(pScenarioList->Insert(TempString, iSelected - 1));
 		pScenarioList->Insert(TempString, iSelected - 1);
 		pScenarioList->SetSelection(iSelected - 1);
@@ -232,13 +228,13 @@ void ScenarioSelectDialog::OnEditScenario( wxCommandEvent &event )
 		if (m_pTerrain->IsCreated())
 		{
 			LayerSet &layers = m_pTerrain->GetLayers();
-			for (uint i = 0; i < layers.size(); i++)
+			for (unsigned int i = 0; i < layers.size(); i++)
 				lnames.push_back(layers[i]->GetLayerName());
 		}
 		else
 		{
 			std::vector<vtTagArray> &layers = m_pTerrain->GetParams().m_Layers;
-			for (uint i = 0; i < layers.size(); i++)
+			for (unsigned int i = 0; i < layers.size(); i++)
 				lnames.push_back(layers[i].GetValueString("Filename"));
 		}
 

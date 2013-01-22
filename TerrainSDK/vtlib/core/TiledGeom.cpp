@@ -1,7 +1,7 @@
 //
 // vtTiledGeom: Renders tiled heightfields using Roettger's libMini library
 //
-// Copyright (c) 2005-2013 Virtual Terrain Project
+// Copyright (c) 2005-2009 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -162,7 +162,7 @@ static vtTiledGeom *s_pTiledGeom = NULL;
 TiledDatasetDescription::TiledDatasetDescription()
 {
 	cols = rows = lod0size = 0;
-	earthextents.SetToZero();
+	earthextents.Empty();
 	minheight = maxheight = INVALID_ELEVATION;
 	bJPEG = false;
 }
@@ -282,9 +282,9 @@ int file_exists(const char *filename)
 
 ///////////////////////////////////////////////////////////////////////
 
-int request_callback(int col,int row,const uchar *mapfile,int hlod,
-					 const uchar *texfile,int tlod,
-					  const uchar *fogfile, void *data,
+int request_callback(int col,int row,const unsigned char *mapfile,int hlod,
+					 const unsigned char *texfile,int tlod,
+					  const unsigned char *fogfile, void *data,
 					  databuf *hfield, databuf *texture, databuf *fogmap)
 {
 	vtTiledGeom *tg = (vtTiledGeom *) data;
@@ -356,7 +356,7 @@ void mini_error_handler(const char *file, int line, int fatal)
 	VTLOG("libMini error: file '%s', line %d, fatal %d\n", file, line, fatal);
 }
 
-void request_callback_async(const uchar *mapfile, databuf *map,
+void request_callback_async(const unsigned char *mapfile, databuf *map,
 							int istexture, int background, void *data)
 {
 	vtTiledGeom *tg = (vtTiledGeom*) data;
@@ -387,13 +387,13 @@ void request_callback_async(const uchar *mapfile, databuf *map,
 	}
 }
 
-int check_callback(const uchar *mapfile, int istexture, void *data)
+int check_callback(const unsigned char *mapfile, int istexture, void *data)
 {
 	vtTiledGeom *tg = (vtTiledGeom*) data;
 	return tg->CheckMapFile((char *)mapfile, istexture != 0);
 }
 
-int inquiry_callback(int col, int row, const uchar *mapfile, int hlod,
+int inquiry_callback(int col, int row, const unsigned char *mapfile, int hlod,
 					  void *data, float *minvalue, float *maxvalue)
 {
 	vtTiledGeom *tg = (vtTiledGeom*) data;
@@ -403,7 +403,7 @@ int inquiry_callback(int col, int row, const uchar *mapfile, int hlod,
 	return tg->CheckMapFile((char *)mapfile, false);
 }
 
-int query_callback(int col, int row, const uchar *texfile, int tlod,
+int query_callback(int col, int row, const unsigned char *texfile, int tlod,
 					void *data, int *tsizex, int *tsizey)
 {
 	vtTiledGeom *tg = (vtTiledGeom*) data;
@@ -644,9 +644,9 @@ void vtTiledGeom::SetVertexTarget(int iVertices)
 
 void vtTiledGeom::SetupMiniLoad(bool bThreading, bool bGradual)
 {
-	VTLOG("SetupMiniLoad: Calling miniload constructor(%d,%d,..)\n", cols, rows);
-	m_pMiniLoad = new miniload((const uchar **)hfields,
-		(const uchar **)textures,
+	VTLOG("Calling miniload constructor(%d,%d,..)\n", cols, rows);
+	m_pMiniLoad = new miniload((const unsigned char **)hfields,
+		(const unsigned char **)textures,
 		cols, rows,
 		coldim, rowdim,
 		m_fMaximumScale, center.x, center.y, center.z);
@@ -655,7 +655,6 @@ void vtTiledGeom::SetupMiniLoad(bool bThreading, bool bGradual)
 
 #if USE_VERTEX_CACHE
 	// use primitive caching with vertex arrays
-	VTLOG1(" Using vertex cache.\n");
 	m_pMiniCache = new minicache;
 	m_pMiniCache->attach(m_pMiniTile);
 #endif
@@ -773,7 +772,6 @@ void vtTiledGeom::SetupMiniLoad(bool bThreading, bool bGradual)
 #if SUPPORT_THREADING
 	if (bThreading)
 	{
-		VTLOG1(" Using threading.\n");
 		// Now set up MiniCloud
 		m_pDataCloud = new datacloud(m_pMiniLoad);
 		m_pDataCloud->setloader(request_callback_async, this, check_callback,
@@ -802,17 +800,22 @@ void vtTiledGeom::SetupMiniLoad(bool bThreading, bool bGradual)
 		// If the user wants, start with minimal tileset and load first tiles gradually
 		if (bGradual)
 		{
-			VTLOG1(" Using gradual loading.\n");
-			// This ensures that lowest detail is loaded first? Actually, it
-			// doesn't seem to have much effect.  It seems the default behavior
-			// now is to load initially minimal tileset anyway.
-			m_pMiniLoad->updateroi(1.0f);
+			float rx = center.x;
+			float rz = center.z;
+			//float rrad = prange;
+			float rrad = 1.0f;
+			// This will start with a _very_ minimal tileset of 2x2 tiles
+			//m_pMiniLoad->restrictroi(rx, rz, rrad);
+
+			float res = TILEDGEOM_RESOLUTION_MIN;
+			float ex = center.x;
+			float ey = 10*farp;
+			float ez = center.z;
+			// This ensures that lowest detail is loaded first
+			m_pMiniLoad->updateroi(rrad);
 		}
 	}
-	else
-		VTLOG1(" Not using threading.\n");
 #endif // THREADED
-	VTLOG1(" SetupMiniLoad finished.\n");
 }
 
 void vtTiledGeom::SetPagingRange(float val)
@@ -892,10 +895,6 @@ void vtTiledGeom::SetBaseURL(const char *url)
 
 void vtTiledGeom::DoRender()
 {
-	static bool bFirst = true;
-	if (bFirst)
-		VTLOG1("First vtTiledGeom render\n");
-
 	clock_t c1 = clock();
 
 	// This vtlib material is just a placeholder, since libMini applies its own
@@ -945,11 +944,12 @@ void vtTiledGeom::DoRender()
 //	m_iVertexCount = m_pMiniCache->getvtxcnt();
 #endif
 
-	if (bFirst)
+	static bool first = true;
+	if (first)
 	{
 		VTLOG("  First Render: %.3f seconds.\n", (float)(clock() - c1) / CLOCKS_PER_SEC);
+		first = false;
 		SetProgressCallback(NULL);
-		bFirst = false;
 	}
 
 	// When vertex count changes, we know a full update occurred
@@ -1027,7 +1027,7 @@ void vtTiledGeom::DoCull(const vtCamera *pCam)
 
 	// Get up vector and direction vector from camera matrix
 	FMatrix4 mat;
-	pCam->GetTransform(mat);
+	pCam->GetTransform1(mat);
 	FPoint3 up(0.0f, 1.0f, 0.0f);
 	mat.TransformVector(up, eye_up);
 
@@ -1186,7 +1186,7 @@ bool vtTiledGeom::CastRayToSurface(const FPoint3 &point, const FPoint3 &dir,
 	return true;
 }
 
-FPoint2 vtTiledGeom::GetWorldSpacingAtPoint(const DPoint2 &p) const
+FPoint2 vtTiledGeom::GetWorldSpacingAtPoint(const DPoint2 &p)
 {
 	float x, z;
 	m_Conversion.ConvertFromEarth(p, x, z);

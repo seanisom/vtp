@@ -21,10 +21,6 @@ public:
 	float m_fSpeed, m_fLastTime;
 };
 
-/**
- The core GUI class of the application.  Handles GUI implementations of all the
- functionality of the Enviro class.
- */
 class EnviroGUI : public Enviro
 {
 public:
@@ -56,7 +52,8 @@ public:
 	virtual vtString GetStringFromUser(const vtString &title, const vtString &msg);
 	virtual void ShowProgress(bool bShow);
 	virtual void SetProgressTerrain(vtTerrain *pTerr);
-	virtual void UpdateProgress(const char *msg1, const char *msg2, int amount1, int amount2);
+	virtual void UpdateProgress(const char *msg, int amount1, int amount2);
+	virtual void ExtendStructure(vtStructInstance *si);
 	virtual void AddVehicle(CarEngine *eng);
 	virtual void RemoveVehicle(CarEngine *eng);
 
@@ -75,6 +72,6 @@ public:
 vtAbstractLayer *CreateNewAbstractPointLayer(vtTerrain *pTerr, bool bAskStyle = true);
 vtAbstractLayer *CreateNewAbstractLineLayer(vtTerrain *pTerr, bool bAskStyle = true);
 
-/** global singleton */
+// global singleton
 extern EnviroGUI g_App;
 

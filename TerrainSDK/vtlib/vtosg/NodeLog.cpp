@@ -85,9 +85,6 @@ void vtLogGraph(osg::Node *node, bool bExtents, bool bRefCounts, int indent)
 		if (node->getNodeMask() != 0xffffffff)
 			VTLOG(" mask=%x", node->getNodeMask());
 
-		if (node->getStateSet() != NULL)
-			VTLOG(" (has stateset)");
-
 		if (bExtents)
 		{
 			const osg::BoundingSphere &bs = node->getBound();
@@ -115,13 +112,13 @@ void vtLogGraph(osg::Node *node, bool bExtents, bool bRefCounts, int indent)
 	osg::Group *grp = dynamic_cast<osg::Group*>(node);
 	if (grp)
 	{
-		for (uint i = 0; i < grp->getNumChildren(); i++)
+		for (unsigned int i = 0; i < grp->getNumChildren(); i++)
 			vtLogGraph(grp->getChild(i), bExtents, bRefCounts, indent+2);
 	}
 	osg::Geode *geode = dynamic_cast<osg::Geode*>(node);
 	if (geode)
 	{
-		for (uint i = 0; i < geode->getNumDrawables(); i++)
+		for (unsigned int i = 0; i < geode->getNumDrawables(); i++)
 		{
 			osg::Geometry *geo = dynamic_cast<osg::Geometry *>(geode->getDrawable(i));
 			if (!geo) continue;
@@ -305,7 +302,7 @@ void LogToDot(osg::Group *pParent, osg::Node *pNode, int depth, FILE *fp, std::v
 	osg::Geode *geode = dynamic_cast<osg::Geode*>(pNode);
 	if (pGeode)
 	{
-		int num_mesh = pGeode->NumMeshes();
+		int num_mesh = pGeode->GetNumMeshes();
 
 		for (int i = 0; i < num_mesh; i++)
 		{
@@ -326,8 +323,8 @@ void LogToDot(osg::Group *pParent, osg::Node *pNode, int depth, FILE *fp, std::v
 
 			if (pMesh)
 			{
-				int iNumPrim = pMesh->NumPrims();
-				int iNumVert = pMesh->NumVertices();
+				int iNumPrim = pMesh->GetNumPrims();
+				int iNumVert = pMesh->GetNumVertices();
 
 				vtMesh::PrimType ptype = pMesh->getPrimType();
 				const char *mtype="";
@@ -342,8 +339,6 @@ void LogToDot(osg::Group *pParent, osg::Node *pNode, int depth, FILE *fp, std::v
 				case osg::PrimitiveSet::QUADS: mtype = "Quads"; break;
 				case osg::PrimitiveSet::QUAD_STRIP: mtype = "QuadStrip"; break;
 				case osg::PrimitiveSet::POLYGON: mtype = "Polygon"; break;
-				default:	// Keep picky compilers quiet.
-					break;
 				}
 				sprintf(buf, "%hs, %d/%d prims", mtype, iNumVert, iNumPrim);
 				label = buf;

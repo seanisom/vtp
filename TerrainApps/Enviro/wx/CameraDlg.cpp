@@ -1,7 +1,7 @@
 //
 // Name: CameraDlg.cpp
 //
-// Copyright (c) 2001-2012 Virtual Terrain Project
+// Copyright (c) 2001-2008 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -43,7 +43,6 @@ BEGIN_EVENT_TABLE(CameraDlg,CameraDlgBase)
 	EVT_TEXT( ID_EYE_SEP, CameraDlg::OnText )
 	EVT_TEXT( ID_FUSION_DIST, CameraDlg::OnText )
 	EVT_TEXT( ID_SPEED, CameraDlg::OnText )
-	EVT_TEXT( ID_DAMPING, CameraDlg::OnText )
 
 	EVT_TEXT( ID_LOD_VEG, CameraDlg::OnText )
 	EVT_TEXT( ID_LOD_STRUCT, CameraDlg::OnText )
@@ -55,7 +54,6 @@ BEGIN_EVENT_TABLE(CameraDlg,CameraDlgBase)
 	EVT_SLIDER( ID_EYE_SEPSLIDER, CameraDlg::OnEyeSepSlider )
 	EVT_SLIDER( ID_FUSION_DIST_SLIDER, CameraDlg::OnFusionDistSlider )
 	EVT_SLIDER( ID_SPEEDSLIDER, CameraDlg::OnSpeedSlider )
-	EVT_SLIDER( ID_DAMPINGSLIDER, CameraDlg::OnDampingSlider )
 
 	EVT_SLIDER( ID_SLIDER_VEG, CameraDlg::OnSliderVeg )
 	EVT_SLIDER( ID_SLIDER_STRUCT, CameraDlg::OnSliderStruct )
@@ -70,7 +68,6 @@ CameraDlg::CameraDlg( wxWindow *parent, wxWindowID id, const wxString &title,
 {
 	m_iSpeedUnits = 0;
 	m_bSet = true;
-	m_pTerrain = NULL;
 
 	AddValidator(this, ID_CAMX, &m_camX);
 	AddValidator(this, ID_CAMY, &m_camY);
@@ -82,7 +79,6 @@ CameraDlg::CameraDlg( wxWindow *parent, wxWindowID id, const wxString &title,
 	AddNumValidator(this, ID_EYE_SEP, &m_fEyeSep);
 	AddNumValidator(this, ID_FUSION_DIST, &m_fFusionDist);
 	AddNumValidator(this, ID_SPEED, &m_fSpeed);
-	AddNumValidator(this, ID_DAMPING, &m_fDamping, 1);
 
 	GetSpeedUnits()->Append(_("Meters/sec"));
 	GetSpeedUnits()->Append(_("Km/hour"));
@@ -100,7 +96,6 @@ CameraDlg::CameraDlg( wxWindow *parent, wxWindowID id, const wxString &title,
 	AddValidator(this, ID_EYE_SEPSLIDER, &m_iEyeSep);
 	AddValidator(this, ID_FUSION_DIST_SLIDER, &m_iFusionDist);
 	AddValidator(this, ID_SPEEDSLIDER, &m_iSpeed);
-	AddValidator(this, ID_DAMPINGSLIDER, &m_iDamping);
 
 	AddValidator(this, ID_SLIDER_VEG, &m_iDistVeg);
 	AddValidator(this, ID_SLIDER_STRUCT, &m_iDistStruct);
@@ -126,8 +121,6 @@ CameraDlg::CameraDlg( wxWindow *parent, wxWindowID id, const wxString &title,
 #define SEP_MIN		-2.5f
 #define SEP_MAX		-0.5f
 #define SEP_RANGE	(SEP_MAX-(SEP_MIN))
-#define DAMP_MIN	0.5f
-#define DAMP_RANGE	19.5f
 
 void CameraDlg::SlidersToValues(int id)
 {
@@ -138,12 +131,11 @@ void CameraDlg::SlidersToValues(int id)
 		else
 			m_fFov = FOV_MIN + (m_iFov * FOV_RANGE / 100);
 	}
-	if (id == ID_NEAR)		m_fNear =   powf(10, (CLIP_MIN + m_iNear * CLIP_RANGE / 100));
-	if (id == ID_FAR)		m_fFar =	 powf(10, (CLIP_MIN + m_iFar * CLIP_RANGE / 100));
-	if (id == ID_EYE_SEP)	m_fEyeSep = powf(10, (SEP_MIN + m_iEyeSep * SEP_RANGE / 100));
+	if (id == ID_NEAR)	 m_fNear =   powf(10, (CLIP_MIN + m_iNear * CLIP_RANGE / 100));
+	if (id == ID_FAR)	 m_fFar =	 powf(10, (CLIP_MIN + m_iFar * CLIP_RANGE / 100));
+	if (id == ID_EYE_SEP)m_fEyeSep = powf(10, (SEP_MIN + m_iEyeSep * SEP_RANGE / 100));
 	if (id == ID_FUSION_DIST)m_fFusionDist = powf(10, (DIST_MIN + m_iFusionDist * DIST_RANGE / 100));
-	if (id == ID_SPEED)		m_fSpeed =  powf(10, (SPEED_MIN + m_iSpeed * SPEED_RANGE / 100));
-	if (id == ID_DAMPING)	m_fDamping =  DAMP_MIN + (m_iDamping * DAMP_RANGE / 100);
+	if (id == ID_SPEED)	 m_fSpeed =  powf(10, (SPEED_MIN + m_iSpeed * SPEED_RANGE / 100));
 
 	if (id == ID_LOD_VEG)	 m_fDistVeg =	 powf(10, (DIST_MIN + m_iDistVeg * DIST_RANGE / 100));
 	if (id == ID_LOD_STRUCT) m_fDistStruct = powf(10, (DIST_MIN + m_iDistStruct * DIST_RANGE / 100));
@@ -166,7 +158,6 @@ void CameraDlg::ValuesToSliders()
 	m_iEyeSep =		(int) ((log10f(m_fEyeSep) - SEP_MIN) / SEP_RANGE * 100);
 	m_iFusionDist =	(int) ((log10f(m_fFusionDist) - DIST_MIN) / DIST_RANGE * 100);
 	m_iSpeed =		(int) ((log10f(m_fSpeed) - SPEED_MIN) / SPEED_RANGE * 100);
-	m_iDamping =	(int) ((m_fDamping - DAMP_MIN) / DAMP_RANGE * 100);
 
 	m_iDistVeg =	(int) ((log10f(m_fDistVeg) - DIST_MIN) / DIST_RANGE * 100);
 	m_iDistStruct = (int) ((log10f(m_fDistStruct) - DIST_MIN) / DIST_RANGE * 100);
@@ -197,13 +188,13 @@ void CameraDlg::GetValues()
 		break;
 	}
 	m_bAccel = g_App.GetFlightAccel();
-	m_fDamping = g_App.GetNavDamping();
 
-	if (m_pTerrain)
+	vtTerrain *t = GetCurrentTerrain();
+	if (t)
 	{
-		m_fDistVeg =	m_pTerrain->GetLODDistance(TFT_VEGETATION);
-		m_fDistStruct = m_pTerrain->GetLODDistance(TFT_STRUCTURES);
-		m_fDistRoad =   m_pTerrain->GetLODDistance(TFT_ROADS);
+		m_fDistVeg =	t->GetLODDistance(TFT_VEGETATION);
+		m_fDistStruct = t->GetLODDistance(TFT_STRUCTURES);
+		m_fDistRoad =   t->GetLODDistance(TFT_ROADS);
 	}
 	if (m_bOrtho)
 	{
@@ -255,13 +246,13 @@ void CameraDlg::SetValues()
 	}
 	g_App.SetFlightSpeed(speed);
 	g_App.SetFlightAccel(m_bAccel);
-	g_App.SetNavDamping(m_fDamping);
 
-	if (m_pTerrain)
+	vtTerrain *t = GetCurrentTerrain();
+	if (t)
 	{
-		m_pTerrain->SetLODDistance(TFT_VEGETATION, m_fDistVeg);
-		m_pTerrain->SetLODDistance(TFT_STRUCTURES, m_fDistStruct);
-		m_pTerrain->SetLODDistance(TFT_ROADS, m_fDistRoad);
+		t->SetLODDistance(TFT_VEGETATION, m_fDistVeg);
+		t->SetLODDistance(TFT_STRUCTURES, m_fDistStruct);
+		t->SetLODDistance(TFT_ROADS, m_fDistRoad);
 	}
 	vtGetScene()->SetStereoSeparation(m_fEyeSep);
 	vtGetScene()->SetStereoFusionDistance(m_fFusionDist);
@@ -278,14 +269,14 @@ void CameraDlg::CameraChanged()
 void CameraDlg::CheckAndUpdatePos()
 {
 	vtCamera *cam = vtGetScene()->GetCamera();
-	const FPoint3 WorldPos = cam->GetTrans();
-	m_pTerrain->GetLocalConversion().ConvertToEarth(WorldPos, m_EarthPos);
+	FPoint3 fpos = cam->GetTrans();
+	g_Conv.ConvertToEarth(fpos, m_pos);
 
 	bool bTransfer = false;
 	wxString newx, newy, newz;
-	newx.Printf(_T("%.7g"), m_EarthPos.x);
-	newy.Printf(_T("%.7g"), m_EarthPos.y);
-	newz.Printf(_T("%.7g"), m_EarthPos.z);
+	newx.Printf(_T("%.7g"), m_pos.x);
+	newy.Printf(_T("%.7g"), m_pos.y);
+	newz.Printf(_T("%.7g"), m_pos.z);
 	if (newx != m_camX || newy != m_camY || newz != m_camZ)
 	{
 		// new to refresh values
@@ -322,7 +313,6 @@ void CameraDlg::SetSliderControls()
 	FindWindow(ID_FARSLIDER)->GetValidator()->TransferToWindow();
 	FindWindow(ID_EYE_SEPSLIDER)->GetValidator()->TransferToWindow();
 	FindWindow(ID_SPEEDSLIDER)->GetValidator()->TransferToWindow();
-	FindWindow(ID_DAMPINGSLIDER)->GetValidator()->TransferToWindow();
 
 	FindWindow(ID_SLIDER_VEG)->GetValidator()->TransferToWindow();
 	FindWindow(ID_SLIDER_STRUCT)->GetValidator()->TransferToWindow();
@@ -414,16 +404,6 @@ void CameraDlg::OnSpeedSlider( wxCommandEvent &event )
 	TransferToWindow();
 }
 
-void CameraDlg::OnDampingSlider( wxCommandEvent &event )
-{
-	if (!m_bSet)
-		return;
-	TransferDataFromWindow();
-	SlidersToValues(ID_DAMPING);
-	SetValues();
-	TransferToWindow();
-}
-
 void CameraDlg::OnSliderVeg( wxCommandEvent &event )
 {
 	if (!m_bSet)
@@ -468,12 +448,12 @@ void CameraDlg::OnTextEnter( wxCommandEvent &event )
 {
 	TransferDataFromWindow();
 
-	m_EarthPos.x = atof(m_camX.mb_str(wxConvUTF8));
-	m_EarthPos.y = atof(m_camY.mb_str(wxConvUTF8));
-	m_EarthPos.z = atof(m_camZ.mb_str(wxConvUTF8));
+	m_pos.x = atof(m_camX.mb_str(wxConvUTF8));
+	m_pos.y = atof(m_camY.mb_str(wxConvUTF8));
+	m_pos.z = atof(m_camZ.mb_str(wxConvUTF8));
 
-	FPoint3 WorldPos;
-	m_pTerrain->GetLocalConversion().ConvertFromEarth(m_EarthPos, WorldPos);
-	vtGetScene()->GetCamera()->SetTrans(WorldPos);
+	FPoint3 fpos;
+	g_Conv.ConvertFromEarth(m_pos, fpos);
+	vtGetScene()->GetCamera()->SetTrans(fpos);
 }
 

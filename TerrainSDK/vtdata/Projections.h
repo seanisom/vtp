@@ -1,7 +1,7 @@
 //
 // Projections.h
 //
-// Copyright (c) 2001-2013 Virtual Terrain Project
+// Copyright (c) 2001-2007 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 // Derived from public-domain USGS software.
@@ -132,17 +132,15 @@ struct EPSGDatum
 	const char *szName;
 	const char *szShortName;
 };
-extern std::vector<EPSGDatum> g_EPSGDatums;
+extern vtArray<EPSGDatum> g_EPSGDatums;
 void SetupEPSGDatums();
 
 StatePlaneInfo *GetStatePlaneTable();
-int NumStatePlanes();
+int GetNumStatePlanes();
 void CreateSimilarGeographicProjection(const vtProjection &source, vtProjection &geo);
 OCT *CreateConversionIgnoringDatum(const vtProjection *pSource, vtProjection *pTarget);
 OCT *CreateCoordTransform(const vtProjection *pSource,
 						  const vtProjection *pTarget, bool bLog = false);
-void TransformInPlace(OCT *transform, DPolygon2 &poly);
-void TransformInPlace(OCT *transform, DLine2 &line);
 
 /**
  * Determine an approximate conversion from degrees of longitude to meters,

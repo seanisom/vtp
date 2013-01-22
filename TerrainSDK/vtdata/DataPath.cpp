@@ -62,20 +62,20 @@ bool vtLoadDataPath(const char *user_config_dir, const char *config_dir)
 	vtString AppDataCommon(config_dir ? config_dir : "");
 
 	VTLOG("Looking for '%s'\n", (const char *) FileName);
-	bool bFound = vtFileExists(FileName);
+	bool bFound = FileExists(FileName);
 	if (!bFound)
 	{
 		VTLOG1("Not found.\n");
 		FileName = AppDataUser + "/" + BaseName;
 		VTLOG("Looking for '%s'\n", (const char *) FileName);
-		bFound = vtFileExists(FileName);
+		bFound = FileExists(FileName);
 	}
 	if (!bFound)
 	{
 		VTLOG1("Not found.\n");
 		FileName = AppDataCommon + "/" + BaseName;
 		VTLOG("Looking for '%s'\n", (const char *) FileName);
-		bFound = vtFileExists(FileName);
+		bFound = FileExists(FileName);
 	}
 
 	// Not found anywhere.  Default to default data path
@@ -105,17 +105,17 @@ bool vtLoadDataPath(const char *user_config_dir, const char *config_dir)
 	s_configfile = FileName;
 
 	// Supply the special symbols {appdata} and {appdatacommon}
-	for (uint i = 0; i < s_datapath.size(); i++)
+	for (unsigned int i = 0; i < s_datapath.size(); i++)
 	{
 		s_datapath[i].Replace("{appdata}", AppDataUser);
 		s_datapath[i].Replace("{appdatacommon}", AppDataCommon);
 	}
 
 	VTLOG1("Loaded Datapaths:\n");
-	uint n = s_datapath.size();
+	unsigned int n = s_datapath.size();
 	if (n == 0)
 		VTLOG("   none.\n");
-	for (uint i = 0; i < n; i++)
+	for (unsigned int i = 0; i < n; i++)
 		VTLOG("   %s\n", (const char *) s_datapath[i]);
 	VTLOG1("\n");
 	return true;
@@ -150,7 +150,7 @@ bool vtSaveDataPath(const char *fname)
 	// write to file
 	fprintf(fp, "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n");
 	fprintf(fp, "<VTP>\n");
-	for (uint i = 0; i < s_datapath.size(); i++)
+	for (unsigned int i = 0; i < s_datapath.size(); i++)
 	{
 		fprintf(fp, "\t<" STR_DATAPATH ">");
 		fputs(s_datapath[i], fp);

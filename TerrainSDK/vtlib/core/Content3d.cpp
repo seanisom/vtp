@@ -3,7 +3,7 @@
 //
 // 3D Content Management class.
 //
-// Copyright (c) 2003-2011 Virtual Terrain Project.
+// Copyright (c) 2003-2008 Virtual Terrain Project.
 // Free for all uses, see license.txt for details.
 //
 
@@ -13,6 +13,17 @@
 #include "vtdata/DataPath.h"
 #include "Content3d.h"
 
+vtItem3d::vtItem3d()
+{
+	m_pNode = NULL;
+}
+
+vtItem3d::~vtItem3d()
+{
+	// Don't need to explicitly release the item's node here, because all nodes
+	//  are released when the the manager's group is released.
+	m_pNode = NULL;
+}
 
 /**
  * Load the model(s) associated with an item.  If there are several models,
@@ -40,19 +51,20 @@ bool vtItem3d::LoadModels()
 	for (i = 0; i < models; i++)
 	{
 		vtModel *model = GetModel(i);
+		osg::Node *pNode = NULL;
 
 		// perhaps it's directly resolvable
-		NodePtr pNode = vtLoadModel(model->m_filename);
+		pNode = vtLoadModel(model->m_filename);
 
 		// if there are some data path(s) to search, use them
-		if (!pNode.valid())
+		if (!pNode)
 		{
 			vtString fullpath = FindFileOnPaths(vtGetDataPath(), model->m_filename);
 			if (fullpath != "")
 				pNode = vtLoadModel(fullpath);
 		}
 
-		if (pNode.valid())
+		if (pNode)
 			VTLOG(" Loaded successfully.\n");
 		else
 		{
@@ -68,7 +80,7 @@ bool vtItem3d::LoadModels()
 			pTrans->setName("scaling xform");
 			pTrans->addChild(pNode);
 			pTrans->Identity();
-			pTrans->Scale(model->m_scale);
+			pTrans->Scale3(model->m_scale, model->m_scale, model->m_scale);
 			pNode = pTrans;
 		}
 
@@ -94,7 +106,7 @@ bool vtItem3d::LoadModels()
 //
 void vtItem3d::UpdateExtents()
 {
-	m_extents.SetToZero();
+	m_extents.Empty();
 
 	if (m_pNode == NULL)
 		return;
@@ -156,17 +168,5 @@ osg::Node *vtContentManager3d::CreateNodeFromItemname(const char *itemname)
 		m_pGroup->addChild(pItem->m_pNode);
 	}
 	return pItem->m_pNode;
-}
-
-vtContentManager3d *vtContentManager3d::s_pContent = NULL;
-
-void vtSetGlobalContent(vtContentManager3d &cm3d)
-{
-	vtContentManager3d::s_pContent = &cm3d;
-}
-
-vtContentManager3d &vtGetContent()
-{
-	return *(vtContentManager3d::s_pContent);
 }
 

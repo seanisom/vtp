@@ -14,10 +14,6 @@
 #include <osgText/Font>
 #include <osgText/Text>
 
-#ifdef AVOID_OSG_INDICES
-//#define USE_OPENGL_BUFFER_OBJECTS
-#endif
-
 // Shorthand
 #define FAB		osg::Material::FRONT_AND_BACK
 
@@ -25,9 +21,7 @@
 #define VT_Normals		1
 #define VT_Colors		2
 #define VT_TexCoords	4
-#ifdef USE_OPENGL_BUFFER_OBJECTS
-#define VT_VBO			8
-#endif
+
 class vtImage;
 
 /** \addtogroup sg */
@@ -64,11 +58,7 @@ public:
 	void AddQuad(int p0, int p1, int p2, int p3);
 
 	// Accessors
-#ifdef AVOID_OSG_INDICES
-	PrimType getPrimType() const { return m_PrimType; }
-#else
 	PrimType getPrimType() const { return (PrimType) getPrimSet()->getMode(); }
-#endif
 
 	void SetMatIndex(int i) { m_iMatIdx = i; }
 	int GetMatIndex() const { return m_iMatIdx; }
@@ -113,28 +103,28 @@ public:
 		const FPoint2 &min1, const FPoint2 &max1, float fLevel, float fTiling);
 
 	// Access vertex properties
-	uint NumVertices() const;
+	unsigned int GetNumVertices() const;
 
-	void SetVtxPos(uint, const FPoint3&);
-	FPoint3 GetVtxPos(uint i) const;
+	void SetVtxPos(unsigned int, const FPoint3&);
+	FPoint3 GetVtxPos(unsigned int i) const;
 
-	void SetVtxNormal(uint, const FPoint3&);
-	FPoint3 GetVtxNormal(uint i) const;
+	void SetVtxNormal(unsigned int, const FPoint3&);
+	FPoint3 GetVtxNormal(unsigned int i) const;
 
-	void SetVtxColor(uint, const RGBAf&);
-	RGBAf GetVtxColor(uint i) const;
+	void SetVtxColor(unsigned int, const RGBAf&);
+	RGBAf GetVtxColor(unsigned int i) const;
 
-	void SetVtxTexCoord(uint, const FPoint2&);
-	FPoint2 GetVtxTexCoord(uint i) const;
+	void SetVtxTexCoord(unsigned int, const FPoint2&);
+	FPoint2 GetVtxTexCoord(unsigned int i) const;
 
 	void SetLineWidth(float fWidth);
 
-	void SetVtxPUV(uint i, const FPoint3 &pos, float u, float v)
+	void SetVtxPUV(unsigned int i, const FPoint3 &pos, float u, float v)
 	{
 		SetVtxPos(i, pos);
 		SetVtxTexCoord(i, FPoint2(u, v));
 	}
-	void SetVtxPN(uint i, const FPoint3 &pos, const FPoint3 &norm)
+	void SetVtxPN(unsigned int i, const FPoint3 &pos, const FPoint3 &norm)
 	{
 		SetVtxPos(i, pos);
 		SetVtxNormal(i, norm);
@@ -145,8 +135,8 @@ public:
 	void AllowOptimize(bool bAllow);
 
 	// Access values
-	int NumPrims() const;
-	int NumIndices() const { return getVertexIndices()->getNumElements(); }
+	int GetNumPrims() const;
+	int GetNumIndices() const { return getVertexIndices()->getNumElements(); }
 	short GetIndex(int i) const { return getIndices()->at(i); }
 	int GetPrimLen(int i) const { return dynamic_cast<const osg::DrawArrayLengths*>(getPrimitiveSet(0))->at(i); }
 
@@ -189,9 +179,6 @@ protected:
 	const osg::Vec2Array *getTexCoords() const { return (const osg::Vec2Array*) getTexCoordArray(0); }
 
 	int m_iMatIdx;
-#ifdef AVOID_OSG_INDICES
-	PrimType m_PrimType;
-#endif
 };
 
 /** A Font for use with vtTextMesh. */

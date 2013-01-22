@@ -10,7 +10,6 @@
 
 #include "VTBuilder_UI.h"
 #include "vtdata/shapelib/shapefil.h"
-#include "vtdata/MathTypes.h"
 #include "VegPointOptions.h"
 
 class vtVegLayer;
@@ -55,7 +54,7 @@ private:
 	SHPHandle m_hSHP;
 	int	   m_nElem, m_nShapeType;
 	wxString  m_filename;
-	uint	   m_iFields;
+	unsigned int	   m_iFields;
 
 	bool	m_bUseSpecies;
 	bool	m_bSpeciesUseField;

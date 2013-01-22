@@ -1,7 +1,7 @@
 //
 // App.cpp - Main application class for VTBuilder
 //
-// Copyright (c) 2001-2011 Virtual Terrain Project
+// Copyright (c) 2001-2008 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -14,8 +14,8 @@
 
 #include "Frame.h"
 #include "BuilderView.h"
+#include "vtdata/vtLog.h"
 #include "vtui/Helper.h"
-#include "vtui/LogCatcher.h"
 #include "gdal_priv.h"
 #include "App.h"
 
@@ -30,17 +30,25 @@ IMPLEMENT_APP(BuilderApp)
 
 void BuilderApp::Args(int argc, wxChar **argv)
 {
-	VTLOG("BuilderApp::Args(argc = %d)\n", argc);
 	for (int i = 0; i < argc; i++)
 	{
 		wxString str = argv[i];
 		wxCharBuffer cbuf = str.mb_str(wxConvUTF8);
-		VTLOG("  Argument %d: '%s'\n", i, (const char *) cbuf);
 		if (!strncmp(cbuf, "-locale=", 8))
 			m_locale_name = (const char *)cbuf + 8;
 	}
-	VTLOG1("  exiting Args()\n");
 }
+
+
+class LogCatcher : public wxLog
+{
+	void DoLogString(const wxChar *szString, time_t t)
+	{
+		VTLOG1(" wxLog: ");
+		VTLOG1(szString);
+		VTLOG1("\n");
+	}
+};
 
 bool BuilderApp::OnInit()
 {
@@ -49,7 +57,7 @@ bool BuilderApp::OnInit()
 #endif
 
 	VTSTARTLOG("debug.txt");
-	VTLOG1("VTBuilder");
+	VTLOG1(APPNAME);
 	VTLOG1("\nBuild:");
 #if VTDEBUG
 	VTLOG(" Debug");
@@ -74,25 +82,19 @@ bool BuilderApp::OnInit()
 	VTLOG("_setmaxstdio to %d\n", newmax);
 #endif
 
-	// Redirect the wxWidgets log messages to our own logging stream
-	VTLOG1("Allocating a LogCatcher\n");
+	// Redirect the wxWindows log messages to our own logging stream
 	wxLog *logger = new LogCatcher;
 	wxLog::SetActiveTarget(logger);
-	wxLog::SetLogLevel(wxLOG_User);
-	wxLog::SetVerbose();
-	wxLogVerbose("wxWidgets logging enabled");
 
-	VTLOG1("Calling Args()\n");
 	Args(argc, argv);
 
-	VTLOG1("Calling SetupLocale()\n");
-	SetupLocale("VTBuilder");
+	SetupLocale();
 
 	VTLOG1("Testing ability to allocate a frame object.\n");
 	wxFrame *frametest = new wxFrame(NULL, -1, _T("Title"));
 	delete frametest;
 
-	wxString title("VTBuilder", wxConvUTF8);
+	wxString title(APPNAME, wxConvUTF8);
 	VTLOG(" Creating Main Frame Window, title '%s'\n", (const char *) title.mb_str(wxConvUTF8));
 	MainFrame *frame = new MainFrame((wxFrame *) NULL, title,
 							   wxPoint(50, 50), wxSize(900, 500));
@@ -129,5 +131,68 @@ int BuilderApp::OnExit()
 {
 	VTLOG("App Exit\n");
 	return wxApp::OnExit();
+}
+
+void BuilderApp::SetupLocale()
+{
+	wxLog::SetVerbose(true);
+
+	// Locale stuff
+	int lang = wxLANGUAGE_DEFAULT;
+	int default_lang = m_locale.GetSystemLanguage();
+
+	const wxLanguageInfo *info = wxLocale::GetLanguageInfo(default_lang);
+	VTLOG("Default language: %d (%s)\n", default_lang,
+		(const char *) info->Description.mb_str(wxConvUTF8));
+
+	// After wx2.4.2, wxWidgets looks in the application's directory for
+	//  locale catalogs, not the current directory.  Here we force it to
+	//  look in the current directory as well.
+	wxString cwd = wxGetCwd();
+	m_locale.AddCatalogLookupPathPrefix(cwd);
+
+	bool bSuccess=false;
+	if (m_locale_name != "")
+	{
+		VTLOG("Looking up language: %s\n", (const char *) m_locale_name);
+		lang = GetLangFromName(wxString(m_locale_name, *wxConvCurrent));
+		if (lang == wxLANGUAGE_UNKNOWN)
+		{
+			VTLOG(" Unknown, falling back on default language.\n");
+			lang = wxLANGUAGE_DEFAULT;
+		}
+		else
+		{
+			info = m_locale.GetLanguageInfo(lang);
+			VTLOG("Initializing locale to language %d, Canonical name '%s', Description: '%s':\n", lang,
+				(const char *) info->CanonicalName.mb_str(wxConvUTF8),
+				(const char *) info->Description.mb_str(wxConvUTF8));
+			bSuccess = m_locale.Init(lang, wxLOCALE_CONV_ENCODING);
+		}
+	}
+	if (lang == wxLANGUAGE_DEFAULT)
+	{
+		VTLOG("Initializing locale to default language:\n");
+		bSuccess = m_locale.Init(wxLANGUAGE_DEFAULT, wxLOCALE_CONV_ENCODING);
+		if (bSuccess)
+			lang = default_lang;
+	}
+	if (bSuccess)
+		VTLOG(" succeeded.\n");
+	else
+		VTLOG(" failed.\n");
+
+	VTLOG1("Attempting to load the 'VTBuilder.mo' catalog for the current locale.\n");
+	bSuccess = m_locale.AddCatalog(wxT("VTBuilder"));
+	if (bSuccess)
+		VTLOG(" succeeded.\n");
+	else
+		VTLOG(" not found.\n");
+	VTLOG1("\n");
+
+	// Test the local code
+//	wxString test = _("&File");
+
+	wxLog::SetVerbose(false);
 }
 

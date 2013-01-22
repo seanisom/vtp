@@ -11,7 +11,7 @@
 #include "vtdata/SPA.h"
 #include "vtdata/FilePath.h"
 #include "SkyDome.h"
-#include "GeomUtil.h"	// for CreateBoundSphereGeode
+#include "GeomUtil.h"	// for CreateBoundSphereGeom
 
 // minimum and maximum ambient light values
 const float MIN_AMB = 0.0f;
@@ -66,7 +66,7 @@ inline void PT_SPHERE_TO_CART(const FPoint3& A, FPoint3& B) {
 vtTransform *CreateMarker(vtMaterialArray *pMats, const RGBf &color)
 {
 	// Now make a green marker, directly north
-	int matidx = pMats->AddRGBMaterial(color, false, false, true);
+	int matidx = pMats->AddRGBMaterial1(color, false, false, true);
 	FPoint3 p;
 	vtMesh *mesh = new vtMesh(osg::PrimitiveSet::LINES, 0, 500);
 	mesh->AddVertex(FPoint3(-0.07, 0, -0.94));
@@ -86,7 +86,7 @@ vtTransform *CreateMarker(vtMaterialArray *pMats, const RGBf &color)
 void PlaceMarker(vtTransform *trans, float alt, float azi)
 {
 	trans->Identity();
-	trans->Rotate(FPoint3(1,0,0), DEG_TO_RAD(alt));
+	trans->Rotate2(FPoint3(1,0,0), DEG_TO_RAD(alt));
 	trans->RotateParent(FPoint3(0,1,0), DEG_TO_RAD(-azi));
 }
 
@@ -171,11 +171,11 @@ void vtSkyDome::Create(const char *starfile, int depth, float radius,
 	CreateMarkers();
 	ShowMarkers(false);
 
-	NumVertices = m_pDomeMesh->NumVertices();
+	NumVertices = m_pDomeMesh->GetNumVertices();
 	SphVertices = new FPoint3[NumVertices];
 	ConvertVertices();
 
-	Scale(radius);
+	Scale3(radius, radius, radius);
 
 	// Set default horizon, azimuth and sunset colors
 	DayHorizonCol.Set(0.5f, 1.0f, 1.0f);
@@ -187,47 +187,44 @@ void vtSkyDome::Create(const char *starfile, int depth, float radius,
 
 	if (sun_texture && *sun_texture)
 	{
-		VTLOG1("   Loading Sun Image.. ");
-		m_pSunImage = osgDB::readImageFile(sun_texture);
-		if (m_pSunImage.valid()) {
-			VTLOG("succeeded.\n");
+		VTLOG("   Loading Sun Image\n");
+		m_pSunImage = vtImageRead(sun_texture);
+		if (!m_pSunImage.valid())
+			return;		// could not load texture, cannot have sun
 
-			int idx = m_pMats->AddTextureMaterial(m_pSunImage,
-								 false, false,	// culling, lighting
-								 true, true,	// transp, additive
-								 1.0f,			// diffuse
-								 1.0f, 1.0f);	// alpha, emmisive
+		int idx = m_pMats->AddTextureMaterial(m_pSunImage,
+							 false, false,	// culling, lighting
+							 true, true,	// transp, additive
+							 1.0f,			// diffuse
+							 1.0f, 1.0f);	// alpha, emmisive
 
-			// Create sun
-			m_pSunMat = m_pMats->at(idx);
+		// Create sun
+		m_pSunMat = m_pMats->at(idx);
 
-			VTLOG("   Creating Sun Geom\n");
-			vtGeode *pGeode = new vtGeode;
-			pGeode->setName("Sun geom");
-			m_pSunGeom = new vtMovGeode(pGeode);
-			m_pSunGeom->setName("Sun xform");
+		VTLOG("   Creating Sun Geom\n");
+		vtGeode *pGeode = new vtGeode;
+		pGeode->setName("Sun geom");
+		m_pSunGeom = new vtMovGeode(pGeode);
+		m_pSunGeom->setName("Sun xform");
 
-			VTLOG("   Creating Sun Mesh\n");
-			vtMesh *SunMesh = new vtMesh(osg::PrimitiveSet::TRIANGLE_FAN, VT_TexCoords, 4);
+		VTLOG("   Creating Sun Mesh\n");
+		vtMesh *SunMesh = new vtMesh(osg::PrimitiveSet::TRIANGLE_FAN, VT_TexCoords, 4);
 
-			SunMesh->AddRectangleXZ(0.50f, 0.50f);
-			pGeode->SetMaterials(m_pMats);
-			pGeode->AddMesh(SunMesh, idx);
+		SunMesh->AddRectangleXZ(0.50f, 0.50f);
+		pGeode->SetMaterials(m_pMats);
+		pGeode->AddMesh(SunMesh, idx);
 
-			// Z translation, to face us at the topographic north (horizon)
-			FMatrix4 trans;
-			trans.Identity();
-			trans.Translate(FPoint3(0.0f, 0.90f, 0.0f));
-			SunMesh->TransformVertices(trans);
-			trans.Identity();
-			trans.AxisAngle(FPoint3(1,0,0), -PID2f);
-			SunMesh->TransformVertices(trans);
+		// Z translation, to face us at the topographic north (horizon)
+		FMatrix4 trans;
+		trans.Identity();
+		trans.Translate(FPoint3(0.0f, 0.90f, 0.0f));
+		SunMesh->TransformVertices(trans);
+		trans.Identity();
+		trans.AxisAngle(FPoint3(1,0,0), -PID2f);
+		SunMesh->TransformVertices(trans);
 
-			// The sun is attached to the celestial sphere which rotates
-			m_pCelestial->addChild(m_pSunGeom);
-		}
-		else
-			VTLOG("failed.\n");
+		// The sun is attached to the celestial sphere which rotates
+		m_pCelestial->addChild(m_pSunGeom);
 	}
 
 	// Create the vtStarDome
@@ -248,7 +245,7 @@ void vtSkyDome::Create(const char *starfile, int depth, float radius,
 void vtSkyDome::CreateMarkers()
 {
 	// First create some 5-degree tic marks.
-	int yellow = m_pMats->AddRGBMaterial(RGBf(1,1,0), false, false, true);
+	int yellow = m_pMats->AddRGBMaterial1(RGBf(1,1,0), false, false, true);
 	FPoint3 p;
 	vtMesh *tics = new vtMesh(osg::PrimitiveSet::LINES, 0, (36+1)*2*2);
 	for (float t = 0; t < PId; t += (PId / 36))	// 5 degree increment
@@ -276,14 +273,13 @@ void vtSkyDome::CreateMarkers()
 
 	// Create celestial sphere wifreframe, to aid in development and testing
 	FSphere sph(FPoint3(0,0,0), 0.99);
-	m_pWireSphere = CreateBoundSphereGeode(sph, 60);
+	m_pWireSphere = CreateBoundSphereGeom(sph, 60);
 	m_pWireSphere->setName("Celestial Sphere wireframe");
 	m_pCelestial->addChild(m_pWireSphere);
 }
 
 void vtSkyDome::ShowMarkers(bool bShow)
 {
-	VTLOG("SkyDome ShowMarkers(%d)\n", bShow);
 	m_pTicks->SetEnabled(bShow);
 	m_pGreenMarker->SetEnabled(bShow);
 	m_pRedMarker->SetEnabled(bShow);
@@ -371,7 +367,7 @@ void vtSkyDome::RefreshCelestialObjects()
 	if (m_pSunGeom)
 	{
 		m_pSunGeom->Identity();
-		m_pSunGeom->Rotate(FPoint3(1,0,0), DEG_TO_RAD(90 - dec));
+		m_pSunGeom->Rotate2(FPoint3(1,0,0), DEG_TO_RAD(90 - dec));
 		m_pSunGeom->RotateParent(FPoint3(0,0,1), DEG_TO_RAD(-ra));
 	}
 
@@ -396,7 +392,7 @@ void vtSkyDome::RefreshCelestialObjects()
 
 	// Put red marker where SPA tells us the ra-dec sun should go
 	m_pRedMarker->Identity();
-	m_pRedMarker->Rotate(FPoint3(1,0,0), DEG_TO_RAD(90 - dec));
+	m_pRedMarker->Rotate2(FPoint3(1,0,0), DEG_TO_RAD(90 - dec));
 	m_pRedMarker->RotateParent(FPoint3(0,0,1), DEG_TO_RAD(-ra));
 }
 
@@ -410,9 +406,9 @@ void vtSkyDome::UpdateSunLight()
 	// First rotate by 180 degrees because OpenGL lights default to
 	//  facing 'north', but alt-azi here assumes the default position is
 	//  _from_ the north at the horizon, facing us.
-	m_pSunLight->Rotate(FPoint3(1,0,0), PId);
-	m_pSunLight->Rotate(FPoint3(1,0,0), DEG_TO_RAD(m_fSunAlt));
-	m_pSunLight->Rotate(FPoint3(0,1,0), DEG_TO_RAD(-m_fSunAzi));
+	m_pSunLight->Rotate2(FPoint3(1,0,0), PId);
+	m_pSunLight->Rotate2(FPoint3(1,0,0), DEG_TO_RAD(m_fSunAlt));
+	m_pSunLight->Rotate2(FPoint3(0,1,0), DEG_TO_RAD(-m_fSunAzi));
 
 //	FPoint3 dir = m_pSunLight->GetDirection();
 //	VTLOG("  Alt-Azi %.3f %.3f, Light dir: %.3f %.3f %.3f\n", m_fSunAlt, m_fSunAzi, dir.x, dir.y, dir.z);
@@ -471,7 +467,7 @@ void vtSkyDome::UpdateSunLight()
 	m_pSunLightSource->SetSpecular(color);
 
 	// Don't actually color the sun geometry, because we use a sun texture now.
-	// if (m_pSunMat) m_pSunMat->SetDiffuse(color);
+	// if (m_pSunMat) m_pSunMat->SetDiffuse1(color);
 }
 
 //
@@ -480,7 +476,7 @@ void vtSkyDome::ConvertVertices()
 {
 	FPoint3 p, psph;
 
-	int num = m_pDomeMesh->NumVertices();
+	int num = m_pDomeMesh->GetNumVertices();
 	for (int i = 0; i < num; i++)
 	{
 		p = m_pDomeMesh->GetVtxPos(i);
@@ -520,8 +516,8 @@ bool vtSkyDome::SetTexture(const char *filename)
 	if (m_pTextureMat)
 	{
 		// if it hasn't changed, return
-		osg::Image *image = m_pTextureMat->GetTextureImage();
-		if (filename && image->getFileName() == filename)
+		vtImage *image = m_pTextureMat->GetTexture();
+		if (filename && image->GetFilename() == filename)
 			return true;
 
 		// Already textured; remove previous material
@@ -545,7 +541,7 @@ bool vtSkyDome::SetTexture(const char *filename)
 	}
 
 	VTLOG("   SkyDome: Set Texture to '%s'.. ", filename);
-	ImagePtr pImage = osgDB::readImageFile(filename);
+	vtImagePtr pImage = vtImageRead(filename);
 	if (!pImage.valid())
 	{
 		VTLOG("failed.\n");
@@ -553,8 +549,8 @@ bool vtSkyDome::SetTexture(const char *filename)
 	}
 	VTLOG("loaded OK.\n");
 
-	VTLOG("    Image is %d x %d, depth %d\n", GetWidth(pImage),
-		GetHeight(pImage), GetDepth(pImage));
+	VTLOG("    Image is %d x %d, depth %d\n", pImage->GetWidth(),
+		pImage->GetHeight(), pImage->GetDepth());
 
 	// create and apply the texture material
 	int index = m_pMats->AddTextureMaterial(pImage, false, false);
@@ -562,7 +558,7 @@ bool vtSkyDome::SetTexture(const char *filename)
 	m_pTextureMat = m_pMats->at(index);
 
 	// set the vertices to initially white
-	int verts = m_pDomeMesh->NumVertices();
+	int verts = m_pDomeMesh->GetNumVertices();
 	for (int i = 0; i < verts; i++)
 		m_pDomeMesh->SetVtxColor(i, RGBf(1,1,1));	// all white vertices
 
@@ -601,7 +597,7 @@ void vtSkyDome::ApplyDomeColors()
 		return;
 
 	// Set day colors
-	for (uint i = 0; i < mesh->NumVertices(); i++)
+	for (unsigned int i = 0; i < mesh->GetNumVertices(); i++)
 	{
 		FPoint3 p = mesh->GetVtxPos(i);
 		psph = SphVertices[i];
@@ -690,7 +686,7 @@ void vtStarDome::Create(const char *starfile, float brightness,
 	ReadStarData(starfile);
 
 	m_pMats = new vtMaterialArray;
-	int star_mat = m_pMats->AddRGBMaterial(RGBf(0,0,0), false, false);
+	int star_mat = m_pMats->AddRGBMaterial1(RGBf(0,0,0), false, false);
 	vtMaterial *pMat = m_pMats->at(star_mat);
 	pMat->SetTransparent(true, true);
 
@@ -705,7 +701,7 @@ void vtStarDome::Create(const char *starfile, float brightness,
 	if (moon_texture && *moon_texture)
 	{
 		int idx = -1;
-		m_pMoonImage = osgDB::readImageFile(moon_texture);
+		m_pMoonImage = vtImageRead(moon_texture);
 		if (m_pMoonImage->valid())
 		{
 			idx = m_pMats->AddTextureMaterial(m_pMoonImage,

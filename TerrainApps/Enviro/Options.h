@@ -1,7 +1,7 @@
 //
 // Options.h
 //
-// Copyright (c) 2001-2012 Virtual Terrain Project
+// Copyright (c) 2001-2011 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -10,11 +10,6 @@
 
 #include "vtdata/FilePath.h"
 
-/**
- All the global options for the Enviro application.  These can be accessed anywhere,
- anytime using the global singleton "g_Options".  Enviro let the user edit them with
- OptionsDlg and serializes them to a file called "Enviro.xml".
- */
 class EnviroOptions
 {
 public:
@@ -23,6 +18,9 @@ public:
 
 	bool ReadXML(const char *szFilename);
 	bool WriteXML();
+
+	// older method was .ini files
+	bool ReadINI(const char *szFilename);
 
 	vtStringArray m_oldDataPaths;
 	bool		m_bEarthView;
@@ -37,7 +35,6 @@ public:
 	bool	m_bFullscreen;
 	bool	m_bStereo;
 	int		m_iStereoMode;
-	int		m_iMultiSamples;	// Anti-aliasing (0, 2, 4, 8, 16)
 	IPoint2	m_WinPos, m_WinSize;
 	bool	m_bLocationInside;
 
@@ -61,8 +58,6 @@ public:
 
 	bool	m_bShowProgress;
 	bool	m_bFlyIn;
-	bool	m_bUseJoystick;
-	bool	m_bUseSpaceNav;
 
 	// toolbar options
 	bool m_bShowToolsCulture;

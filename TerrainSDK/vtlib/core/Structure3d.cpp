@@ -1,7 +1,7 @@
 //
 // Structure3d.cpp
 //
-// Copyright (c) 2001-2012 Virtual Terrain Project
+// Copyright (c) 2001-2011 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -14,11 +14,24 @@
 #include "Building3d.h"
 #include "Fence3d.h"
 #include "Terrain.h"
+#include "TerrainScene.h"	// For content manager
 #include "PagedLodGrid.h"
+
+const vtString BMAT_NAME_HIGHLIGHT = "Highlight";
 
 // Static members
 vtMaterialDescriptorArray3d vtStructure3d::s_MaterialDescriptors;
 
+
+// Helper: Linear distance in RGB space
+float ColorDiff(const RGBi &c1, const RGBi &c2)
+{
+	FPoint3 diff;
+	diff.x = (float) (c1.r - c2.r);
+	diff.y = (float) (c1.g - c2.g);
+	diff.z = (float) (c1.b - c2.b);
+	return diff.Length();
+}
 
 ///////////////////////////////////////////////////////////////////////
 
@@ -37,10 +50,10 @@ void vtStructInstance3d::UpdateTransform(vtHeightField3d *pHeightField)
 	m_pContainer->Identity();
 
 	if (m_fScale != 1.0f)
-		m_pContainer->Scale(m_fScale);
+		m_pContainer->Scale3(m_fScale, m_fScale, m_fScale);
 
 	if (m_fRotation != 0.0f)
-		m_pContainer->Rotate(FPoint3(0,1,0), m_fRotation);
+		m_pContainer->Rotate2(FPoint3(0,1,0), m_fRotation);
 
 	// convert earth -> XZ
 	FPoint3 point;
@@ -55,7 +68,7 @@ void vtStructInstance3d::UpdateTransform(vtHeightField3d *pHeightField)
 	{
 		// Should we drape structure instances on all culture, including roads
 		//  and other structures?  There are some cases where this is not
-		//  desirable, such as buildings composed of multiple footprints which
+		//  desirable, such as buildings composed of multiple instance which
 		//  should intersect, not stack.  Should it be a user option, global,
 		//  per-layer, or per-structure?
 
@@ -94,7 +107,7 @@ void vtStructInstance3d::ShowBounds(bool bShow)
 				FSphere sphere;
 				s2v(m_pModel->getBound(), sphere);
 
-				m_pHighlight = CreateBoundSphereGeode(sphere);
+				m_pHighlight = CreateBoundSphereGeom(sphere);
 				m_pHighlight->SetCastShadow(false);		// no shadow
 				m_pContainer->addChild(m_pHighlight);
 			}
@@ -179,15 +192,12 @@ bool vtStructInstance3d::CreateNode(vtTerrain *pTerr)
 	if (GetValueFloat("scale", sc))
 		m_fScale = sc;
 
+	// Allow the terrain to extend the structure with custom functionality
+	const char *extend = GetValueString("extend", true);
+	if (extend)
+		pTerr->ExtendStructure(this);
+
 	UpdateTransform(pTerr->GetHeightField());
-
-	// Remember the radius for later
-	FSphere sphere;
-	s2v(m_pModel->getBound(), sphere);
-	DPoint2 evector;
-	pTerr->GetLocalConversion().ConvertVectorToEarth(sphere.radius, 0, evector);
-	m_RadiusInEarthCoords = evector.x;
-
 	return true;
 }
 
@@ -225,11 +235,19 @@ double vtStructInstance3d::DistanceToPoint(const DPoint2 &p, float fMaxRadius) c
 		//  from the given point to the edge of the bounding sphere.  This
 		//  makes objects easier to select, because their selectable zone
 		//  is larger for larger objects.  This is a little messy, because
-		//  it's a world-coord operation applied to a earth-coord value.
-		if (m_RadiusInEarthCoords < fMaxRadius)
+		//  it's a world-coord operation applied to a earth-coord result.
+		FSphere sphere;
+		s2v(m_pModel->getBound(), sphere);
+		FPoint3 trans = m_pContainer->GetTrans();
+		sphere.center += trans;
+		if (sphere.radius < fMaxRadius)
 		{
-			double dist_to_center = vtStructInstance::DistanceToPoint(p, fMaxRadius);
-			return dist_to_center - m_RadiusInEarthCoords;
+			DPoint2 ecenter;
+			DPoint2 evector;
+			g_Conv.ConvertToEarth(sphere.center.x, sphere.center.z, ecenter);
+			g_Conv.ConvertVectorToEarth(sphere.radius, 0, evector);
+			double dist = (ecenter - p).Length();
+			return (dist - evector.x);
 		}
 		else
 			return 1E9;	// Ignore instances with such a large radius
@@ -250,6 +268,10 @@ vtStructureArray3d::vtStructureArray3d() : vtStructureArray()
 
 vtBuilding *vtStructureArray3d::NewBuilding()
 {
+	// Make sure that subsequent operations on this building are done in with
+	// the correct local coordinate system
+	vtBuilding::s_Conv.Setup(m_proj.GetUnits(), DRECT(0,1,1,0));
+
 	return new vtBuilding3d;
 }
 
@@ -266,10 +288,10 @@ vtStructInstance *vtStructureArray3d::NewInstance()
 vtStructure3d *vtStructureArray3d::GetStructure3d(int i)
 {
 	// Safety check
-	if (i < 0 || i >= (int) size())
+	if (i < 0 || i >= (int) GetSize())
 		return NULL;
 
-	vtStructure *str = at(i);
+	vtStructure *str = GetAt(i);
 
 	// Due to the somewhat complicated structure of the multiple inheritance
 	// here, we must do a double-cast: first cast down to the object's true
@@ -303,9 +325,9 @@ bool vtStructureArray3d::ConstructStructure(int index)
 void vtStructureArray3d::OffsetSelectedStructures(const DPoint2 &offset)
 {
 	vtStructure *str;
-	for (uint i = 0; i < size(); i++)
+	for (unsigned int i = 0; i < GetSize(); i++)
 	{
-		str = at(i);
+		str = GetAt(i);
 		if (!str->IsSelected())
 			continue;
 		if (str->GetType() == ST_BUILDING)
@@ -335,9 +357,9 @@ void vtStructureArray3d::OffsetSelectedStructures(const DPoint2 &offset)
 void vtStructureArray3d::OffsetSelectedStructuresVertical(float offset)
 {
 	vtStructure *str;
-	for (uint i = 0; i < size(); i++)
+	for (unsigned int i = 0; i < GetSize(); i++)
 	{
-		str = at(i);
+		str = GetAt(i);
 		if (!str->IsSelected())
 			continue;
 		if (str->GetType() == ST_BUILDING)
@@ -357,9 +379,9 @@ void vtStructureArray3d::OffsetSelectedStructuresVertical(float offset)
 
 void vtStructureArray3d::VisualDeselectAll()
 {
-	for (uint i = 0; i < size(); i++)
+	for (unsigned int i = 0; i < GetSize(); i++)
 	{
-		vtStructure *str = (vtStructure *) at(i);
+		vtStructure *str = (vtStructure *) GetAt(i);
 		vtStructure3d *str3d = GetStructure3d(i);
 
 		str->Select(false);
@@ -369,7 +391,7 @@ void vtStructureArray3d::VisualDeselectAll()
 
 void vtStructureArray3d::SetEnabled(bool bTrue)
 {
-	for (uint j = 0; j < size(); j++)
+	for (unsigned int j = 0; j < GetSize(); j++)
 	{
 		vtStructure3d *str3d = GetStructure3d(j);
 		if (str3d)
@@ -405,7 +427,7 @@ void vtStructureArray3d::SetEnabled(bool bTrue)
 
 void vtStructureArray3d::SetShadows(bool bTrue)
 {
-	for (uint j = 0; j < size(); j++)
+	for (unsigned int j = 0; j < GetSize(); j++)
 	{
 		vtStructure3d *str3d = GetStructure3d(j);
 		if (str3d)
@@ -454,16 +476,255 @@ void vtStructureArray3d::DestroyStructure(int i)
 
 
 /////////////////////////////////////////////////////////////////////////////
+// Methods for vtMaterialDescriptorArray3d
+//
+
+vtMaterialDescriptorArray3d::vtMaterialDescriptorArray3d()
+{
+	m_pMaterials = NULL;
+	m_bMaterialsCreated = false;
+}
+
+void vtMaterialDescriptorArray3d::InitializeMaterials()
+{
+	if (m_pMaterials != NULL)	// already initialized
+		return;
+
+	VTLOG("Initializing MaterialDescriptorArray3d\n");
+
+	int i, j, k;
+	RGBf color;
+	int count = 0;
+	int divisions = 6;
+	float start = .25f;
+	float step = (1.0f-start)/(divisions-1);
+
+	// set up colour spread
+	for (i = 0; i < divisions; i++) {
+		for (j = 0; j < divisions; j++) {
+			for (k = 0; k < divisions; k++) {
+				m_Colors[count++].Set(start+i*step, start+j*step, start+k*step);
+			}
+		}
+	}
+
+	m_pMaterials = new vtMaterialArray;
+	m_pMaterials->reserve(500);
+
+	// Create internal materials (only needed by vtlib, not vtdata)
+	m_hightlight1 = m_pMaterials->AddRGBMaterial1(RGBf(1,1,1), false, false, true);
+	m_hightlight2 = m_pMaterials->AddRGBMaterial1(RGBf(1,0,0), false, false, true);
+	m_hightlight3 = m_pMaterials->AddRGBMaterial1(RGBf(1,1,0), false, false, true);
+
+	// wire material
+	m_wire = m_pMaterials->AddRGBMaterial(RGBf(0.0f, 0.0f, 0.0f), // diffuse
+		RGBf(0.4f, 0.4f, 0.4f),	// ambient
+		false, true, false,		// culling, lighting, wireframe
+		0.6f);					// alpha
+}
+
+void vtMaterialDescriptorArray3d::CreateMaterials()
+{
+	VTLOG1("Creating Materials:\n");
+	clock_t clock1 = clock();
+
+	m_bMaterialsCreated = true;
+
+	vtMaterial *pMat;
+	int i, j, iSize = GetSize();
+
+	for (j = 0; j < iSize; j++)
+	{
+		vtMaterialDescriptor *descriptor = GetAt(j);
+		VTLOG(" %s,", (const char *) descriptor->GetName());
+
+		switch (descriptor->GetColorable())
+		{
+		case VT_MATERIAL_COLOUR:
+			pMat = MakeMaterial(descriptor, descriptor->GetRGB());
+			descriptor->SetMaterialIndex(m_pMaterials->AppendMaterial(pMat));
+			break;
+
+		case VT_MATERIAL_COLOURABLE:
+			for (i = 0; i < COLOR_SPREAD; i++)
+			{
+				pMat = MakeMaterial(descriptor, m_Colors[i]);
+				if (i == 0)
+					descriptor->SetMaterialIndex(m_pMaterials->AppendMaterial(pMat));
+				else
+					m_pMaterials->AppendMaterial(pMat);
+			}
+			break;
+
+		case VT_MATERIAL_SELFCOLOURED_TEXTURE:
+			CreateSelfColoredMaterial(descriptor);
+			break;
+
+		case VT_MATERIAL_COLOURABLE_TEXTURE:
+			CreateColorableTextureMaterial(descriptor);
+			break;
+		}
+	}
+	clock_t clock2 = clock();
+	VTLOG(" done in %.3f seconds.\n", (float)(clock2-clock1)/CLOCKS_PER_SEC);
+}
+
+void vtMaterialDescriptorArray3d::CreateSelfColoredMaterial(vtMaterialDescriptor *descriptor)
+{
+	RGBf color(1.0f, 1.0f, 1.0f);
+	vtMaterial *pMat = MakeMaterial(descriptor, color);
+
+	vtString path = FindFileOnPaths(vtGetDataPath(), descriptor->GetSourceName());
+	pMat->SetTexture(vtImageRead(path));
+	pMat->SetClamp(false);	// material needs to repeat
+
+	if (descriptor->GetBlending())
+		pMat->SetTransparent(true);
+
+	descriptor->SetMaterialIndex(m_pMaterials->AppendMaterial(pMat));
+}
+
+void vtMaterialDescriptorArray3d::CreateColorableTextureMaterial(vtMaterialDescriptor *descriptor)
+{
+	vtString source = descriptor->GetSourceName();
+	vtString path = FindFileOnPaths(vtGetDataPath(), source);
+	if (path == "")
+	{
+		VTLOG("\n\tMissing texture: %s\n", (const char *) source);
+		return;
+	}
+	vtImagePtr img = vtImageRead(path);
+
+	for (int i = 0; i < COLOR_SPREAD; i++)
+	{
+		vtMaterial *pMat = MakeMaterial(descriptor, m_Colors[i]);
+		pMat->SetTexture(img);
+		pMat->SetMipMap(true);
+		pMat->SetClamp(false);
+
+		if (descriptor->GetBlending())
+			pMat->SetTransparent(true);
+
+		int index = m_pMaterials->AppendMaterial(pMat);
+		if (i == 0)
+			descriptor->SetMaterialIndex(index);
+	}
+}
+
+
+//
+// Takes the building material and color, and tries to find the closest
+// existing vtMaterial.
+//
+int vtMaterialDescriptorArray3d::FindMatIndex(const vtString& Material,
+											  const RGBf &inputColor,
+											  int iType)
+{
+	if (!m_bMaterialsCreated)
+	{
+		// postpone material creation until the first time they're needed
+		CreateMaterials();
+	}
+
+	// handle special case of internal materials
+	if (Material == "Highlight")
+	{
+		// Choose the correct highlight
+		if (inputColor == RGBf(1,1,1))
+			return m_hightlight1;
+		else if (inputColor == RGBf(1,0,0))
+			return m_hightlight2;
+		else
+			return m_hightlight3;
+	}
+	if (Material == "Wire")
+	{
+		return m_wire;
+	}
+
+	const vtMaterialDescriptor  *pMaterialDescriptor;
+	pMaterialDescriptor = FindMaterialDescriptor(Material, inputColor, iType);
+
+	if (pMaterialDescriptor == NULL)
+		return -1;
+	int iIndex = pMaterialDescriptor->GetMaterialIndex();
+	vtMaterialColorEnum Type = pMaterialDescriptor->GetColorable();
+
+	if (Type == VT_MATERIAL_COLOUR)
+		return iIndex;
+
+	if (Type == VT_MATERIAL_SELFCOLOURED_TEXTURE)
+		return iIndex;
+
+	// otherwise, it is of type VT_MATERIAL_COLOURABLE or VT_MATERIAL_COLOURABLE_TEXTURE
+	// match the closest color.
+	float bestError = 1E8;
+	int bestMatch = -1;
+	float error;
+
+	for (int i = 0; i < COLOR_SPREAD; i++)
+	{
+		error = ColorDiff(m_Colors[i], inputColor);
+		if (error < bestError)
+		{
+			bestMatch  = iIndex + i;
+			bestError = error;
+		}
+	}
+	return bestMatch;
+}
+
+vtMaterialDescriptor *vtMaterialDescriptorArray3d::FindMaterialDescriptor(const vtString& MaterialName,
+																		  const RGBf &color,
+																		  int iType) const
+{
+	if (&MaterialName == NULL)
+		return NULL;
+
+	float bestError = 1E8;
+	int bestMatch = -1;
+	float error;
+
+	vtMaterialDescriptor *desc;
+	int i, iSize = GetSize();
+	for (i = 0; i < iSize; i++)
+	{
+		desc = GetAt(i);
+
+		// omit if the name does not match
+		if (desc->GetName().CompareNoCase(MaterialName) != 0)
+			continue;
+
+		// omit if the desired type is not matched
+		if (iType != -1 && iType != desc->GetMatType())
+			continue;
+
+		// look for matching name with closest color
+		const RGBi rgb = desc->GetRGB();
+		error = ColorDiff(rgb, color);
+		if (error < bestError)
+		{
+			bestMatch  = i;
+			bestError = error;
+		}
+	}
+	if (bestMatch != -1)
+		return GetAt(bestMatch);
+	return NULL;
+}
+
+
+/////////////////////////////////////////////////////////////////////////////
 // Methods for vtStructure3d
 //
 
-bool vtStructure3d::s_bMaterialsInitialized = false;
+bool vtStructure3d::s_bMaterialsLoaded = false;
 
 void vtStructure3d::InitializeMaterialArrays()
 {
-	if (!s_bMaterialsInitialized)
+	if (!s_bMaterialsLoaded)
 	{
-		s_bMaterialsInitialized = true;
+		s_bMaterialsLoaded = true;
 
 		s_MaterialDescriptors.InitializeMaterials();
 
@@ -487,4 +748,29 @@ bool vtStructure3d::GetCastShadow()
 	else
 		return false;
 }
+
+//
+// Helper to make a material
+//
+vtMaterial *vtMaterialDescriptorArray3d::MakeMaterial(vtMaterialDescriptor *desc,
+													  const RGBf &color)
+{
+	vtMaterial *pMat = new vtMaterial;
+	if (desc->GetAmbient())
+	{
+		// a purely ambient material
+		pMat->SetDiffuse(0,0,0);
+		pMat->SetAmbient(1,1,1);
+	}
+	else
+	{
+		pMat->SetDiffuse1(color * 0.7f);
+		pMat->SetAmbient1(color * 0.4f);
+	}
+	pMat->SetSpecular2(0.0f);
+	pMat->SetCulling(!desc->GetTwoSided());
+	pMat->SetLighting(true);
+	return pMat;
+}
+
 

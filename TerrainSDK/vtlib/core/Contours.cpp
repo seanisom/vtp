@@ -17,7 +17,7 @@
 //
 // This callback function will receive points output from QuikGrid.
 //
-void ReceiveContourPoint2(void *context, float x, float y, bool bStart)
+void ReceiveContourPoint(void *context, float x, float y, bool bStart)
 {
 	vtContourConverter *cc = (vtContourConverter *) context;
 	cc->Coord(x, y, bStart);
@@ -147,7 +147,7 @@ vtGeode *vtContourConverter::Setup(vtTerrain *pTerr, const RGBf &color, float fH
 
 	// Create material and geometry to contain the vector geometry
 	vtMaterialArrayPtr pMats = new vtMaterialArray;
-	pMats->AddRGBMaterial(color, false, false, true);
+	pMats->AddRGBMaterial1(color, false, false, true);
 
 	m_pGeode = new vtGeode;
 	m_pGeode->setName("Contour Geometry");
@@ -186,7 +186,7 @@ bool vtContourConverter::Setup(vtTerrain *pTerr, vtFeatureSetLineString *fset)
  */
 void vtContourConverter::GenerateContour(float fAlt)
 {
-	SetQuikGridCallbackFunction(ReceiveContourPoint2, this);
+	SetQuikGridCallbackFunction(ReceiveContourPoint, this);
 	m_fAltitude = fAlt;
 	Contour(*m_pGrid, fAlt);
 }
@@ -213,7 +213,7 @@ void vtContourConverter::GenerateContours(float fInterval)
 	int start = (int) (fMin / fInterval) + 1;
 	int stop = (int) (fMax / fInterval);
 
-	SetQuikGridCallbackFunction(ReceiveContourPoint2, this);
+	SetQuikGridCallbackFunction(ReceiveContourPoint, this);
 	for (int i = start; i <= stop; i++)
 	{
 		m_fAltitude = i * fInterval;
@@ -256,7 +256,7 @@ void vtContourConverter::Flush()
 		// confirm they are not all the same
 		DPoint2 p2 = m_line[0];
 		bool same = true;
-		for (uint i = 1; i < m_line.GetSize(); i++)
+		for (unsigned int i = 1; i < m_line.GetSize(); i++)
 		{
 			if (m_line[i] != p2)
 			{
@@ -268,13 +268,12 @@ void vtContourConverter::Flush()
 		{
 			if (m_pMF)
 			{
-				const bool bInterpolate = false;		// no need; it already hugs the ground
-				const bool bCurve = false;				// no need; it's already quite smooth
-				const bool bUseTrueElevation = true;	// use true elevation, not scaled
-				const float fSpacing = 0.0f;			// Doesn't matter, no interpolation.
+				bool bInterpolate = false;		// no need; it already hugs the ground
+				bool bCurve = false;			// no need; it's already quite smooth
+				bool bUseTrueElevation = true;	// use true elevation, not scaled
 
-				m_pMF->AddSurfaceLineToMesh(m_pTerrain->GetHeightField(),
-					m_line, fSpacing, m_fHeight, bInterpolate, bCurve, bUseTrueElevation);
+				m_pTerrain->AddSurfaceLineToMesh(m_pMF, m_line, m_fHeight,
+					bInterpolate, bCurve, bUseTrueElevation);
 			}
 			else if (m_pLS)
 			{
@@ -283,7 +282,7 @@ void vtContourConverter::Flush()
 			}
 		}
 	}
-	m_line.Clear();
+	m_line.Empty();
 }
 
 #endif // SUPPORT_QUIKGRID

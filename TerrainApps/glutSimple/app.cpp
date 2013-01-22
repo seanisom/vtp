@@ -35,7 +35,7 @@
 
 void redraw();
 void reshape(int w, int h);
-void keyboard(uchar key, int x, int y);
+void keyboard(unsigned char key, int x, int y);
 void mouse(int button, int state, int x, int y);
 void motion(int x, int y);
 
@@ -51,7 +51,7 @@ void reshape(int w, int h )
 /*
   The GLUT keyboard event
 */
-void keyboard(uchar key, int x, int y)
+void keyboard(unsigned char key, int x, int y)
 {
 	if ( key == 27 /* ESC */ || key == 'q' || key == 'Q' )
 		exit(0);
@@ -212,13 +212,13 @@ bool CreateScene()
 	float fSpeed = pTerr->GetParams().GetValueFloat(STR_NAVSPEED);
 
 	vtTerrainFlyer *pFlyer = new vtTerrainFlyer(fSpeed);
-	pFlyer->AddTarget(pCamera);
+	pFlyer->SetTarget(pCamera);
 	pFlyer->SetHeightField(pTerr->GetHeightField());
 	pScene->AddEngine(pFlyer);
 
 	// Minimum height over terrain is 100 m
 	vtHeightConstrain *pConstrain = new vtHeightConstrain(100);
-	pConstrain->AddTarget(pCamera);
+	pConstrain->SetTarget(pCamera);
 	pConstrain->SetHeightField(pTerr->GetHeightField());
 	pScene->AddEngine(pConstrain);
 

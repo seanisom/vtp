@@ -89,7 +89,7 @@ void DistanceDlg::Zero()
 {
 	m_p1.Set(0,0);
 	m_p2.Set(0,0);
-	m_path.Clear();
+	m_path.Empty();
 	m_fGround = FLT_MIN;
 	m_fVertical = FLT_MIN;
 }
@@ -186,7 +186,7 @@ void DistanceDlg::ShowValues()
 	{
 		DLine2 geo_line;
 
-		uint i, len = m_path.GetSize();
+		unsigned int i, len = m_path.GetSize();
 		if (bIsGeo)
 			geo_line = m_path;
 		else

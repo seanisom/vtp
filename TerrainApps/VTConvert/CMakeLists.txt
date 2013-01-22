@@ -1,8 +1,6 @@
 
 add_executable(VTConvert VTConvert.cpp)
 
-install(TARGETS VTConvert RUNTIME DESTINATION bin)
-
 # Internal library dependencies for this target
 target_link_libraries(VTConvert vtdata)
 

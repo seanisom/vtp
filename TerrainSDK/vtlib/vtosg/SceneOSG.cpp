@@ -3,11 +3,14 @@
 //
 // Implementation of vtScene for the OSG library
 //
-// Copyright (c) 2001-2012 Virtual Terrain Project
+// Copyright (c) 2001-2011 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
 #include "vtlib/vtlib.h"
+#if OLD_OSG_SHADOWS
+#include "StructureShadowsOSG.h"
+#endif
 
 #include <osgViewer/ViewerEventHandlers>
 
@@ -91,56 +94,10 @@ float vtGetFrameTime()
 
 int vtGetMaxTextureSize()
 {
-	osg::GraphicsContext *context = vtGetScene()->GetGraphicsContext();
-	if (!context) {
-		VTLOG1("Error: Called vtGetMaxTextureSize without a known context\n");
-		return 0;
-	}
-
-    // Do not try to create an Extensions object if one does not already exist
-    // as we cannot gaurantee a valid rendering context at this point.
-	osg::ref_ptr<osg::Texture::Extensions> pTextureExtensions =
-		osg::Texture::getExtensions(context->getState()->getContextID(), false);
-    if (pTextureExtensions.valid())
-        return pTextureExtensions->maxTextureSize();
-    else
-        return 0;
+	GLint tmax = 0;	// TODO: cannot make direct GL calls in threaded environment
+	glGetIntegerv(GL_MAX_TEXTURE_SIZE, &tmax);
+	return tmax;
 }
-
-#if 0
-class MyCull : public osg::NodeCallback
-{
-public:
-    /** Callback method called by the NodeVisitor when visiting a node.*/
-	virtual void operator()(osg::Node* node, osg::NodeVisitor* nv)
-    {
-		const GLubyte *test = glGetString(GL_VERSION);
-        traverse(node,nv);
-    }
-};
-
-class MyUpdate : public osg::NodeCallback
-{
-public:
-    /** Callback method called by the NodeVisitor when visiting a node.*/
-    virtual void operator()(osg::Node* node, osg::NodeVisitor* nv)
-    {
-		const GLubyte *test = glGetString(GL_VERSION);
-        traverse(node,nv);
-    }
-};
-
-class MyEvent : public osg::NodeCallback
-{
-public:
-    /** Callback method called by the NodeVisitor when visiting a node.*/
-    virtual void operator()(osg::Node* node, osg::NodeVisitor* nv)
-    {
-		const GLubyte *test = glGetString(GL_VERSION);
-        traverse(node,nv);
-    }
-};
-#endif
 
 /**
  * Initialize the vtlib library, including the display and scene graph.
@@ -183,19 +140,12 @@ bool vtScene::Init(int argc, char** argv, bool bStereo, int iStereoMode)
 		osg::DisplaySettings::StereoMode mode;
 		if (iStereoMode == 0) mode = osg::DisplaySettings::ANAGLYPHIC;
 		if (iStereoMode == 1) mode = osg::DisplaySettings::QUAD_BUFFER;
-		if (iStereoMode == 2) mode = osg::DisplaySettings::HORIZONTAL_SPLIT;
-		if (iStereoMode == 3) mode = osg::DisplaySettings::VERTICAL_SPLIT;
 		displaySettings->setStereoMode(mode);
 	}
 #ifdef __DARWIN_OSX__
 	// Kill multi-threading on OSX until wxGLContext properly implemented on that platform
 	m_pOsgViewer->setThreadingModel(osgViewer::Viewer::SingleThreaded);
 #endif
-
-	// We can't use displaySettings->setNumMultiSamples here to enable anti-
-	// aliasing, because it has to be done eariler (at the time the OpenGL
-	// context is made).
-
 #ifdef USE_OSG_STATS
 	osgViewer::StatsHandler* pStatsHandler = new osgViewer::StatsHandler;
 	pStatsHandler->setKeyEventPrintsOutStats(0);
@@ -233,13 +183,6 @@ bool vtScene::Init(int argc, char** argv, bool bStereo, int iStereoMode)
 	m_StateRoot = new osg::Group;
 	m_pOsgViewer->setSceneData(m_StateRoot);
 
-	// By default, things are lit, unless they ask not to be
-	m_StateRoot->getOrCreateStateSet()->setMode(GL_LIGHTING, osg::StateAttribute::ON);
-
-	//m_StateRoot->addCullCallback(new MyCull);
-	//m_StateRoot->setUpdateCallback(new MyUpdate);
-	//m_StateRoot->setEventCallback(new MyEvent);
-
 	m_bInitialized = true;
 
 	_initialTick = _timer.tick();
@@ -256,7 +199,7 @@ void vtScene::Shutdown()
 
 	delete m_pDefaultWindow;
 	m_pDefaultWindow = NULL;
-	m_Windows.Clear();
+	m_Windows.Empty();
 
 	// Also clear the OSG cache
 	osgDB::Registry::instance()->clearObjectCache();
@@ -278,7 +221,7 @@ void vtScene::OnMouse(vtMouseEvent &event, vtWindow *pWindow)
 {
 	// Pass event to Engines
 	vtEngineArray list(m_pRootEngine);
-	for (uint i = 0; i < list.size(); i++)
+	for (unsigned int i = 0; i < list.GetSize(); i++)
 	{
 		vtEngine *pEng = list[i];
 		if (pEng->GetEnabled() &&
@@ -291,7 +234,7 @@ void vtScene::OnKey(int key, int flags, vtWindow *pWindow)
 {
 	// Pass event to Engines
 	vtEngineArray list(m_pRootEngine);
-	for (uint i = 0; i < list.size(); i++)
+	for (unsigned int i = 0; i < list.GetSize(); i++)
 	{
 		vtEngine *pEng = list[i];
 		if (pEng->GetEnabled() &&
@@ -319,7 +262,7 @@ void vtScene::DoEngines(vtEngine *eng)
 {
 	// Evaluate Engines
 	vtEngineArray list(eng);
-	for (uint i = 0; i < list.size(); i++)
+	for (unsigned int i = 0; i < list.GetSize(); i++)
 	{
 		vtEngine *pEng = list[i];
 		if (pEng->GetEnabled())
@@ -340,11 +283,11 @@ void vtScene::TargetRemoved(osg::Referenced *tar)
 {
 	// Look at all Engines
 	vtEngineArray list(m_pRootEngine);
-	for (uint i = 0; i < list.size(); i++)
+	for (unsigned int i = 0; i < list.GetSize(); i++)
 	{
 		// If this engine targets something that is no longer there
 		vtEngine *pEng = list[i];
-		for (uint j = 0; j < pEng->NumTargets(); j++)
+		for (unsigned int j = 0; j < pEng->NumTargets(); j++)
 		{
 			// Then remove it
 			if (pEng->GetTarget(j) == tar)
@@ -448,11 +391,9 @@ void vtScene::UpdateWindow(vtWindow *pWindow)
 	imat.invert(mat2);
 	m_pOsgViewer->getCamera()->setViewMatrix(imat);
 
-	m_pOsgViewer->getCamera()->setCullMask(0x3);
-	// Also set the mask for the case of split-screen stereo
-	m_pOsgViewer->getCamera()->setCullMaskLeft(0x3);
-	m_pOsgViewer->getCamera()->setCullMaskRight(0x3);
+	CalcCullPlanes();
 
+	m_pOsgViewer->getCamera()->setCullMask(0x3);
 	m_pOsgViewer->frame();
 }
 
@@ -498,6 +439,11 @@ void vtScene::SetRoot(vtGroup *pRoot)
 	m_StateRoot->removeChildren(0, m_StateRoot->getNumChildren());
 	if (pRoot)
 		m_StateRoot->addChild(pRoot);
+
+#if OLD_OSG_SHADOWS
+	// Clear out any shadow stuff
+	m_pStructureShadowsOSG = NULL;
+#endif
 
 	// Remember it
 	m_pRoot = pRoot;
@@ -588,6 +534,127 @@ void vtScene::WorldToScreen(const FPoint3 &point, IPoint2 &result)
 	result.y = (int) window.y();
 }
 
+
+// Debugging helper
+void LogCullPlanes(FPlane *planes)
+{
+	for (int i = 0; i < 4; i++)
+		VTLOG(" plane %d: %.3f %.3f %.3f %.3f\n", i, planes[i].x, planes[i].y, planes[i].z, planes[i].w);
+	VTLOG("\n");
+}
+
+void vtScene::CalcCullPlanes()
+{
+#if 0
+	// Non-API-Specific code - will work correctly as long as the Camera
+	// methods are fully functional.
+	FMatrix4 mat;
+	m_pCamera->GetTransform1(mat);
+
+	assert(( m_WindowSize.x > 0 ) && ( m_WindowSize.y > 0 ));
+
+	double fov = m_pCamera->GetFOV();
+
+	double aspect = (float)m_WindowSize.y / m_WindowSize.x;
+	double hither = m_pCamera->GetHither();
+
+	double a = hither * tan(fov / 2);
+	double b = a * aspect;
+
+	FPoint3 vec_l(-a, 0, -hither);
+	FPoint3 vec_r(a, 0, -hither);
+	FPoint3 vec_t(0, b, -hither);
+	FPoint3 vec_b(0, -b, -hither);
+
+	vec_l.Normalize();
+	vec_r.Normalize();
+	vec_t.Normalize();
+	vec_b.Normalize();
+
+	FPoint3 up(0.0f, 1.0f, 0.0f);
+	FPoint3 right(1.0f, 0.0f, 0.0f);
+
+	FPoint3 temp;
+
+	FPoint3 center;
+	FPoint3 norm_l, norm_r, norm_t, norm_b;
+
+	temp = up.Cross(vec_l);
+	mat.TransformVector(temp, norm_l);
+
+	temp = vec_r.Cross(up);
+	mat.TransformVector(temp, norm_r);
+
+	temp = right.Cross(vec_t);
+	mat.TransformVector(temp, norm_t);
+
+	temp = vec_b.Cross(right);
+	mat.TransformVector(temp, norm_b);
+
+	mat.Transform(FPoint3(0.0f, 0.0f, 0.0f), center);
+
+	// set up m_cullPlanes in world coordinates!
+	m_cullPlanes[0].Set(center, norm_l);
+	m_cullPlanes[1].Set(center, norm_r);
+	m_cullPlanes[2].Set(center, norm_t);
+	m_cullPlanes[3].Set(center, norm_b);
+#else
+	// Get the view frustum clipping planes directly from OSG.
+	// We can't get the planes from the state, because the state
+	//  includes the funny modelview matrix used to scale the
+	//  heightfield.  We must get it from the 'scene' instead.
+
+	const osg::Matrixd &_projection = m_pOsgViewer->getCamera()->getProjectionMatrix();
+	const osg::Matrixd &_modelView = m_pOsgViewer->getCamera()->getViewMatrix();
+
+	osg::Polytope tope;
+	tope.setToUnitFrustum();
+	tope.transformProvidingInverse((_modelView)*(_projection));
+
+	const osg::Polytope::PlaneList &planes = tope.getPlaneList();
+
+	int i = 0;
+	for (osg::Polytope::PlaneList::const_iterator itr=planes.begin();
+		itr!=planes.end(); ++itr)
+	{
+		// make a copy of the clipping plane
+		osg::Plane plane = *itr;
+
+		// extract the OSG plane to our own structure
+		osg::Vec4 pvec = plane.asVec4();
+		m_cullPlanes[i++].Set(-pvec.x(), -pvec.y(), -pvec.z(), -pvec.w());
+	}
+#endif
+
+	// For debugging
+//	LogCullPlanes(m_cullPlanes);
+}
+
+
+void vtScene::DrawFrameRateChart()
+{
+	static float fps[100];
+	static int s = 0;
+	fps[s] = GetFrameRate();
+
+	glMatrixMode(GL_MODELVIEW);
+	glLoadIdentity();
+
+	glDisable(GL_TEXTURE_2D);
+	glDisable(GL_LIGHTING);
+	glColor3f(1.0f, 1.0f, 0.0f);
+
+	glBegin(GL_LINE_STRIP);
+	for (int i = 1; i <= 100; i++)
+	{
+		glVertex3f(-1.0 + i/200.0f, -1.0f + fps[(s+i)%100]/200.0f, 0.0f);
+	}
+	glEnd();
+
+	s++;
+	if (s == 100) s = 0;
+}
+
 void vtScene::SetGlobalWireframe(bool bWire)
 {
 	m_bWireframe = bWire;
@@ -620,7 +687,7 @@ void vtScene::SetWindowSize(int w, int h, vtWindow *pWindow)
 
 	// Pass event to Engines
 	vtEngineArray list(m_pRootEngine);
-	for (uint i = 0; i < list.size(); i++)
+	for (unsigned int i = 0; i < list.GetSize(); i++)
 	{
 		vtEngine *pEng = list[i];
 		if (pEng->GetEnabled() &&
@@ -628,7 +695,7 @@ void vtScene::SetWindowSize(int w, int h, vtWindow *pWindow)
 			pEng->OnWindowSize(w, h);
 	}
 
-	osgViewer::GraphicsWindow* pGW = GetGraphicsWindow();
+	osgViewer::GraphicsWindow* pGW = (osgViewer::GraphicsWindow*)GetGraphicsContext();
 	if ((NULL != pGW) && pGW->valid())
 	{
 		pGW->getEventQueue()->windowResize(0, 0, w, h);
@@ -676,20 +743,73 @@ bool vtScene::GetWindowSizeFromOSG()
 ////////////////////////////////////////
 // Shadow methods
 
+#if OLD_OSG_SHADOWS
+void vtScene::ShadowVisibleNode(osg::Node *node, bool bVis)
+{
+	if (m_pStructureShadowsOSG.valid())
+		if (bVis)
+			m_pStructureShadowsOSG->ExcludeFromShadower(node, false);
+		else
+			m_pStructureShadowsOSG->ExcludeFromShadower(node, true);
+}
+
+bool vtScene::IsShadowVisibleNode(osg::Node *node)
+{
+	if (m_pStructureShadowsOSG.valid())
+		return (m_pStructureShadowsOSG->IsExcludedFromShadower(node) == false);
+	return false;
+}
+
+void vtScene::SetShadowedNode(vtTransform *pLight, osg::Node *pShadowerNode,
+							  osg::Node *pShadowed, int iRez, float fDarkness,
+							  int iTextureUnit, const FSphere &ShadowSphere)
+{
+	m_pStructureShadowsOSG = new CStructureShadowsOSG;
+	m_pStructureShadowsOSG->Initialise(m_pOsgSceneView.get(), pShadowerNode,
+		pShadowed, iRez, fDarkness, iTextureUnit, ShadowSphere);
+	m_pStructureShadowsOSG->SetSunDirection(v2s(-pLight->GetDirection()));
+	m_pStructureShadowsOSG->ComputeShadows();
+}
+
+void vtScene::UnsetShadowedNode(vtTransform *pTransform)
+{
+	m_pStructureShadowsOSG = NULL;
+}
+
+void vtScene::UpdateShadowLightDirection(vtTransform *pLight)
+{
+	if (m_pStructureShadowsOSG.valid())
+		m_pStructureShadowsOSG->SetSunDirection(v2s(-pLight->GetDirection()));
+}
+
+void vtScene::SetShadowDarkness(float fDarkness)
+{
+	if (m_pStructureShadowsOSG.valid())
+		m_pStructureShadowsOSG->SetShadowDarkness(fDarkness);
+}
+
+void vtScene::SetShadowSphere(const FSphere &ShadowSphere, bool bForceRedraw)
+{
+	if (m_pStructureShadowsOSG.valid())
+		m_pStructureShadowsOSG->SetShadowSphere(ShadowSphere, bForceRedraw);
+}
+
+void vtScene::ComputeShadows()
+{
+	if (m_pStructureShadowsOSG.valid())
+		m_pStructureShadowsOSG->ComputeShadows();
+}
+#endif // OLD_OSG_SHADOWS
+
 void vtScene::SetGraphicsContext(osg::GraphicsContext* pGraphicsContext)
 {
 	m_pGraphicsContext = pGraphicsContext;
 	m_pOsgViewer->getCamera()->setGraphicsContext(pGraphicsContext);
 }
 
-osg::GraphicsContext *vtScene::GetGraphicsContext()
+osg::GraphicsContext* vtScene::GetGraphicsContext()
 {
 	return m_pGraphicsContext.get();
-}
-
-osgViewer::GraphicsWindow *vtScene::GetGraphicsWindow()
-{
-	return dynamic_cast<osgViewer::GraphicsWindow*>(m_pGraphicsContext.get());
 }
 
 ////////////////////////////////////////
@@ -703,7 +823,7 @@ void printnode(osg::Node *node, int tab)
 	osg::notify(osg::WARN) << node->className() << " - " << node->getName() << " @ " << node << std::endl;
 	osg::Group *group = node->asGroup();
 	if (group) {
-		for (uint i = 0; i < group->getNumChildren(); i++) {
+		for (unsigned int i = 0; i < group->getNumChildren(); i++) {
 			printnode(group->getChild(i), tab+1);
 		}
 	}

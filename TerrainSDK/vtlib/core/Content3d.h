@@ -3,7 +3,7 @@
 //
 // Header for the Content Management classes.
 //
-// Copyright (c) 2003-2011 Virtual Terrain Project.
+// Copyright (c) 2003-2004 Virtual Terrain Project.
 // Free for all uses, see license.txt for details.
 //
 
@@ -25,10 +25,13 @@
 class vtItem3d : public vtItem
 {
 public:
+	vtItem3d();
+	~vtItem3d();
+
 	bool LoadModels();
 	void UpdateExtents();
 
-	NodePtr m_pNode;
+	osg::Node *m_pNode;
 };
 
 /**
@@ -47,13 +50,7 @@ public:
 	void ReleaseContents();
 
 	vtGroupPtr m_pGroup;
-
-	// Static: handle to the singleton
-	static vtContentManager3d *s_pContent;
 };
-
-void vtSetGlobalContent(vtContentManager3d &cm3d);
-vtContentManager3d &vtGetContent();
 
 /*@}*/	// group content
 

@@ -1,7 +1,7 @@
 //
 // RoadMapEdit.h
 //
-// Copyright (c) 2001-2012 Virtual Terrain Project
+// Copyright (c) 2001-2008 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -78,7 +78,7 @@ public:
 	// determine bounding box
 	void ComputeExtent();
 	//is target in the bounding box?
-	bool OverlapsExtent(const DRECT &target);
+	bool WithinExtent(const DRECT &target);
 	bool WithinExtent(const DPoint2 &target);
 
 	//is extent of the road in "bound"
@@ -102,14 +102,13 @@ public:
 	NodeEdit *GetNode(int n) { return (NodeEdit *)m_pNode[n]; }
 	LinkEdit *GetNext() { return (LinkEdit *)m_pNext; }
 
-	DRECT	m_extent;		// bounding box, kept up-to-date at all times
-	int		m_iPriority;	// used to determine intersection behavior. lower number => higher priority
+	DRECT	m_extent;		// bounding box in world coordinates
+	int		m_iPriority;	// used to determine intersection behavior.  lower number => higher priority
 	float	m_fLength;		// length of the road
 	bool	m_bDrawPoints;	// draw each point in the road individually
-	int		m_iHighlightPoint;
 
 	DLine2	m_WidthOffset;		// offset from each point to its left edge
-	bool	m_bSidesComputed;	// true when m_WidthOffset is up-to-date
+	bool	m_bSidesComputed;	// true when m_Left and m_Right are up-to-date
 };
 
 class RoadMapEdit : public vtRoadMap
@@ -124,19 +123,6 @@ public:
 	NodeEdit *NewNode() { return new NodeEdit; }
 	LinkEdit *NewLink() { return new LinkEdit; }
 
-	NodeEdit *AddNewNode()
-	{
-		NodeEdit *node = new NodeEdit;
-		AddNode(node);
-		return node;
-	}
-	LinkEdit *AddNewLink()
-	{
-		LinkEdit *link = new LinkEdit;
-		AddLink(link);
-		return link;
-	}
-
 	// Import from DLG
 	void AddElementsFromDLG(vtDLGFile *pDlg);
 
@@ -150,8 +136,8 @@ public:
 		bool progress_callback(int) = NULL);
 	LinkEdit *AddRoadSegment(class OGRLineString *pLineString);
 
-	void SplitLinkAtIndex(LinkEdit *link, int index, NodeEdit *node,
-		LinkEdit **plink1 = NULL, LinkEdit **plink2 = NULL);
+	// Import from OpenStreetMap
+	bool ImportFromOSM(const char *fname, bool progress_callback(int) = NULL);
 
 	//cleaning functions-------------------------
 	// merge nodes that are near each other
@@ -182,11 +168,11 @@ public:
 	DRECT* DeleteSelected(int &nBounds);
 
 	// find which road is within a given distance of a given point
-	LinkEdit *FindLink(const DPoint2 &point, float error);
+	LinkEdit *FindLink(DPoint2 point, float error);
 	// inverts m_bSelect value of road within error of utmCoord
-	bool SelectLink(const DPoint2 &point, float error, DRECT &bound);
+	bool SelectLink(DPoint2 point, float error, DRECT &bound);
 	// if bval true, select roads within bound.  otherwise deselect roads
-	int SelectLinks(const DRECT &bound, bool bval);
+	int SelectLinks(DRECT bound, bool bval);
 
 	// selects a road, as well as any adjacent roads that is an extension of that road.
 	bool SelectAndExtendLink(DPoint2 point, float error, DRECT &bound);

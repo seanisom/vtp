@@ -1,7 +1,7 @@
 //
 // Terrain.h
 //
-// Copyright (c) 2001-2013 Virtual Terrain Project
+// Copyright (c) 2001-2011 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -17,13 +17,12 @@
 #include "DynTerrain.h"
 #include "GeomUtil.h"	// for MeshFactory
 #include "Location.h"
-#include "Plants3d.h"	// for vtSpeciesList3d, vtPlantInstanceArray3d
 #include "Roads.h"
-#include "SurfaceTexture.h"
+#include "Route.h"
 #include "TextureUnitManager.h"
 #include "TiledGeom.h"
 #include "TParams.h"
-#include "UtilityMap3d.h"
+#include "Trees.h"	// for vtSpeciesList3d, vtPlantInstanceArray3d
 #include "vtTin3d.h"
 
 #include <memory>
@@ -35,6 +34,7 @@ class vtFeatureSet;
 class vtFence3d;
 class vtLodGrid;
 class vtPagedStructureLodGrid;
+class vtSimpleBillboardEngine;
 class vtSimpleLodGrid;
 class vtExternalHeightField3d;
 
@@ -46,29 +46,25 @@ class vtExternalHeightField3d;
 enum TFType
 {
 	TFT_TERRAINSURFACE,
+	TFT_HORIZON,
 	TFT_OCEAN,
 	TFT_VEGETATION,
 	TFT_STRUCTURES,
 	TFT_ROADS
 };
 
-/** Shadow options */
+class vtStructureExtension
+{
+public:
+	virtual void OnCreate(vtTerrain *t, vtStructure *s) {}
+	virtual void OnDelete(vtTerrain *t, vtStructure *s) {}
+};
+
 struct vtShadowOptions
 {
-	/** Darkness (opacity) of the shadows from 0 to 1. */
 	float fDarkness;
-
-	/** Set to true to improve rendering speed by only recomputing shadows
-		when the camera has moved significantly (1/10 of shadow radius)
-		since the last frame. */
 	bool bShadowsEveryFrame;
-
-	/** Set to true, shadows will only be drawn within this radius of the
-		camera. Highly recommended to set this, since shadow resolution is
-		limited. */
 	bool bShadowLimit;
-
-	/** The radius to use when shadow area is limited. */
 	float fShadowRadius;
 };
 
@@ -76,48 +72,57 @@ struct vtShadowOptions
 typedef bool (*ProgFuncPtrType)(int);
 
 /**
- The vtTerrain class represents a terrain, which is a part of the surface
-  of the earth.
- 
- It is generally described by a set of parameters such as elevation,
- vegetation, and time of day.  These terrain parameters are contained
- in the class TParams.
- 
- To create a new terrain, first construct a vtTerrain and set its
- parameters with SetParams() or SetParamFile().
- You can also set many properties of the terrain directly, which is useful
- if you want to set them from memory instead of from disk.  These include:
+ * The vtTerrain class represents a terrain, which is a part of the surface
+ *  of the earth.
+ *
+ * It is generally described by a set of parameters such as elevation,
+ * vegetation, and time of day.  These terrain parameters are contained
+ * in the class TParams.
+ *
+ * To create a new terrain, first construct a vtTerrain and set its
+ * parameters with SetParams() or SetParamFile().
+ * You can also set many properties of the terrain directly, which is useful
+ * if you want to set them from memory instead of from disk.  These include:
 	- Elevation grid: use SetLocalGrid().
 	- Elevation TIN: use SetTin().
 	- Structures: use NewStructureLayer(), then fill it with your structures.
-	- Vegetation: call SetSpeciesList(), then NewVegLayer().
-	- Abstract layers: call NewAbstractLayer() and fill in the properties.
-	  The features will be created according to the properties you have set
-	  with vtAbstractLayer::SetProps().
+	- Vegetation: call SetPlantList(), then GetPlantInstances().
+	- Abstract layers: use GetLayers() to get the LayerSet, then create and append
+	  your vtAbstractLayer objects. The features will be created
+	  according to the properties you have set with vtAbstractLayer::SetProperties().
 	  The properties you can set are documented with the class TParams.
 	- Animation paths: use GetAnimContainer(), then add your own animpaths.
- 
- You can then build the terrain using the CreateStep methods, or add it
- to a vtTerrainScene and use vtTerrainScene::BuildTerrain.
- 
- <h3>Customizing your Terrain</h3>
- 
- To extend your terrain beyond what is possible with the terrain
- parameters, you can create a subclass of vtTerrain and implement the
- method CreateCustomCulture().  Here you can create anything you like,
- and add it to the terrain.  Generally you should add your nodes with
- AddNode(), or AddNodeToStructGrid() if it is a structure that should
- be culled in the distance.  You can also add your nodes with
- GetScaledFeatures()->addChild(), if they are 'flat' like GIS features
- or contour lines, which should be scaled up/down with the vertical
- exaggeration of the terrain.
- 
- <h3>How it works</h3>
- 
- The terrain is implemented with a scene graph with the following structure.
- When you call SetShadows() or SetFog(), a vtShadow or vtFog node (but not
- both) may be inserted between the container and the main terrain group.
- \dotfile terrain_graph.dot "Top of the Scenegraph per Terrain"
+ *
+ * You can then build the terrain using the CreateStep methods, or add it
+ * to a vtTerrainScene and use vtTerrainScene::BuildTerrain.
+ *
+ * <h3>Customizing your Terrain</h3>
+ *
+ * To extend your terrain beyond what is possible with the terrain
+ * parameters, you can create a subclass of vtTerrain and implement the
+ * method CreateCustomCulture().  Here you can create anything you like,
+ * and add it to the terrain.  Generally you should add your nodes with
+ * AddNode(), or AddNodeToStructGrid() if it is a structure that should
+ * be culled in the distance.  You can also add your nodes with
+ * GetScaledFeatures()->addChild(), if they are 'flat' like GIS features
+ * or contour lines, which should be scaled up/down with the vertical
+ * exaggeration of the terrain.
+ *
+ * <h3>How it works</h3>
+ *
+ * The terrain is implemented with a scene graph with the following structure.
+ * - vtGroup "Terrain Group"
+ *  - vtTransform "Dynamic Geometry"
+ *   - A vtDynGeom for the CLOD terrain surface.
+ *  - vtTransform "Scaled Features"
+ *   - Abstract layers, which may need scaling in order to remain draped
+ *		on the ground as the user changes the vertical exaggeration.
+ *  - vtGroup "Structure LOD Grid"
+ *   - many vtLOD objects, for efficient culling of large number of structures.
+ *  - vtGroup "Roads"
+ *   - many vtLOD objects, for efficient culling of large number of roads.
+ *  - vtGroup "Vegetation"
+ *   - many vtLOD objects, for efficient culling of large number of plants.
  */
 class vtTerrain : public CultureExtension
 {
@@ -133,7 +138,6 @@ public:
 	vtString GetParamFile()  { return m_strParamFile; }
 	void SetParams(const TParams &Params);
 	TParams &GetParams();
-	const TParams &GetParams() const { return m_Params; }
 
 	// each terrain can have a long descriptive name
 	void SetName(const vtString &str) { m_Params.SetValueString(STR_NAME, str); }
@@ -144,34 +148,34 @@ public:
 	void SetTin(vtTin3d *pTin);
 	vtTin3d *GetTin() { return m_pTin; }
 	bool GetGeoExtentsFromMetadata();
-	float EstimateGroundSpacingAtPoint(const DPoint2 &p) const;
+
+	/// pass true to draw the underside of the terrain as well
+	void SetBothSides(bool bFlag) { m_bBothSides = bFlag; }
 
 	// You can use these methods to build a terrain step by step,
 	// or simply use the method vtTerrainScene::BuildTerrain.
-	void CreateStep1();
-	bool CreateStep2();
-	bool CreateStep3(vtTransform *pSunLight, vtLightSource *pLightSource);
+	void CreateStep0();
+	bool CreateStep1();
+	bool CreateStep2(vtTransform *pSunLight, vtLightSource *pLightSource);
+	bool CreateStep3();
 	bool CreateStep4();
 	bool CreateStep5();
-	void CreateStep6();
-	void CreateStep7();
-	void CreateStep8();
-	void CreateStep9();
-	void CreateStep10();
-	void CreateStep11();
-	void CreateStep12();
 	vtString GetLastError() { return m_strErrorMsg; }
 
 	void SetProgressCallback(ProgFuncPtrType progress_callback = NULL);
 	ProgFuncPtrType m_progress_callback;
 	bool ProgressCallback(int i);
 
+	/// Set the colors to be used in a derived texture.
+	void SetTextureColors(ColorMap *colors);
+	ColorMap *GetTextureColors() { return m_pTextureColors.get(); }
+
 	/// Sets the texture colors to be a set of black contour stripes.
 	void SetTextureContours(float fInterval, float fSize);
 
-	/// Set the colors to be used in a derived texture.
-	void SetTextureColorMap(ColorMap *colors);
-	ColorMap *GetTextureColorMap() { return m_Texture.m_pColorMap.get(); }
+	/** Override this method to customize the Dib, before it is turned into
+	 * a vtImage.  The default implementation colors from elevation. */
+	virtual void PaintDib(bool progress_callback(int) = NULL);
 
 	/// Return true if the terrain has been created.
 	bool IsCreated();
@@ -196,53 +200,49 @@ public:
 	/// Test whether a given point is within the current terrain.
 	bool PointIsInTerrain(const DPoint2 &p);
 
-	// UtilityMap
-	vtPole3d *NewPole();
-	vtLine3d *NewLine();
-	void AddPoleToLine(vtLine3d *line, const DPoint2 &epos, const char *structname);
-	void RebuildUtilityGeometry();
-	vtUtilityMap3d &GetUtilityMap() { return m_UtilityMap; }
+	// set global projection based on this terrain
+	void SetGlobalProjection();
+
+	// fences
+	bool AddFence(vtFence3d *f);
+	void AddFencepoint(vtFence3d *f, const DPoint2 &epos);
+	void RedrawFence(vtFence3d *f);
+
+	// Route
+	void AddRoute(vtRoute *f);
+	void add_routepoint_earth(vtRoute *f, const DPoint2 &epos, const char *structname);
+	void RedrawRoute(vtRoute *f);
+	void SaveRoute();
+	vtRoute* GetLastRoute() { return m_Routes.GetSize()>0?m_Routes[m_Routes.GetSize()-1]:0; }
+	vtRouteMap &GetRouteMap() { return m_Routes; }
 
 	// Layers
 	/// Get at the container for all the layers
 	LayerSet &GetLayers() { return m_Layers; }
-	const LayerSet &GetLayers() const { return m_Layers; }
 	void RemoveLayer(vtLayer *lay, bool progress_callback(int) = NULL);
 	vtLayer *LoadLayer(const char *fname);
-	void SetActiveLayer(vtLayer *lay) { m_pActiveLayer = lay; }
-	vtLayer *GetActiveLayer() { return m_pActiveLayer; }
-	vtLayer *GetOrCreateLayerOfType(LayerType type);
-	uint NumLayersOfType(LayerType type);
 
 	// plants
-	vtVegLayer *GetVegLayer();
-	vtVegLayer *NewVegLayer();
-	vtVegLayer *LoadVegetation(const vtString &fname);
-	bool AddPlant(vtVegLayer *v_layer, const DPoint2 &pos, int iSpecies, float fSize);
-	int DeleteSelectedPlants(vtVegLayer *v_layer);
-	void RemoveAndDeletePlant(vtVegLayer *v_layer, int index);
-	void SetSpeciesList(vtSpeciesList3d *pSpeciesList);
-	vtSpeciesList3d *GetSpeciesList() { return m_pSpeciesList; }
+	bool AddPlant(const DPoint2 &pos, int iSpecies, float fSize);
+	int DeleteSelectedPlants();
+	void SetPlantList(vtSpeciesList3d *pPlantList);
+	vtSpeciesList3d *GetPlantList() { return m_pPlantList; }
 	/// Get the plant array for this terrain.  You can modify it directly.
+	vtPlantInstanceArray3d &GetPlantInstances() { return m_PIA; }
 	bool AddNodeToVegGrid(osg::Node *pNode);
-	int NumVegLayers() const;
-	bool FindClosestPlant(const DPoint2 &point, double epsilon,
-						  int &plant_index, vtVegLayer **v_layer);
-	void DeselectAllPlants();
 
 	// structures
-	vtStructureLayer *GetStructureLayer() const;
+	vtStructureLayer *GetStructureLayer();
+	void SetStructureLayer(vtStructureLayer *slay);
 	vtStructureLayer *NewStructureLayer();
 	vtStructureLayer *LoadStructuresFromXML(const vtString &strFilename);
 	void CreateStructures(vtStructureArray3d *structures);
 	bool CreateStructure(vtStructureArray3d *structures, int index);
-	int DeleteSelectedStructures(vtStructureLayer *st_layer);
-	void DeleteStructureFromTerrain(vtStructureLayer *st_layer, int index);
+	int DeleteSelectedStructures();
+	void DeleteLayer(unsigned int index);
 	bool FindClosestStructure(const DPoint2 &point, double epsilon,
-							  int &structure, vtStructureLayer **st_layer,
-							  double &closest, float fMaxInstRadius,
+							  int &structure, double &closest, float fMaxInstRadius,
 							  float fLinearWidthBuffer);
-	void DeselectAllStructures();
 
 	bool AddNodeToStructGrid(osg::Node *pNode);
 	void RemoveNodeFromStructGrid(osg::Node *pNode);
@@ -254,15 +254,15 @@ public:
 	void SetStructurePageOutDistance(float f);
 	int GetStructurePageMax() { return m_iPagingStructureMax; }
 
-	virtual void OnCreateBehavior(vtStructure *s);
-	virtual void OnDeleteBehavior(vtStructure *s);
+	void ExtendStructure(vtStructure *s);
+	void SetStructureExtension(vtStructureExtension *se = NULL) { m_pStructureExtension = se; }
+	vtStructureExtension *m_pStructureExtension;
 
 	// abstract layers
-	vtAbstractLayer *NewAbstractLayer();
+	void SetAbstractLayer(vtAbstractLayer *alay);
 	vtAbstractLayer *GetAbstractLayer();
-	bool CreateAbstractLayerVisuals(vtAbstractLayer *ab_layer);
 	void RemoveFeatureGeometries(vtAbstractLayer *alay);
-	int DeleteSelectedFeatures(vtAbstractLayer *alay);
+	int DeleteSelectedFeatures();
 	void SetFeatureLoader(vtFeatureLoader *loader) { m_pFeatureLoader = loader; }
 
 	/// You should add your nodes to this terrain's scaled features if
@@ -283,6 +283,7 @@ public:
 	void AddEngine(vtEngine *pE);
 	void ActivateEngines(bool bActive);
 	vtEngine *GetEngineGroup() { return m_pEngineGroup; }
+	vtEngine *GetBillboardEngine() { return m_pBBEngine; }
 
 	// reports world coordinates
 	FPoint3 GetCenter();
@@ -301,19 +302,21 @@ public:
 	// query
 	vtDynTerrainGeom *GetDynTerrain() { return m_pDynGeom; }
 	const vtDynTerrainGeom *GetDynTerrain() const { return m_pDynGeom; }
-	vtTiledGeom *GetTiledGeom() const { return m_pTiledGeom.get(); }
+	vtTiledGeom *GetTiledGeom() { return m_pTiledGeom.get(); }
 	vtGroup *GetTopGroup() { return m_pContainerGroup; }
 	vtGroup *GetTerrainGroup() { return m_pTerrainGroup; }
-	vtHeightField3d *GetHeightField() const;
+	vtHeightField3d *GetHeightField();
 	vtHeightFieldGrid3d *GetHeightFieldGrid3d();
-	const vtLocalConversion &GetLocalConversion() const { return GetHeightField()->m_Conversion; }
-	const vtProjection &GetProjection() const { return m_proj; }
-	bool IsGeographicCRS() const { return (m_proj.IsGeographic() == 1); }
+	vtProjection &GetProjection() { return m_proj; }
 	virtual bool FindAltitudeOnCulture(const FPoint3 &p3, float &fAltitude, bool bTrue, int iCultureFlags) const;
 	int GetShadowTextureUnit();
 
+	// symbols and labels for abstract data
+	float AddSurfaceLineToMesh(vtGeomFactory *pMF, const DLine2 &line,
+		float fOffset, bool bInterp = true, bool bCurve = false, bool bTrue = false);
+
 	// Access the viewpoint(s) associated with this terrain
-	void SetCamLocation(FMatrix4 &mat);
+	void SetCamLocation(FMatrix4 &mat) { m_CamLocation = mat; }
 	FMatrix4 &GetCamLocation() { return m_CamLocation; }
 	vtLocationSaver *GetLocSaver() { return &m_LocSaver; }
 	void Visited(bool bVisited) { m_bVisited = bVisited; }
@@ -354,9 +357,10 @@ public:
 	void RedrapeCulture(const DRECT &area);
 
 	// Texture
-	void ReshadeTexture(vtTransform *pSunLight, bool progress_callback(int) = NULL);
-	osg::Image *GetTextureImage();
-	void AddMultiTextureOverlay(vtImageLayer *im_layer);
+	void RecreateTextures(vtTransform *pSunLight, bool progress_callback(int) = NULL);
+	vtImage *GetTextureImage();
+	vtOverlappedTiledImage	*GetOverlappedImage() { return &m_ImageTiles; }
+	vtMultiTexture *AddMultiTextureOverlay(vtImage *pImage, const DRECT &extents, int TextureMode);
 	osg::Node *GetTerrainSurfaceNode();
 
 	/********************** Public Data ******************/
@@ -372,26 +376,26 @@ protected:
 	bool CreateFromGrid();
 	bool CreateFromTiles();
 	bool CreateFromExternal();
-
-	void _CreateOtherCulture();
 	void _CreateCulture();
 	void _CreateVegetation();
 	void _CreateStructures();
 	void _CreateRoads();
 	void _SetupVegGrid(float fLODDistance);
 	void _SetupStructGrid(float fLODDistance);
-	void _CreateAbstractLayersFromParams();
-	bool _CreateAbstractLayerFromParams(int index);
+	void _CreateAbstractLayers();
 	void _CreateImageLayers();
-	void _CreateElevLayers();
+	void _CreateTextures(const FPoint3 &light_dir, bool progress_callback(int) = NULL);
+	void _CreateDetailTexture();
 	bool _CreateDynamicTerrain();
 	void _CreateErrorMessage(DTErr error, vtElevationGrid *pGrid);
 	void _SetErrorMessage(const vtString &msg);
+	void CreateArtificialHorizon(float fAltitude, bool bWater, bool bHorizon,
+		bool bCenter);
 
-	void CreateWaterPlane();
-	void MakeWaterMaterial();
-	void CreateWaterHeightfield(const vtString &fname);
-
+	void _CreateSingleMaterial(float ambient, float diffuse, float emmisive);
+	void _CreateTiledMaterials(int patches, float ambient, float diffuse, float emmisive);
+	void _ApplyPreLight(vtHeightFieldGrid3d *pLocalGrid, vtBitmapBase *dib,
+		const FPoint3 &light_dir, bool progress_callback(int) = NULL);
 	void _ComputeCenterLocation();
 	void GetTerrainBounds();
 	void EnforcePageOut();
@@ -433,9 +437,10 @@ protected:
 	vtLocationSaver	m_LocSaver;
 	vtAnimContainer m_AnimContainer;
 
-	// Ocean, shadow and fog
+	// horizon, water, and fog
 	vtFogPtr	m_pFog;
 	vtShadowPtr	m_pShadow;
+	vtMovGeodePtr m_pHorizonGeom;
 	vtMovGeodePtr m_pOceanGeom;
 	bool		m_bFog;
 	RGBf		m_fog_color;
@@ -445,17 +450,23 @@ protected:
 
 	// Layers
 	LayerSet		m_Layers;
-	vtLayer			*m_pActiveLayer;
 
 	// built structures, e.g. buildings and fences
+	vtStructureLayer *m_pActiveStructLayer;
 	vtLodGrid		*m_pStructGrid;
 	vtPagedStructureLodGrid		*m_pPagedStructGrid;
 	int		m_iPagingStructureMax;
 	float	m_fPagingStructureDist;
 
+	vtMaterialArrayPtr m_pTerrMats;		// materials for the LOD terrain
+	vtMaterialArrayPtr m_pDetailMats;	// and detail texture
 	vtMaterialArrayPtr m_pEphemMats;	// and ephemeris
 	int				m_idx_water;
+	int				m_idx_horizon;
+	bool			m_bBothSides;	// show both sides of terrain materials
+
 	// abstract layers
+	vtAbstractLayer *m_pActiveAbstractLayer;
 	vtTransform		*m_pScaledFeatures;
 	vtFeatureLoader *m_pFeatureLoader;
 
@@ -464,16 +475,20 @@ protected:
 	vtRoadMap3dPtr	m_pRoadMap;
 
 	// plants
-	vtSpeciesList3d	*m_pSpeciesList;
+	vtPlantInstanceArray3d	m_PIA;
+	vtSpeciesList3d	*m_pPlantList;
 	vtGroup			*m_pVegGroup;
 	vtSimpleLodGrid	*m_pVegGrid;
 
 	// routes
-	vtUtilityMap3d	m_UtilityMap;
+	vtRouteMap		m_Routes;
 
 	// ground texture and shadows
-	SurfaceTexture	m_Texture;
-
+	vtImagePtr		m_pImageSource;
+	vtImagePtr		m_pImage;
+	vtOverlappedTiledImage	m_ImageTiles;
+	auto_ptr<ColorMap>	m_pTextureColors;
+	bool			m_bTextureInitialized;
 	vtTextureUnitManager m_TextureUnits;
 	int				m_iShadowTextureUnit;
 	vtLightSource	*m_pLightSource;
@@ -485,6 +500,7 @@ protected:
 
 	// contain the engines specific to this terrain
 	vtEnginePtr		m_pEngineGroup;
+	vtEnginePtr		m_pBBEngine;
 
 	// only used during initialization
 	auto_ptr<vtElevationGrid>	m_pElevGrid;

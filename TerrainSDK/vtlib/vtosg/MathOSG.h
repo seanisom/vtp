@@ -30,10 +30,7 @@ typedef double osg_matrix_value;
 #endif
 
 ///////////////////////
-// Math helpers.
-//
-// The s2v methods convert from "S" (the underlying scenegraph, OSG) to "v" (VTP).
-// The v2s methods convert from "v" (VTP) to "S" (the underlying scenegraph, OSG).
+// math helpers
 
 inline void v2s(const FPoint2 &f, osg::Vec2 &s) { s[0] = f.x; s[1] = f.y; }
 inline void v2s(const FPoint3 &f, osg::Vec3 &s) { s[0] = f.x; s[1] = f.y; s[2] = f.z; }
@@ -124,28 +121,6 @@ inline void ConvertMatrix4(const FMatrix4 *mat, osg::Matrix *mat_osg)
 			ptr[(i<<2)+j] = mat->Get(j, i);
 		}
 }
-
-class vtVec3 : public osg::Vec3
-{
-public:
-	vtVec3() {}
-	vtVec3(const FPoint3& v) : osg::Vec3(v.x, v.y, v.z) {}
-	vtVec3(const osg::Vec3& v) : osg::Vec3(v) {}
-};
-
-class vtVec2 : public osg::Vec2
-{
-public:
-	vtVec2() {}
-	vtVec2(const FPoint2& v) : osg::Vec2(v.x, v.y) {}
-	vtVec2(const osg::Vec2& v) : osg::Vec2(v) {}
-	inline vtVec2& operator /= (const vtVec2& rhs)
-	{
-		_v[0] /= rhs._v[0];
-		_v[1]/= rhs._v[1];
-		return *this;
-	}
-};
 
 #endif	// VTOSG_MATHH
 

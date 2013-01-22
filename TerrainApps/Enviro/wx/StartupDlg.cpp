@@ -18,7 +18,6 @@
 
 #include "vtlib/vtlib.h"	// mostly for gl.h
 #include "vtlib/core/TParams.h"
-#include "vtlib/core/TemporaryGraphicsContext.h"
 #include "vtdata/DataPath.h"
 #include "vtdata/vtLog.h"
 #include "vtui/Helper.h"	// for AddFilenamesToComboBox
@@ -35,7 +34,24 @@ DECLARE_APP(EnviroApp);
 
 static void ShowOGLInfo2(bool bLog)
 {
-    vtTemporaryGraphicsContext TemporaryContext;
+#if 1
+	wxFrame *frame = new wxFrame(NULL, wxID_ANY, wxT(""), wxPoint(0, 0), wxSize(0, 0), 0);
+	wxGLCanvas *canvas = new wxGLCanvas(frame, wxID_ANY, wxPoint(0, 0), wxSize(0, 0));
+#if defined(__WXMAC__) || defined(__WXGTK__)
+		frame->Show(true);
+		canvas->SetCurrent();
+		frame->Show(false);
+#else
+		canvas->GetContext()->SetCurrent(*canvas);
+#endif
+#else
+	wxFrame *frame = new wxFrame();
+	frame->Create(NULL, -1, _T("Test"));
+	wxGLCanvas *canvas = new wxGLCanvas(frame, wxID_ANY, wxDefaultPosition, wxDefaultSize);
+	frame->Show();
+	canvas->SetCurrent();	// This is necessary as of wx 2.8
+	frame->Show(false);		// Minimise the visibility of the opengl test window
+#endif
 
 	GLint value;
 	glGetIntegerv(GL_MAX_TEXTURE_SIZE, &value);
@@ -55,27 +71,18 @@ static void ShowOGLInfo2(bool bLog)
 	else
 	{
 		// show the information in a popup dialog
-		msg = _("OpenGL Version: ");
-		msg += glGetString(GL_VERSION);
-		msg += "\n";
-		msg += _("Vendor: ");
-		msg += glGetString(GL_VENDOR);
-		msg += "\n";
-		msg += _("Renderer: "),
-		msg += glGetString(GL_RENDERER);
-		msg += "\n";
+		str.Printf(_("OpenGL Version: %hs\nVendor: %hs\nRenderer: %hs\n"),
+			glGetString(GL_VERSION), glGetString(GL_VENDOR),
+			glGetString(GL_RENDERER));
+		msg += str;
 		str.Printf(_("Maximum Texture Dimension: %d\n"), value);
 		msg += str;
-#ifdef GL_SHADING_LANGUAGE_VERSION
-		msg += _("GLSL Version: ");
-		const char *glsl = (const char *) glGetString(GL_SHADING_LANGUAGE_VERSION);
-		msg += wxString(glsl, wxConvUTF8);
-		msg += _T("\n");
-#endif
 		msg += _("Extensions: ");
 		const char *ext = (const char *) glGetString(GL_EXTENSIONS);
 		msg += wxString(ext, wxConvUTF8);
 	}
+	frame->Close();
+	delete frame;
 
 	if (!bLog)
 	{
@@ -156,7 +163,7 @@ void StartupDlg::RefreshTerrainChoices()
 
 	EnviroApp &app = wxGetApp();
 
-	for (uint i = 0; i < app.terrain_files.size(); i++)
+	for (unsigned int i = 0; i < app.terrain_files.size(); i++)
 	{
 		vtString &name = app.terrain_names[i];
 		wxString ws(name, wxConvUTF8);
@@ -176,7 +183,7 @@ void StartupDlg::OnInitDialog(wxInitDialogEvent& event)
 
 	// Populate Earth Image files choices
 	vtStringArray &paths = vtGetDataPath();
-	for (uint i = 0; i < paths.size(); i++)
+	for (unsigned int i = 0; i < paths.size(); i++)
 	{
 		vtString path = paths[i];
 		path += "WholeEarth/";

@@ -13,8 +13,6 @@
 #include <locale.h>
 #include <vector>
 #include <string>
-
-#include "vtdata/config_vtdata.h"
 #include "Array.h"
 
 // willemsn: this was taken from OSG's Math include file.
@@ -135,7 +133,7 @@ public:
 	FPoint3 operator *(float s) const { return FPoint3(x*s, y*s, z*s); }
 	FPoint3 operator *(double s) const { return FPoint3((float)(x*s), (float)(y*s), (float)(z*s)); }
 	FPoint3 operator /(float s) const { return FPoint3(x/s, y/s, z/s); }
-	FPoint3 operator -() const { return FPoint3(-x, -y, -z); }
+	FPoint3 operator -() { return FPoint3(-x, -y, -z); }
 	bool operator==(const FPoint3 &v2) const
 	{ return (x == v2.x && y == v2.y && z == v2.z); }
 	bool operator!=(const FPoint3 &v2) const
@@ -145,6 +143,7 @@ public:
 	void operator -=(const FPoint3 &v) { x-=v.x; y-=v.y; z-=v.z; }
 	void operator *=(float s) { x*=s; y*=s; z*=s; }
 	void operator /=(float s) { x/=s; y/=s; z/=s; }
+	FPoint3 operator -() const { return FPoint3 (-x, -y, -z); }
 
 	// also allow array-like access, such that x,y,z components are 0,1,2
 	float &operator[](int nIndex) { return *(&x+nIndex); }
@@ -321,7 +320,6 @@ public:
 	DPoint2 operator -(const DPoint2 &v) const { return DPoint2(x-v.x, y-v.y); }
 	DPoint2 operator *(double s) const { return DPoint2(x*s, y*s); }
 	DPoint2 operator /(double s) const { return DPoint2(x/s, y/s); }
-	DPoint2 operator -() const { return DPoint2(-x, -y); }
 
 	void operator +=(const DPoint2 &v) { x+=v.x; y+=v.y; }
 	void operator -=(const DPoint2 &v) { x-=v.x; y-=v.y; }
@@ -416,12 +414,11 @@ public:
 	void InsertPointAfter(int iInsertAfter, const DPoint2 &Point);
 	void RemovePoint(int i);
 	void ReverseOrder();
-	int RemoveDegeneratePoints(double dEpsilon, bool bClosed);
-	int RemoveColinearPoints(double dEpsilon, bool bClosed);
+	int RemoveDegeneratePoints(double dEpsilon);
 
 	// Query
 	bool ContainsPoint(const DPoint2 &p) const;
-	double SegmentLength(uint i) const;
+	double SegmentLength(unsigned int i) const;
 	void NearestPoint(const DPoint2 &Point, int &iIndex, double &dist) const;
 	bool NearestSegment(const DPoint2 &Point, int &iIndex, double &dist, DPoint2 &Intersection) const;
 	bool IsConvex() const;
@@ -457,7 +454,7 @@ public:
 	FLine2 &operator=(const DLine2 &v);
 
 	float Area() const;
-	float SegmentLength(uint i) const;
+	float SegmentLength(unsigned int i) const;
 	void NearestPoint(const FPoint2 &Point, int &iIndex, float &dist) const;
 	void NearestPoint(const FPoint2 &Point, int &iIndex) const;
 	bool NearestSegment(const FPoint2 &Point, int &iIndex, float &dist, FPoint2 &Intersection) const;
@@ -468,37 +465,53 @@ public:
 
 inline DLine2 &DLine2::operator=(const DLine2 &v)
 {
-	const uint size = v.GetSize();
+	int size = v.GetSize();
 	SetSize(size);
-	for (uint i = 0; i < size; i++)
-		SetAt(i, v[i]);
+	for (int i = 0; i < size; i++)
+		SetAt(i, v.GetAt(i));
+
 	return *this;
 }
 
 inline DLine2 &DLine2::operator=(const FLine2 &v)
 {
-	const uint size = v.GetSize();
+	int size = v.GetSize();
 	SetSize(size);
-	for (uint i = 0; i < size; i++)
-		SetAt(i, v[i]);
+
+	FPoint2 p1;
+	DPoint2 p2;
+	for (int i = 0; i < size; i++)
+	{
+		p1 = v.GetAt(i);
+		p2 = p1;
+		SetAt(i, p2);
+	}
 	return *this;
 }
 
 inline FLine2 &FLine2::operator=(const FLine2 &v)
 {
-	const uint size = v.GetSize();
+	int size = v.GetSize();
 	SetSize(size);
-	for (uint i = 0; i < size; i++)
-		SetAt(i, v[i]);
+	for (int i = 0; i < size; i++)
+		SetAt(i, v.GetAt(i));
+
 	return *this;
 }
 
 inline FLine2 &FLine2::operator=(const DLine2 &v)
 {
-	const uint size = v.GetSize();
+	int size = v.GetSize();
 	SetSize(size);
-	for (uint i = 0; i < size; i++)
-		SetAt(i, v[i]);
+
+	DPoint2 p1;
+	FPoint2 p2;
+	for (int i = 0; i < size; i++)
+	{
+		p1 = v.GetAt(i);
+		p2 = p1;
+		SetAt(i, p2);
+	}
 	return *this;
 }
 
@@ -547,19 +560,21 @@ public:
 
 inline DLine3 &DLine3::operator=(const DLine3 &v)
 {
-	const uint size = v.GetSize();
+	int size = v.GetSize();
 	SetSize(size);
-	for (uint i = 0; i < size; i++)
-		SetAt(i, v[i]);
+	for (int i = 0; i < size; i++)
+		SetAt(i, v.GetAt(i));
+
 	return *this;
 }
 
 inline FLine3 &FLine3::operator=(const FLine3 &v)
 {
-	const uint size = v.GetSize();
+	int size = v.GetSize();
 	SetSize(size);
-	for (uint i = 0; i < size; i++)
-		SetAt(i, v[i]);
+	for (int i = 0; i < size; i++)
+		SetAt(i, v.GetAt(i));
+
 	return *this;
 }
 
@@ -659,7 +674,7 @@ public:
 	}
 	void GrowToContainLine(const FLine3 &line)
 	{
-		for (uint i = 0; i < line.GetSize(); i++)
+		for (unsigned int i = 0; i < line.GetSize(); i++)
 			GrowToContainPoint(line[i]);
 	}
 	void GrowToContainBox(const FBox3 &box)
@@ -700,7 +715,7 @@ public:
 		center = p;
 		radius = fRadius;
 	}
-	void SetToZero() { center.Set(0,0,0); radius = 0; }
+	void Empty() { center.Set(0,0,0); radius = 0; }
 
 	void GrowToContain(const FSphere &sh)
 	{
@@ -744,7 +759,7 @@ class DPolygon2 : public DLine2Array
 {
 public:
 	// Query
-	uint NumTotalVertices() const;
+	unsigned int NumTotalVertices() const;
 	bool ComputeExtents(DRECT &rect) const;
 	bool ContainsPoint(const DPoint2 &p) const;
 	void GetAsDLine2(DLine2 &dline) const;
@@ -759,7 +774,6 @@ public:
 	void InsertPointAfter(int iInsertAfter, const DPoint2 &Point);
 	void RemovePoint(int N);
 	int RemoveDegeneratePoints(double dEpsilon);
-	int RemoveColinearPoints(double dEpsilon);
 };
 
 /**
@@ -791,7 +805,7 @@ public:
 	void Add(const FPoint3 &p);
 	void Mult(float factor);
 	void ReverseOrder();
-	uint NumTotalVertices() const;
+	unsigned int NumTotalVertices() const;
 	int WhichRing(int &iVtxNum) const;
 };
 
@@ -821,7 +835,7 @@ public:
 	bool IsNull() const { return (left == 0.0 && top == 0.0 && right == 0.0 && bottom == 0.0); }
 	// return true if empty
 	bool IsEmpty() const { return (left == right && top == bottom); }
-	void SetToZero() { left = top = right = bottom = 0.0; }
+	void Empty() { left = top = right = bottom = 0.0; }
 	void Sort()
 	{
 		if (left > right) { double tmp = left; left = right; right = tmp; }
@@ -835,10 +849,6 @@ public:
 	DPoint2 GetCenter() const
 	{
 		return DPoint2((left + right) / 2.0, (bottom + top) / 2);
-	}
-	DPoint2 SizeExtents() const
-	{
-		return DPoint2(right - left, top - bottom);
 	}
 	DPoint2 LowerLeft() const
 	{
@@ -872,13 +882,6 @@ public:
 		else
 			return true;
 	}
-	void Offset(const DPoint2 &delta)
-	{
-		left += delta.x;
-		right += delta.x;
-		top += delta.y;
-		bottom += delta.y;
-	}
 	void Grow(double x, double y)
 	{
 		left -= x;
@@ -895,10 +898,11 @@ public:
 	}
 	void GrowToContainLine(const DLine2 &line)
 	{
-		const uint size = line.GetSize();
-		for (uint i = 0; i < size; i++)
+		DPoint2 p;
+		int size = line.GetSize();
+		for (int i = 0; i < size; i++)
 		{
-			const DPoint2 &p = line[i];
+			p = line.GetAt(i);
 			if (p.x < left)		left = p.x;
 			if (p.x > right)	right = p.x;
 			if (p.y < bottom)	bottom = p.y;
@@ -907,10 +911,11 @@ public:
 	}
 	void GrowToContainLine(const DLine3 &line)
 	{
-		const uint size = line.GetSize();
-		for (uint i = 0; i < size; i++)
+		DPoint3 p;
+		int size = line.GetSize();
+		for (int i = 0; i < size; i++)
 		{
-			const DPoint3 &p = line[i];
+			p = line.GetAt(i);
 			if (p.x < left)		left = p.x;
 			if (p.x > right)	right = p.x;
 			if (p.y < bottom)	bottom = p.y;
@@ -968,7 +973,7 @@ public:
 	float Height() const { return top - bottom; };
 	// return true if empty
 	bool IsEmpty() const { return (left == right && top == bottom); }
-	void SetToZero() { left = top = right = bottom = 0.0; }
+	void Empty() { left = top = right = bottom = 0.0; }
 	void Sort()
 	{
 		if (left > right) { float tmp = left; left = right; right = tmp; }
@@ -1192,7 +1197,7 @@ public:
 	float LengthSquared() const { return x*x + y*y + z*z + w*w; }
 	const FQuat Inverse() const
 	{
-		const float l2 = LengthSquared();
+		float l2 = LengthSquared();
 		return FQuat( -x / l2, -y / l2, -z / l2, w / l2);
 	}
 	void Invert();
@@ -1250,7 +1255,6 @@ public:
 	RGBi() {}
 	RGBi(short _r, short _g, short _b) { r = _r; g = _g; b = _b; }
 	RGBi(const class RGBf &v) { *this = v; }
-	RGBi(const class RGBAi &v) { *this = v; }
 
 	void Set(short _r, short _g, short _b) { r = _r; g = _g; b = _b; }
 	RGBi operator +(const RGBi &v) const { return RGBi(r+v.r, g+v.g, b+v.b); }
@@ -1269,7 +1273,6 @@ public:
 	// assignment
 	RGBi &operator=(const RGBi &v) { r = v.r; g = v.g; b = v.b; return *this; }
 	RGBi &operator=(const class RGBf &v);
-	RGBi &operator=(const class RGBAi &v);
 
 	bool operator==(const RGBi &v) const { return (r == v.r && g == v.g && b == v.b); }
 	bool operator!=(const RGBi &v) const { return (r != v.r || g != v.g || b != v.b); }
@@ -1288,7 +1291,6 @@ public:
 	RGBAi() {}
 	RGBAi(short _r, short _g, short _b, short _a = 255) { r = _r; g = _g; b = _b; a = _a; }
 	RGBAi(const class RGBi &v) { *this = v; }
-	RGBAi(const class RGBAf &v) { *this = v; }
 
 	void Set(short _r, short _g, short _b, short _a = 255) { r = _r; g = _g; b = _b; a = _a; }
 	RGBAi operator +(const RGBAi &v) const { return RGBAi(r+v.r, g+v.g, b+v.b, a+v.a); }
@@ -1298,28 +1300,19 @@ public:
 	void operator *=(float s) { r=(short)(r*s); g=(short)(g*s); b=(short)(b*s); a=(short)(a*s); }
 	void operator /=(float s) { r=(short)(r/s); g=(short)(g/s); b=(short)(b/s); a=(short)(a/s); }
 
-	void operator +=(const RGBAi &v) { r=r+v.r; g=g+v.g; b=b+v.b; a=a+v.a; }
-
 	// generally it's useful to operate on the RGB alone and leave A unmodified
 	void MultRGB(float s) { r=(short)(r*s); g=(short)(g*s); b=(short)(b*s); }
 
 	void Crop();
 
 	// assignment
-	RGBAi &operator=(const RGBAi &v) { r = v.r; g = v.g; b = v.b; a = v.a; return *this; }
 	RGBAi &operator=(const RGBi &v) { r = v.r; g = v.g; b = v.b; a = 255; return *this; }
-	RGBAi &operator=(const RGBf &v);
-	RGBAi &operator=(const RGBAf &v);
-
-	bool operator==(const RGBAi &v) const { return (r == v.r && g == v.g && b == v.b && a == v.a); }
-	bool operator!=(const RGBAi &v) const { return (r != v.r || g != v.g || b != v.b || a != v.a); }
 
 	short r, g, b, a;
 };
 
 inline void RGBi::operator +=(const class RGBAi &v) { r=r+v.r; g=g+v.g; b=b+v.b; }
 inline RGBi RGBi::operator +(const class RGBAi &v) const { return RGBi(r+v.r, g+v.g, b+v.b); }
-inline RGBi& RGBi::operator=(const class RGBAi &v) { r = v.r; g = v.g; b = v.b; return *this; }
 
 /**
  * An RGB class for handling color operations.
@@ -1352,12 +1345,6 @@ public:
 	{ return (r == v2.r && g == v2.g && b == v2.b); }
 	bool operator!=(const RGBf &v2) const
 	{ return (r != v2.r || g != v2.g || b != v2.b); }
-	bool operator<(const RGBf &v2) const
-	{ if (r < v2.r) return true; else if (r > v2.r) return false;
-	  if (g < v2.g) return true; else if (g > v2.g) return false;
-	  if (b < v2.b) return true; else if (b > v2.b) return false;
-	  return false;
-	}
 
 	float r, g, b;
 };
@@ -1367,15 +1354,6 @@ inline RGBi &RGBi::operator=(const class RGBf &v)
 	r = (short) (v.r * 255.999f);
 	g = (short) (v.g * 255.999f);
 	b = (short) (v.b * 255.999f);
-	return *this;
-}
-
-inline RGBAi &RGBAi::operator=(const RGBf &v)
-{
-	r = (short) (v.r * 255.999f);
-	g = (short) (v.g * 255.999f);
-	b = (short) (v.b * 255.999f);
-	a = 255;
 	return *this;
 }
 
@@ -1428,15 +1406,6 @@ inline RGBf &RGBf::operator=(const class RGBAf &v)
 	return *this;
 }
 
-inline RGBAi &RGBAi::operator=(const RGBAf &v)
-{
-	r = (short) (v.r * 255.999f);
-	g = (short) (v.g * 255.999f);
-	b = (short) (v.b * 255.999f);
-	a = (short) (v.a * 255.999f);
-	return *this;
-}
-
 /**
  * The locale might be set to something strange, ala European. that
  * interprets '.' as ',' and vice versa.  That terribly breaks VTP's usage
@@ -1470,12 +1439,6 @@ float random_offset(float x);
 float random(float x);
 int vt_log2(int n);
 float vt_log2f(float n);
-
-double AngleSideVector(const DPoint2 &p0, const DPoint2 &p1, const DPoint2 &p2,
-					   DPoint2 &sideways);
-float AngleSideVector(const FPoint3 &p0, const FPoint3 &p1, const FPoint3 &p2,
-					  FPoint3 &sideways);
-
 bool CrossingsTest(const DPoint2 *pgon, int numverts, const DPoint2 &point);
 bool CrossingsTest(const DPoint3 *pgon, int numverts, const DPoint2 &point);
 bool PointInTriangle(const FPoint2 &p, const FPoint2 &p1, const FPoint2 &p2,
@@ -1488,7 +1451,6 @@ bool BarycentricCoords(const DPoint2 &p1, const DPoint2 &p2,
 					   const DPoint2 &p3, const DPoint2 &p, double fBary[3]);
 bool PlaneIntersection(const FPlane &plane1, const FPlane &plane2,
 					   const FPlane &plane3, FPoint3 &result);
-
 double DistancePointToLine(const DPoint2 &p1, const DPoint2 &p2, const DPoint2 &p3);
 float DistanceLineToLine(const FPoint3 &A1, const FPoint3 &A2,
 						 const FPoint3 &B1, const FPoint3 &B2,
@@ -1498,7 +1460,6 @@ float DistanceSegmentToSegment(const FPoint3 &A1, const FPoint3 &A2,
 						 FPoint3 &result1, FPoint3 &result2);
 int LineSegmentsIntersect(const DPoint2 &p1, const DPoint2 &p2,
 						 const DPoint2 &p3, const DPoint2 &p4, DPoint2 *result = NULL);
-
 void vtLogMatrix(const FMatrix4 &mat);
 void vtLogMatrix(const FMatrix3 &mat);
 bool RaySphereIntersection(const FPoint3 &rkOrigin, const FPoint3 &rkDirection,

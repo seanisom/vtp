@@ -1,7 +1,7 @@
 //
 // StructArray.h
 //
-// Copyright (c) 2001-2012 Virtual Terrain Project
+// Copyright (c) 2001-2008 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -67,19 +67,18 @@ typedef enum
  * with the ReadXML and WriteXML methods.
  *
  */
-class vtStructureArray : public std::vector<vtStructure*>
+class vtStructureArray : public vtArray<vtStructure*>
 {
 public:
 	vtStructureArray();
-	virtual ~vtStructureArray();
-	void DestructItems();
+	virtual ~vtStructureArray() { Empty(); free(m_Data); m_Data = NULL; m_MaxSize = 0; }
+	virtual void DestructItems(unsigned int first, unsigned int last);
 
 	void SetFilename(const vtString &str) { m_strFilename = str; }
 	vtString GetFilename() { return m_strFilename; }
 
 	int GetFirstSelected();
 	int GetNextSelected();
-	vtStructure *GetFirstSelectedStructure() const;
 	int DeleteSelected();
 	virtual void DestroyStructure(int i) {}
 
@@ -122,7 +121,7 @@ public:
 	bool FindClosestBuilding(const DPoint2 &point, double epsilon,
 			int &structure, double &closest);
 
-	bool IsEmpty() { return (size() == 0); }
+	bool IsEmpty() { return (GetSize() == 0); }
 	void GetExtents(DRECT &ext) const;
 	void Offset(const DPoint2 &delta);
 
@@ -131,11 +130,10 @@ public:
 
 	// selection
 	int NumSelected();
-	int NumSelectedOfType(vtStructureType t);
 	void DeselectAll();
 
-	// Override these 'Factory' methods so that the vtStructureArray base
-	// methods can be capable of handling subclasses of vtBuilding etc.
+	// override these 'Factory' methods so that the vtStructureArray base
+	// methods can be capable of handling subclasses of vtBuilding
 	virtual vtBuilding *NewBuilding();
 	virtual vtFence *NewFence();
 	virtual vtStructInstance *NewInstance();

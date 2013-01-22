@@ -12,7 +12,6 @@
 #include "wx/wx.h"
 #endif
 
-#include "vtdata/FileFilters.h"
 #include "vtdata/GEOnet.h"
 #include "vtdata/TripDub.h"
 #include "vtui/Helper.h"
@@ -21,7 +20,6 @@
 // Dialogs
 #include "GeocodeDlg.h"
 
-#if SUPPORT_WSTRING
 
 bool FindGeoPointInBuffer(const char *buffer, DPoint2 &p)
 {
@@ -175,14 +173,14 @@ void MainFrame::DoGeocode()
 		if (success)
 		{
 			// ensure the points are initialized to zero
-			for (uint i = 0; i < feat.NumEntities(); i++)
+			for (unsigned int i = 0; i < feat.GetNumEntities(); i++)
 				feat.SetPoint(i, zero);
 		}
 	}
 
 	if (!success)
 		return;
-	int iRecords = feat.NumEntities();
+	int iRecords = feat.GetNumEntities();
 	vtString strStreet;
 	vtString strCity;
 	vtString strState;
@@ -295,7 +293,7 @@ void MainFrame::DoGeocode()
 	{
 		// Save to SHP
 		wxFileDialog saveFile(NULL, _T("Save to SHP"), _T(""), _T(""),
-			FSTRING_SHP, wxFD_SAVE);
+			_T("SHP Files (*.shp)|*.shp"), wxFD_SAVE);
 		if (saveFile.ShowModal() == wxID_OK)
 		{
 			shpname = saveFile.GetPath();
@@ -313,8 +311,3 @@ void MainFrame::DoGeocode()
 	}
 }
 
-#else
-void MainFrame::DoGeocode()
-{
-}
-#endif // SUPPORT_WSTRING

@@ -1,7 +1,7 @@
 //
 // class Enviro: Main functionality of the Enviro application
 //
-// Copyright (c) 2001-2013 Virtual Terrain Project
+// Copyright (c) 2001-2011 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -12,9 +12,7 @@
 #include "vtlib/core/SkyDome.h"
 #include "vtlib/core/Building3d.h"
 #include "vtlib/core/PagedLodGrid.h"
-#include "vtlib/core/PickEngines.h"
 #include "vtlib/core/TiledGeom.h"
-#include "vtlib/core/MapOverviewEngine.h"
 #include "vtdata/vtLog.h"
 #include "vtdata/PolyChecker.h"
 #include "vtdata/DataPath.h"
@@ -24,6 +22,7 @@
 #include "Options.h"
 #include "Hawaii.h"
 #include "Nevada.h"
+#include "SpecificTerrain.h"
 
 // Although there is no string translation in the core of Enviro (because it
 //  is independent of wx or any GUI library) nonetheless we want the text
@@ -36,12 +35,18 @@
 
 ///////////////////////////////////////////////////////////
 
+Enviro *Enviro::s_pEnviro = NULL;
+
 Enviro::Enviro() : vtTerrainScene()
 {
+	s_pEnviro = this;
+
 	m_mode = MM_NONE;
 	m_state = AS_Initializing;
 	m_iInitStep = 0;
 
+	m_bActiveFence = false;
+	m_pCurFence = NULL;
 	m_FenceParams.Defaults();
 
 	m_bOnTerrain = false;
@@ -60,6 +65,7 @@ Enviro::Enviro() : vtTerrainScene()
 	m_pEarthLines = NULL;
 
 	m_bTopDown = false;
+	m_pTopDownCamera = NULL;
 	m_pTerrainPicker = NULL;
 	m_pGlobePicker = NULL;
 	m_pCursorMGeom = NULL;
@@ -73,9 +79,10 @@ Enviro::Enviro() : vtTerrainScene()
 	m_fMessageTime = 0.0f;
 	m_pHUD = NULL;
 	m_pHUDMessage = NULL;
+	m_pArial = NULL;
 
 	// plants
-	m_pSpeciesList = NULL;
+	m_pPlantList = NULL;
 	m_bPlantsLoaded = false;
 	m_PlantOpt.m_iMode = 0;
 	m_PlantOpt.m_iSpecies = -1;
@@ -91,6 +98,7 @@ Enviro::Enviro() : vtTerrainScene()
 	m_pControlEng = NULL;
 
 	// HUD
+	m_pHUDMaterials = NULL;
 	m_pLegendGeom = NULL;
 	m_bCreatedLegend = false;
 
@@ -104,13 +112,6 @@ Enviro::Enviro() : vtTerrainScene()
 	m_pMapOverview = NULL;
 	m_bFlyIn = false;
 	m_iFlightStage = 0;
-
-	m_Elastic.SetPostHeight(4.0f);
-	m_Elastic.SetLineHeight(2.0f);
-
-	// There are more buildings with all right angles than those without..
-	m_bConstrainAngles = true;
-	m_bShowVerticalLine = false;
 }
 
 Enviro::~Enviro()
@@ -139,7 +140,7 @@ void Enviro::Shutdown()
 {
 	VTLOG1("Shutdown.\n");
 
-	delete m_pSpeciesList;
+	delete m_pPlantList;
 
 	m_pTopDownCamera = NULL;
 
@@ -179,7 +180,7 @@ void Enviro::LoadAllTerrainDescriptions()
 {
 	VTLOG("LoadAllTerrainDescriptions...\n");
 
-	for (uint i = 0; i < vtGetDataPath().size(); i++)
+	for (unsigned int i = 0; i < vtGetDataPath().size(); i++)
 		LoadTerrainDescriptions(vtGetDataPath()[i]);
 
 	VTLOG(" Done.\n");
@@ -190,7 +191,7 @@ void Enviro::LoadTerrainDescriptions(const vtString &path)
 	int count = 0;
 	VTLOG("  On path '%s':\n", (const char *) path);
 
-	const vtString directory = path + "Terrains";
+	vtString directory = path + "Terrains";
 	for (dir_iter it((const char *)directory); it != dir_iter(); ++it)
 	{
 		//VTLOG("\t file: %s\n", it.filename().c_str());
@@ -223,6 +224,8 @@ void Enviro::LoadTerrainDescriptions(const vtString &path)
 			pTerr = new IslandTerrain;
 		else if (before_dot == "Nevada")
 			pTerr = new NevadaTerrain;
+		else if (before_dot == "TransitTerrain")
+			pTerr = new TransitTerrain;
 		else
 			pTerr = new vtTerrain;
 
@@ -272,9 +275,8 @@ void Enviro::StartControlEngine()
 {
 	VTLOG1("StartControlEngine\n");
 
-	m_pControlEng = new ControlEngine;
+	m_pControlEng = new ControlEngine();
 	m_pControlEng->setName("Control Engine");
-	m_pControlEng->m_pEnvironment = this;
 	vtGetScene()->AddEngine(m_pControlEng);
 }
 
@@ -327,17 +329,17 @@ void Enviro::DoControl()
 			pTerr->GetParams().SetValueString(STR_COLOR_MAP, "default_absolute.cmt");
 			pTerr->GetParams().SetValueString(STR_INITTIME, "104 2 21 9 0 0");
 
-			const vtString &s = g_Options.m_strUseElevation;
+			vtString &s = g_Options.m_strUseElevation;
 			if (s.Find(".itf") != -1 || s.Find(".ITF") != -1)
 				pTerr->GetParams().SetValueInt(STR_SURFACE_TYPE, 1);	// 1 = tin
 			else
 				pTerr->GetParams().SetValueInt(STR_SURFACE_TYPE, 0);	// 0 = grid
-			RequestTerrain(pTerr);
+			SwitchToTerrain(pTerr);
 			return;
 		}
 		else
 		{
-			if (!RequestTerrain(g_Options.m_strInitTerrain))
+			if (!SwitchToTerrain(g_Options.m_strInitTerrain))
 			{
 				SetMessage(_("Terrain not found"));
 				SetState(AS_Error);
@@ -362,7 +364,7 @@ void Enviro::DoControl()
 	{
 		m_iInitStep++;
 		SetupTerrain(m_pTargetTerrain);
-		if (m_bFlyIn && m_iInitStep >= 10)
+		if (m_bFlyIn && m_iInitStep >= 7)
 		{
 			// Finished constructing, can smoothly fly in now
 			ShowProgress(false);
@@ -392,20 +394,56 @@ void Enviro::DoControlTerrain()
 	if (pslg)
 	{
 		int remaining = terr->DoStructurePaging();
-		if (remaining != 0)
+		if (m_pHUDMessage)
 		{
-			vtString msg;
-			msg.Format("Structure queue: %d\n", remaining);
-			SetHUDMessageText(msg);
+			if (remaining != 0)
+			{
+				vtString msg;
+				msg.Format("Structure queue: %d\n", remaining);
+				m_pHUDMessage->SetText(msg);
+			}
+			else
+				m_pHUDMessage->SetText("");
 		}
-		else
-			SetHUDMessageText("");
+	}
+	if (plg)
+	{
+#if OLD_OSG_SHADOWS
+		// Periodically re-render the shadows
+		static FPoint3 previous_shadow_center(0,0,0);
+
+		// Only draw shadows in the area of visible structure LOD
+		FSphere sph;
+		vtCamera *cam = vtGetScene()->GetCamera();
+		sph.center = cam->GetTrans();
+		sph.radius = terr->GetLODDistance(TFT_STRUCTURES);
+
+		bool bRedrawShadows = false;
+
+		// If we moved 15% of the LOD distance, re-render
+		if ((sph.center - previous_shadow_center).Length() > (sph.radius * 0.15f))
+			bRedrawShadows = true;
+
+		// If we've paged in 20 buildings since last render, re-render
+		if (pslg && pslg->GetLoadCount() > 20)
+			bRedrawShadows = true;
+
+		if (bRedrawShadows)
+		{
+			// Pass true to force re-render with current area
+			vtGetScene()->SetShadowSphere(sph, true);
+
+			previous_shadow_center = sph.center;
+			if (pslg)
+				pslg->ResetLoadCount();
+		}
+#endif // #if OLD_OSG_SHADOWS
 	}
 }
 
-bool Enviro::RequestTerrain(const char *name)
+bool Enviro::SwitchToTerrain(const char *name)
 {
-	VTLOG("RequestTerrain (%s)\n", name);
+	VTLOG("SwitchToTerrain (%s)\n", name);
 	vtTerrain *pTerr = FindTerrainByName(name);
 	if (!pTerr)
 		return false;
@@ -415,16 +453,16 @@ bool Enviro::RequestTerrain(const char *name)
 
 	if (pTerr)
 	{
-		RequestTerrain(pTerr);
+		SwitchToTerrain(pTerr);
 		return true;
 	}
 	else
 		return false;
 }
 
-void Enviro::RequestTerrain(vtTerrain *pTerr)
+void Enviro::SwitchToTerrain(vtTerrain *pTerr)
 {
-	VTLOG("RequestTerrain %lx\n", pTerr);
+	VTLOG("SwitchToTerrain %lx\n", pTerr);
 
 	FreeArc();
 
@@ -439,8 +477,9 @@ void Enviro::RequestTerrain(vtTerrain *pTerr)
 		vtTerrain *pT = GetCurrentTerrain();
 		vtCamera *pCam = vtGetScene()->GetCamera();
 		FMatrix4 mat;
-		pCam->GetTransform(mat);
+		pCam->GetTransform1(mat);
 		pT->SetCamLocation(mat);
+		pT->SaveRoute();
 	}
 
 	// If it's not a tileset, and we're coming in from space, fly in
@@ -466,55 +505,55 @@ void Enviro::SetupTerrain(vtTerrain *pTerr)
 	VTLOG("SetupTerrain step %d\n", m_iInitStep);
 	if (m_iInitStep == 1)
 	{
-		vtString name_quotes = vtString("'") + pTerr->GetName() + "'";
-		SetMessage(_("Setting up Terrain "), name_quotes);
-		UpdateProgress(m_strMessage1, m_strMessage2, m_iInitStep * 100 / 16, 0);
+		vtString str = _("Creating Terrain ");
+		str += "'";
+		str += pTerr->GetName();
+		str += "'";
+		SetMessage(str);
+		UpdateProgress(m_strMessage, 10, 0);
 	}
 	else if (m_iInitStep == 2)
 	{
 		if (pTerr->IsCreated())
 		{
-			m_iInitStep = 13;	// already made, skip ahead
+			m_iInitStep = 7;	// already made, skip ahead
 			return;
 		}
 		else
 			SetMessage(_("Loading Elevation"));
-		UpdateProgress(m_strMessage1, m_strMessage2, m_iInitStep * 100 / 16, 0);
+		UpdateProgress(m_strMessage, 20, 0);
 	}
-	else if (m_iInitStep == 3)
+	if (m_iInitStep == 3)
 	{
 		OnCreateTerrain(pTerr);
 
-		const int veg_layers = pTerr->GetParams().NumLayersOfType(TERR_LTYPE_VEGETATION);
-		VTLOG("There are %d vegetation layers\n", veg_layers);
-		if (veg_layers > 0)
+		if (pTerr->GetParams().GetValueBool(STR_TREES))
 		{
 			// We'll need vegetation for this terrain, so load the species
 			//  file and check which appearances are available
 			LoadSpeciesList();
 		}
 
-		pTerr->SetSpeciesList(m_pSpeciesList);
-		pTerr->CreateStep1();
+		pTerr->SetPlantList(m_pPlantList);
+		pTerr->CreateStep0();
 
 		// connect the terrain's engines
 		m_pTerrainEngines->AddChild(pTerr->GetEngineGroup());
 
-		if (!pTerr->CreateStep2())
+		if (!pTerr->CreateStep1())
 		{
 			SetState(AS_Error);
-			SetMessage("", pTerr->GetLastError());	// Don't try to translate error
+			SetMessage(pTerr->GetLastError());
 			return;
 		}
-		SetMessage(_("Loading/Coloring/Prelighting Textures"));
-		UpdateProgress(m_strMessage1, m_strMessage2, m_iInitStep * 100 / 16, 0);
+		SetMessage(_("Loading/Chopping/Prelighting Textures"));
+		UpdateProgress(m_strMessage, 30, 0);
 	}
 	else if (m_iInitStep == 4)
 	{
 		if (m_pSkyDome)
 		{
 			// Tell the skydome where on the planet we are
-			VTLOG1("Placing skydome.\n");
 			DPoint2 geo = pTerr->GetCenterGeoLocation();
 			m_pSkyDome->SetGeoLocation(geo);
 
@@ -522,87 +561,75 @@ void Enviro::SetupTerrain(vtTerrain *pTerr)
 			m_pSkyDome->SetTime(pTerr->GetInitialTime());
 		}
 
-		if (!pTerr->CreateStep3(GetSunLightTransform(), GetSunLightSource()))
+		if (!pTerr->CreateStep2(GetSunLightTransform(), GetSunLightSource()))
 		{
 			SetState(AS_Error);
-			SetMessage("", pTerr->GetLastError());
+			SetMessage(pTerr->GetLastError());
 			return;
 		}
 		SetMessage(_("Processing Elevation"));
-		UpdateProgress(m_strMessage1, m_strMessage2, m_iInitStep * 100 / 16, 0);
+		UpdateProgress(m_strMessage, 40, 0);
 	}
 	else if (m_iInitStep == 5)
+	{
+		if (!pTerr->CreateStep3())
+		{
+			SetState(AS_Error);
+			SetMessage(pTerr->GetLastError());
+			return;
+		}
+		SetMessage(_("Building CLOD"));
+		UpdateProgress(m_strMessage, 50, 0);
+	}
+	else if (m_iInitStep == 6)
 	{
 		if (!pTerr->CreateStep4())
 		{
 			SetState(AS_Error);
-			SetMessage("", pTerr->GetLastError());
+			SetMessage(pTerr->GetLastError());
 			return;
 		}
-		SetMessage(_("Building CLOD"));
-		UpdateProgress(m_strMessage1, m_strMessage2, 25, 0);
+		SetMessage(_("Creating Culture"));
+		UpdateProgress(m_strMessage, 60, 0);
 	}
-	else if (m_iInitStep == 6)
+	else if (m_iInitStep == 7)
 	{
 		if (!pTerr->CreateStep5())
 		{
 			SetState(AS_Error);
-			SetMessage("", pTerr->GetLastError());
+			SetMessage(pTerr->GetLastError());
+			ShowProgress(false);
 			return;
 		}
-		SetMessage(_("Creating Structures"));
-		UpdateProgress(m_strMessage1, m_strMessage2, m_iInitStep * 100 / 16, 0);
-	}
-	else if (m_iInitStep == 7)
-	{
-		pTerr->CreateStep6();
 
-		SetMessage(_("Creating Roads"));
-		UpdateProgress(m_strMessage1, m_strMessage2, m_iInitStep * 100 / 16, 0);
-	}
-	else if (m_iInitStep == 8)
-	{
-		pTerr->CreateStep7();
+		// Initial default location for camera for this terrain: Try center
+		//  of heightfield, just above the ground
+		vtHeightField3d *pHF = pTerr->GetHeightField();
+		FPoint3 middle;
+		FMatrix4 mat;
 
-		SetMessage(_("Creating Vegetation"));
-		UpdateProgress(m_strMessage1, m_strMessage2, m_iInitStep * 100 / 16, 0);
-	}
-	else if (m_iInitStep == 9)
-	{
-		pTerr->CreateStep8();
+		VTLOG1(" Placing the camera at the center of the terrain:\n");
+		VTLOG(" World extents: LRTB %f %f %f %f\n",
+			pHF->m_WorldExtents.left,
+			pHF->m_WorldExtents.right,
+			pHF->m_WorldExtents.top,
+			pHF->m_WorldExtents.bottom);
+		pHF->GetCenter(middle);
+		VTLOG(" Center: %f %f %f\n", middle.x, middle.y, middle.z);
+		pHF->FindAltitudeAtPoint(middle, middle.y);
+		VTLOG(" Altitude at that point: %f\n", middle.y);
+		float minheight = pTerr->GetParams().GetValueFloat(STR_MINHEIGHT);
+		middle.y += minheight;
+		VTLOG(" plus minimum height (%f) is %f\n", minheight, middle.y);
 
-		SetMessage(_("Creating Water, UtilityMaps, HUD"));
-		UpdateProgress(m_strMessage1, m_strMessage2, m_iInitStep * 100 / 16, 0);
-	}
-	else if (m_iInitStep == 10)
-	{
-		pTerr->CreateStep9();
-
-		SetMessage(_("Creating Abstract Layers"));
-		UpdateProgress(m_strMessage1, m_strMessage2, m_iInitStep * 100 / 16, 0);
-	}
-	else if (m_iInitStep == 11)
-	{
-		pTerr->CreateStep10();
-
-		SetMessage(_("Creating Image Layers"));
-		UpdateProgress(m_strMessage1, m_strMessage2, m_iInitStep * 100 / 16, 0);
-	}
-	else if (m_iInitStep == 12)
-	{
-		pTerr->CreateStep11();
-
-		SetMessage(_("Creating Elevation Layers"));
-		UpdateProgress(m_strMessage1, m_strMessage2, m_iInitStep * 100 / 16, 0);
-	}
-	else if (m_iInitStep == 13)
-	{
-		pTerr->CreateStep12();
+		mat.Identity();
+		mat.SetTrans(middle);
+		pTerr->SetCamLocation(mat);
 
 		SetMessage(_("Setting Camera"));
-		UpdateProgress(m_strMessage1, m_strMessage2, m_iInitStep * 100 / 16, 0);
+		UpdateProgress(m_strMessage, 70, 0);
 	}
-	else if (m_iInitStep == 14)
+	else if (m_iInitStep == 8)
 	{
 		// If we were in Earth View, hide the globe and disable the trackball
 		if (m_pGlobeContainer != NULL)
@@ -613,13 +640,16 @@ void Enviro::SetupTerrain(vtTerrain *pTerr)
 		if (m_pTrackball)
 			m_pTrackball->SetEnabled(false);
 
+		// Set initial location
+		m_pNormalCamera->SetTransform1(pTerr->GetCamLocation());
+
 		SetMessage(_("Switching to Terrain"));
-		UpdateProgress(m_strMessage1, m_strMessage2, m_iInitStep * 100 / 16, 0);
+		UpdateProgress(m_strMessage, 80, 0);
 	}
-	else if (m_iInitStep == 15)
+	else if (m_iInitStep == 9)
 	{
-		// make the terrain active
-		SwitchToTerrain(pTerr);
+		// make first terrain active
+		SetTerrain(pTerr);
 
 		// Set hither and yon
 		m_pNormalCamera->SetHither(pTerr->GetParams().GetValueFloat(STR_HITHER));
@@ -628,15 +658,19 @@ void Enviro::SetupTerrain(vtTerrain *pTerr)
 		// ensure that sunlight is active
 		GetSunLightTransform()->SetEnabled(true);
 
+		m_pCurRoute=pTerr->GetLastRoute();	// Error checking needed here.
+
 		m_pTerrainPicker->SetEnabled(true);
 		SetMode(MM_NAVIGATE);
-		UpdateProgress(m_strMessage1, m_strMessage2, m_iInitStep * 100 / 16, 0);
 	}
-	else if (m_iInitStep == 16)
+	else if (m_iInitStep == 10)
 	{
-		SetMessage(_("Welcome to "), pTerr->GetName(), 5.0f);
+		vtString str = _("Welcome to ");
+		str += pTerr->GetName();
+		SetMessage(str, 5.0f);
 
-		VTLOG(" seconds since app start: %.2f\n", (float)clock()/CLOCKS_PER_SEC);
+		clock_t clock2 = clock();
+		VTLOG(" seconds since app start: %.2f\n", (float)clock2/CLOCKS_PER_SEC);
 
 		ShowProgress(false);
 
@@ -644,8 +678,6 @@ void Enviro::SetupTerrain(vtTerrain *pTerr)
 
 		// Layer view needs to update
 		RefreshLayerView();
-
-		m_Elastic.SetTerrain(pTerr);
 	}
 }
 
@@ -693,6 +725,7 @@ void Enviro::DoCursorOnTerrain()
 {
 	m_bOnTerrain = false;
 	DPoint3 earthpos;
+	vtString str;
 
 	if (m_pTerrainPicker != NULL)
 		m_bOnTerrain = m_pTerrainPicker->GetCurrentEarthPos(earthpos);
@@ -701,27 +734,24 @@ void Enviro::DoCursorOnTerrain()
 		m_EarthPos = earthpos;
 
 		// Attempt to scale the 3d cursor, for ease of use.
-		// Rather than keeping it the same size in world space (it would be too
-		// small in the distance) or the same size in screen space (would look
-		// confusing without the spatial distance cue) we compromise and scale
-		// it based on the square root of distance.
+		// Rather than keeping it the same size in world space (it would
+		// be too small in the distance) or the same size in screen space
+		// (would look confusing without the spatial distance cue) we
+		// compromise and scale it based on the square root of distance.
 		FPoint3 gpos;
 		if (m_pTerrainPicker->GetCurrentPoint(gpos))
 		{
-			const FPoint3 campos = vtGetScene()->GetCamera()->GetTrans();
-			const float distance = (gpos - campos).Length();
-			const float sc = (float) sqrt(distance) / 1.0f;
-			const FPoint3 pos = m_pCursorMGeom->GetTrans();
+			FPoint3 campos = vtGetScene()->GetCamera()->GetTrans();
+			float distance = (gpos - campos).Length();
+			float sc = (float) sqrt(distance) / 1.0f;
+			FPoint3 pos = m_pCursorMGeom->GetTrans();
 			m_pCursorMGeom->Identity();
-			m_pCursorMGeom->Scale(sc);
+			m_pCursorMGeom->Scale3(sc, sc, sc);
 			m_pCursorMGeom->SetTrans(pos);
 		}
 
 		// Inform GUI, in case it cares.
 		EarthPosUpdated();
-
-		if (m_bShowVerticalLine)
-			UpdateVerticalLine();
 	}
 }
 
@@ -777,7 +807,7 @@ void Enviro::SetupScene2()
 	m_pGFlyer->SetEnabled(false);
 	m_pNavEngines->AddChild(m_pGFlyer);
 
-	m_pFlatFlyer = new FlatFlyer;
+	m_pFlatFlyer = new FlatFlyer();
 	m_pFlatFlyer->setName("Flat Flyer");
 	m_pFlatFlyer->SetEnabled(false);
 	m_pNavEngines->AddChild(m_pFlatFlyer);
@@ -795,11 +825,11 @@ void Enviro::SetupScene2()
 	m_pCursorMGeom->setName("Cursor");
 
 	GetTop()->addChild(m_pCursorMGeom);
-	m_pTerrainPicker = new TerrainPicker;
+	m_pTerrainPicker = new TerrainPicker();
 	m_pTerrainPicker->setName("TerrainPicker");
 	vtGetScene()->AddEngine(m_pTerrainPicker);
 
-	m_pTerrainPicker->AddTarget(m_pCursorMGeom);
+	m_pTerrainPicker->SetTarget(m_pCursorMGeom);
 	m_pTerrainPicker->SetEnabled(false); // turn off at startup
 
 	// Connect to the GrabFlyer
@@ -815,21 +845,21 @@ void Enviro::SetupScene2()
 		m_pTopDownCamera = new vtCamera;
 		m_pTopDownCamera->SetOrtho(true);
 		m_pTopDownCamera->setName("Top-Down Camera");
-		m_pOrthoFlyer->AddTarget(m_pTopDownCamera);
+		m_pOrthoFlyer->SetTarget(m_pTopDownCamera);
 	}
 
-	m_pQuakeFlyer->AddTarget(m_pNormalCamera);
-	m_pVFlyer->AddTarget(m_pNormalCamera);
-	m_pTFlyer->AddTarget(m_pNormalCamera);
-	m_pGFlyer->AddTarget(m_pNormalCamera);
-	m_pFlatFlyer->AddTarget(m_pNormalCamera);
-	m_pPanoFlyer->AddTarget(m_pNormalCamera);
+	m_pQuakeFlyer->SetTarget(m_pNormalCamera);
+	m_pVFlyer->SetTarget(m_pNormalCamera);
+	m_pTFlyer->SetTarget(m_pNormalCamera);
+	m_pGFlyer->SetTarget(m_pNormalCamera);
+	m_pFlatFlyer->SetTarget(m_pNormalCamera);
+	m_pPanoFlyer->SetTarget(m_pNormalCamera);
 
 	// An engine to keep the camera above the terrain, comes after the other
 	//  engines which could move the camera.
 	m_pHeightEngine = new vtHeightConstrain(1.0f);
 	m_pHeightEngine->setName("Height Constrain Engine");
-	m_pHeightEngine->AddTarget(m_pNormalCamera);
+	m_pHeightEngine->SetTarget(m_pNormalCamera);
 	vtGetScene()->GetRootEngine()->AddChild(m_pHeightEngine);
 
 	// This HUD group will contain geometry such as the legend
@@ -838,8 +868,19 @@ void Enviro::SetupScene2()
 	m_pRoot->addChild(m_pHUD);
 	m_pHUDMaterials = new vtMaterialArray;
 
-	// A font is need by the HUD message text, and the elevation legend.
+	// The HUD always has a place to put status messages to the user
 	m_pArial = osgText::readFontFile("Arial.ttf");
+
+	vtGeode *geode = new vtGeode;
+	geode->setName("Message");
+	m_pHUD->GetContainer()->addChild(geode);
+	if (m_pArial)
+	{
+		m_pHUDMessage = new vtTextMesh(m_pArial, 18);
+		m_pHUDMessage->SetText("");
+		m_pHUDMessage->SetPosition(FPoint3(3,3,0));
+		geode->AddTextMesh(m_pHUDMessage, 0);
+	}
 }
 
 //
@@ -865,20 +906,21 @@ void Enviro::LoadSpeciesList()
 		return;
 	}
 
-	vtSpeciesList sp_list;
+	vtSpeciesList pl;
 	vtString errmsg;
-	if (sp_list.ReadXML(species_path, &errmsg))
+	if (pl.ReadXML(species_path, &errmsg))
 	{
 		VTLOG(" Using species file: '%s'\n", (const char *) species_path);
-		m_pSpeciesList = new vtSpeciesList3d;
-		*m_pSpeciesList = sp_list;
+		m_pPlantList = new vtSpeciesList3d;
+		*m_pPlantList = pl;
 
 		// global options
 		vtPlantAppearance3d::s_fPlantScale = g_Options.m_fPlantScale;
 		vtPlantAppearance3d::s_bPlantShadows = g_Options.m_bShadows;
 
 		// Don't load all the plant appearances now, just check which are available
-		int available = m_pSpeciesList->CheckAvailability();
+//			m_pPlantList->CreatePlantSurfaces();
+		int available = m_pPlantList->CheckAvailability();
 		VTLOG(" %d plant appearances available.\n", available);
 
 		m_bPlantsLoaded = true;
@@ -964,12 +1006,12 @@ void Enviro::ResetCamera()
 {
 	VTLOG1("ResetCamera\n");
 	if (m_pCurrentTerrain)
-		m_pNormalCamera->SetTransform(m_pCurrentTerrain->GetCamLocation());
+		m_pNormalCamera->SetTransform1(m_pCurrentTerrain->GetCamLocation());
 }
 
-void Enviro::SwitchToTerrain(vtTerrain *pTerrain)
+void Enviro::SetTerrain(vtTerrain *pTerrain)
 {
-	VTLOG("Enviro::SwitchToTerrain '%s'\n",
+	VTLOG("Enviro::SetTerrain '%s'\n",
 		pTerrain ? (const char *) pTerrain->GetName() : "none");
 
 	if (m_pCurrentTerrain)
@@ -988,12 +1030,12 @@ void Enviro::SwitchToTerrain(vtTerrain *pTerrain)
 		ShowMapOverview(false);
 		return;
 	}
-	const vtHeightField3d *pHF = pTerrain->GetHeightField();
+	vtHeightField3d *pHF = pTerrain->GetHeightField();
 	if (!pHF)
 		return;
 
 	// Inform the UI that this new terrain is current
-	const TParams &param = pTerrain->GetParams();
+	TParams &param = pTerrain->GetParams();
 	SetNavType((enum NavType) param.GetValueInt(STR_NAVSTYLE));
 
 	EnableFlyerEngine(true);
@@ -1001,11 +1043,11 @@ void Enviro::SwitchToTerrain(vtTerrain *pTerrain)
 	// Inform the terrain's location saver of the camera
 	pTerrain->GetLocSaver()->SetTransform(m_pNormalCamera);
 
-	// inform the navigation engines of the new terrain
+	// inform the navigation engine of the new terrain
 	float speed = param.GetValueFloat(STR_NAVSPEED);
 	if (m_pCurrentFlyer != NULL)
 	{
-		m_pCurrentFlyer->AddTarget(m_pNormalCamera);
+		m_pCurrentFlyer->SetTarget(m_pNormalCamera);
 		m_pCurrentFlyer->SetEnabled(true);
 		m_pCurrentFlyer->SetExag(param.GetValueBool(STR_ACCEL));
 	}
@@ -1013,8 +1055,6 @@ void Enviro::SwitchToTerrain(vtTerrain *pTerrain)
 	m_pVFlyer->SetSpeed(speed);
 	m_pPanoFlyer->SetSpeed(speed);
 	m_pOrthoFlyer->SetSpeed(speed);
-
-	m_pVFlyer->SetDamping(param.GetValueFloat(STR_NAVDAMPING));
 
 	// TODO: a more elegant way of keeping all nav engines current
 	m_pQuakeFlyer->SetHeightField(pHF);
@@ -1061,8 +1101,23 @@ void Enviro::SwitchToTerrain(vtTerrain *pTerrain)
 	if (pOverlay)
 		m_pHUD->GetContainer()->addChild(pOverlay);
 
-	if (!IsFlyingInFromSpace())
-		SelectInitialViewpoint(pTerrain);
+	if (m_iFlightStage != 2)
+	{
+		// Only do this the first time: jump to initial viewpoint
+		if (!pTerrain->IsVisited())
+		{
+			VTLOG1("First visit to this terrain, looking up stored viewpoint.\n");
+			if (g_Options.m_strInitLocation != "")
+			{
+				// may have been given on command line
+				pTerrain->GetLocSaver()->RecallFrom(g_Options.m_strInitLocation);
+				g_Options.m_strInitLocation = "";
+			}
+			else
+				pTerrain->GetLocSaver()->RecallFrom(pTerrain->GetParams().GetValueString(STR_INITLOCATION));
+		}
+	}
+	pTerrain->Visited(true);
 
 	// Inform the GUI that the terrain has changed
 	SetTerrainToGUI(pTerrain);
@@ -1072,76 +1127,15 @@ void Enviro::SwitchToTerrain(vtTerrain *pTerrain)
 		m_pMapOverview->SetTerrain(pTerrain);
 
 	// If there is an initial scenario, show it
-	vtString scenario_name;
-	if (param.GetValueString(STR_INIT_SCENARIO, scenario_name))
+	vtString sname;
+	if (param.GetValueString(STR_INIT_SCENARIO, sname))
 	{
-		for (uint snum = 0; snum < param.m_Scenarios.size(); snum++)
+		for (unsigned int snum = 0; snum < param.m_Scenarios.size(); snum++)
 		{
-			if (scenario_name == param.m_Scenarios[snum].GetValueString(STR_SCENARIO_NAME))
+			if (sname == param.m_Scenarios[snum].GetValueString(STR_SCENARIO_NAME))
 				pTerrain->ActivateScenario(snum);
 		}
 	}
-}
-
-void Enviro::SelectInitialViewpoint(vtTerrain *pTerrain)
-{
-	// If we've already been here, use the viewpoint we had last time
-	if (pTerrain->IsVisited())
-	{
-		// Get stored location
-		const FMatrix4 &mat = pTerrain->GetCamLocation();
-		FPoint3 trans = mat.GetTrans();
-		VTLOG("   Got stored viewpoint for terrain '%s' as position %.1f, %.1f, %.1f\n",
-			(const char *) pTerrain->GetName(), trans.x, trans.y, trans.z);
-		m_pNormalCamera->SetTransform(mat);
-		return;
-	}
-
-	// First visit.
-	bool bGotStoredViewpoint = false;
-	VTLOG1("First visit to this terrain, looking up initial location.\n");
-	if (g_Options.m_strInitLocation != "")
-	{
-		// may have been given on command line
-		pTerrain->GetLocSaver()->RecallFrom(g_Options.m_strInitLocation);
-		g_Options.m_strInitLocation = "";
-		bGotStoredViewpoint = true;
-	}
-	else
-	{
-		// or, it may be a location in the terrain parameters
-		vtString vname = pTerrain->GetParams().GetValueString(STR_INITLOCATION);
-		if (pTerrain->GetLocSaver()->RecallFrom(vname))
-			bGotStoredViewpoint = true;
-	}
-	if (!bGotStoredViewpoint)
-	{
-		// Initial default location for camera for this terrain: Try center
-		//  of heightfield, just above the ground, looking north.
-		const vtHeightField3d *pHF = pTerrain->GetHeightField();
-		FPoint3 middle;
-		FMatrix4 mat;
-
-		VTLOG1(" Placing the camera at the center of the terrain:\n");
-		pHF->GetCenter(middle);
-		VTLOG(" Center: %f %f %f\n", middle.x, middle.y, middle.z);
-		pHF->FindAltitudeAtPoint(middle, middle.y);
-		VTLOG(" Altitude at that point: %f\n", middle.y);
-		float minheight = pTerrain->GetParams().GetValueFloat(STR_MINHEIGHT);
-		middle.y += minheight;
-		VTLOG(" plus minimum height (%f) is %f\n", minheight, middle.y);
-		mat.Identity();
-		mat.SetTrans(middle);
-
-		// Use it now
-		m_pNormalCamera->SetTransform(mat);
-	}
-	// Remember it for later
-	FMatrix4 mat;
-	m_pNormalCamera->GetTransform(mat);
-	pTerrain->SetCamLocation(mat);
-
-	pTerrain->Visited(true);
 }
 
 //
@@ -1159,7 +1153,6 @@ void Enviro::StoreTerrainParameters()
 
 	par.SetValueInt(STR_NAVSTYLE, GetNavType());
 	par.SetValueFloat(STR_NAVSPEED, GetFlightSpeed());
-	par.SetValueFloat(STR_NAVDAMPING, GetNavDamping());
 	//par.SetValueString(STR_LOCFILE);
 	//par.SetValueString(STR_INITLOCATION);
 	par.SetValueFloat(STR_HITHER, cam->GetHither());
@@ -1188,7 +1181,8 @@ void Enviro::StoreTerrainParameters()
 	//par.SetValueFloat(STR_OCEANPLANELEVEL);	// already set dynamically
 	//par.SetValueBool(STR_DEPRESSOCEAN);
 	//par.SetValueFloat(STR_DEPRESSOCEANLEVEL);
-	const RGBi col = terr->GetBgColor();
+	par.SetValueBool(STR_HORIZON,  terr->GetFeatureVisible(TFT_HORIZON));
+	RGBi col = terr->GetBgColor();
 	par.SetValueRGBi(STR_BGCOLOR, col);
 
 	par.SetValueFloat(STR_STRUCTDIST, terr->GetLODDistance(TFT_STRUCTURES));
@@ -1200,33 +1194,68 @@ void Enviro::StoreTerrainParameters()
 
 	// Layers: copy back from the current set of layers to the set of
 	//  layers in the parameters.
-	const LayerSet &set = terr->GetLayers();
+	LayerSet &set = terr->GetLayers();
 	par.m_Layers.clear();
-	for (uint i = 0; i < set.size(); i++)
-		par.m_Layers.push_back(set[i]->Props());
+	for (unsigned int i = 0; i < set.size(); i++)
+	{
+		vtLayer *lay = set[i];
+
+		vtStructureLayer *slay = dynamic_cast<vtStructureLayer*>(lay);
+		vtImageLayer *ilay = dynamic_cast<vtImageLayer*>(lay);
+		vtAbstractLayer *alay = dynamic_cast<vtAbstractLayer*>(lay);
+
+		vtTagArray newlay;
+		if (slay)
+			newlay.SetValueString("Type", TERR_LTYPE_STRUCTURE, true);
+		if (ilay)
+			newlay.SetValueString("Type", TERR_LTYPE_IMAGE, true);
+		if (alay)
+		{
+			newlay.SetValueString("Type", TERR_LTYPE_ABSTRACT, true);
+			vtTagArray &style = alay->GetProperties();
+			newlay.CopyTagsFrom(style);
+		}
+
+		newlay.SetValueString("Filename", lay->GetLayerName(), true);
+		newlay.SetValueBool("Visible", lay->GetVisible());
+		par.m_Layers.push_back(newlay);
+	}
 }
 
-/**
-  Display a message in the UI. The surrounding flavor of Enviro might show this
-  in the status bar of the frame window (for wxEnviro) or as a HUD text (for
-  a pure OpenGL version of Enviro).
-
-  \param str1 The first part of the message, which should be translated.
-  \param str2 The second part of the message, which should not be translated.
-	The two parts will be concatenated.
-  \param fTime How long the message should appear, in seconds.
-*/
-void Enviro::SetMessage(const vtString &str1, const vtString &str2, float fTime)
+//
+// Display a message as a text sprite in the middle of the window.
+//
+// The fTime argument lets you specify how long the message should
+// appear, in seconds.
+//
+void Enviro::SetMessage(const vtString &msg, float fTime)
 {
-	VTLOG(" SetMessage: '%s' '%s'\n", (const char *) str1, (const char *) str2);
+	VTLOG("  SetMessage: '%s'\n", (const char *) msg);
 
-	if ((str1 + str2) != "" && fTime != 0.0f)
+#if 0
+	if (m_pMessageSprite == NULL)
+	{
+		m_pMessageSprite = new vtSprite;
+		m_pMessageSprite->setName("MessageSprite");
+		m_pRoot->addChild(m_pMessageSprite);
+	}
+	if (msg == "")
+		m_pMessageSprite->SetEnabled(false);
+	else
+	{
+		m_pMessageSprite->SetEnabled(true);
+		m_pMessageSprite->SetText(msg);
+		int len = msg.GetLength();
+		m_pMessageSprite->SetWindowRect(0.5f - (len * 0.01f), 0.45f,
+										0.5f + (len * 0.01f), 0.55f);
+	}
+#endif
+	if (msg != "" && fTime != 0.0f)
 	{
 		m_fMessageStart = vtGetTime();
 		m_fMessageTime = fTime;
 	}
-	m_strMessage1 = str1;
-	m_strMessage2 = str2;
+	m_strMessage = msg;
 }
 
 void Enviro::SetFlightSpeed(float speed)
@@ -1245,16 +1274,6 @@ float Enviro::GetFlightSpeed()
 		return m_pCurrentFlyer->GetSpeed();
 	else
 		return 0.0f;
-}
-
-void Enviro::SetNavDamping(float factor)
-{
-	m_pVFlyer->SetDamping(factor);
-}
-
-float Enviro::GetNavDamping()
-{
-	return m_pVFlyer->GetDamping();
 }
 
 void Enviro::SetFlightAccel(bool bAccel)
@@ -1292,9 +1311,9 @@ void Enviro::SetMode(MouseMode mode)
 			m_pCursorMGeom->SetEnabled(false);
 			EnableFlyerEngine(false);
 			break;
-		case MM_LINEARS:
+		case MM_FENCES:
 		case MM_BUILDINGS:
-		case MM_POWER:
+		case MM_ROUTES:
 		case MM_PLANTS:
 		case MM_ADDPOINTS:
 		case MM_INSTANCES:
@@ -1307,6 +1326,7 @@ void Enviro::SetMode(MouseMode mode)
 			break;
 		}
 	}
+	m_bActiveFence = false;
 	m_mode = mode;
 }
 
@@ -1332,15 +1352,15 @@ void Enviro::SetTopDown(bool bTopDown)
 	// set mode again, to put everything in the right state
 	SetMode(m_mode);
 
-	// inform the UI that we have switched cameras
+	// inform the UI that we have a switched cameras
 	CameraChanged();
 }
 
 void Enviro::DumpCameraInfo()
 {
-	const vtCamera *cam = m_pNormalCamera;
-	const FPoint3 pos = cam->GetTrans();
-	const FPoint3 dir = cam->GetDirection();
+	vtCamera *cam = m_pNormalCamera;
+	FPoint3 pos = cam->GetTrans();
+	FPoint3 dir = cam->GetDirection();
 	VTLOG("Camera: pos %f %f %f, dir %f %f %f\n",
 		pos.x, pos.y, pos.z, dir.x, dir.y, dir.z);
 }
@@ -1408,43 +1428,47 @@ bool Enviro::OnMouse(vtMouseEvent &event)
 
 void Enviro::OnMouseLeftDownTerrain(vtMouseEvent &event)
 {
-	if (m_mode != MM_SELECT &&
-		m_mode != MM_SELECTMOVE &&
-		m_mode != MM_SELECTBOX)
-	{
-		// All other modes require that we are pointing at some spot on the ground.
-		if (!m_bOnTerrain)
-			return;
-	}
+	if (m_mode != MM_SELECT && m_mode != MM_SELECTMOVE && m_mode != MM_SELECTBOX && !m_bOnTerrain)
+		return;
 
-	// Many operations only need the 2D point
-	const DPoint2 p2(m_EarthPos.x, m_EarthPos.y);
 	vtTerrain *pTerr = GetCurrentTerrain();
 
-	if (m_mode == MM_LINEARS || m_mode == MM_BUILDINGS)
+	// Build fences on click
+	if (m_mode == MM_FENCES)
 	{
-		// Add to a structure being drawn.
-		AddElasticPoint(p2);
+		if (!m_bActiveFence)
+		{
+			start_new_fence();
+			m_bActiveFence = true;
+		}
+		pTerr->AddFencepoint(m_pCurFence, DPoint2(m_EarthPos.x, m_EarthPos.y));
 	}
-	if (m_mode == MM_POWER)
-	{
-		if (!m_bActiveUtilLine)
-			StartPowerline();
+	if (m_mode == MM_BUILDINGS)
+		OnMouseLeftDownBuildings();
 
-		pTerr->AddPoleToLine(m_pCurUtilLine, p2, m_sStructType);
+	if (m_mode == MM_ROUTES)
+	{
+		if (!m_bActiveRoute)
+		{
+			start_new_route();
+			m_bActiveRoute = true;
+		}
+		pTerr->add_routepoint_earth(m_pCurRoute,
+			DPoint2(m_EarthPos.x, m_EarthPos.y), m_sStructType);
 	}
 	if (m_mode == MM_PLANTS)
 	{
 		// try planting a tree there
-		if (pTerr->IsGeographicCRS())
+		if (pTerr->GetProjection().IsGeographic())
 			VTLOG("Create a plant at %.8lf,%.8lf:", m_EarthPos.x, m_EarthPos.y);
 		else
 			VTLOG("Create a plant at %.2lf,%.2lf:", m_EarthPos.x, m_EarthPos.y);
-		bool success = PlantATree(p2);
+		bool success = PlantATree(DPoint2(m_EarthPos.x, m_EarthPos.y));
 		VTLOG(" %s.\n", success ? "yes" : "no");
 	}
 	if (m_mode == MM_ADDPOINTS)
 	{
+		DPoint2 atpoint(m_EarthPos.x, m_EarthPos.y);
 		vtString str = GetStringFromUser("Created labeled point feature", "Label:");
 		if (str != "")
 		{
@@ -1453,18 +1477,18 @@ void Enviro::OnMouseLeftDownTerrain(vtMouseEvent &event)
 			if (pset)
 			{
 				// add a single 2D point
-				int rec = pset->AddPoint(p2);
+				int rec = pset->AddPoint(atpoint);
 				int field = pset->GetFieldIndex("Label");
 				pset->SetValueFromString(rec, field, str);
 
 				// create its 3D visual
-				alay->CreateFeatureVisual(rec);
+				alay->CreateStyledFeature(rec);
 			}
 			UpdateLayerView();
 		}
 	}
 	if (m_mode == MM_INSTANCES)
-		CreateInstance();
+		PlantInstance();
 
 	if (m_mode == MM_VEHICLES)
 		CreateGroundVehicle(m_VehicleOpt);
@@ -1484,6 +1508,7 @@ void Enviro::OnMouseLeftDownTerrain(vtMouseEvent &event)
 	if (m_mode == MM_MEASURE)
 	{
 		m_bDragging = true;
+		DPoint2 g1(m_EarthPos.x, m_EarthPos.y);
 
 		if (m_bMeasurePath)
 		{
@@ -1494,10 +1519,10 @@ void Enviro::OnMouseLeftDownTerrain(vtMouseEvent &event)
 				// begin new path
 				m_fArcLength = 0.0;
 				m_EarthPosDown = m_EarthPos;
-				m_distance_path.Append(p2);
+				m_distance_path.Append(g1);
 			}
 			// default: add point to the path
-			m_distance_path.Append(p2);
+			m_distance_path.Append(g1);
 
 			SetTerrainMeasure(m_distance_path);
 		}
@@ -1505,14 +1530,20 @@ void Enviro::OnMouseLeftDownTerrain(vtMouseEvent &event)
 		{
 			m_EarthPosDown = m_EarthPos;
 			m_fArcLength = 0.0;
-			SetTerrainMeasure(p2, p2);
+			SetTerrainMeasure(g1, g1);
 		}
 		UpdateDistanceTool();
 	}
 	if (m_mode == MM_SLOPE)
 	{
 		// TODO
+		//pTerr->AddFencepoint(m_pCurFence, DPoint2(m_EarthPos.x, m_EarthPos.y));
 	}
+}
+
+void Enviro::OnMouseLeftDownBuildings()
+{
+	PolygonSelectionAddPoint();
 }
 
 void Enviro::OnMouseSelectRayPick(vtMouseEvent &event)
@@ -1528,12 +1559,11 @@ void Enviro::OnMouseSelectRayPick(vtMouseEvent &event)
 		m_bSelectedStruct = false;
 	}
 
-	vtVegLayer *v_layer = pTerr->GetVegLayer();
-	if (v_layer)
-		v_layer->VisualDeselectAll();
+	vtPlantInstanceArray3d &Plants = pTerr->GetPlantInstances();
+	Plants.VisualDeselectAll();
 	m_bSelectedPlant = false;
 
-	vtUtilityMap3d &util_map = pTerr->GetUtilityMap();
+	vtRouteMap &Routes = pTerr->GetRouteMap();
 	m_bSelectedUtil = false;
 
 	// Get ray intersection with near and far planes
@@ -1613,7 +1643,7 @@ void Enviro::OnMouseSelectRayPick(vtMouseEvent &event)
 		{
 			// Switching to a different structure set
 			pActiveStructures->VisualDeselectAll();
-			pTerr->SetActiveLayer(slay);
+			pTerr->SetStructureLayer(slay);
 			ShowLayerView();
 			UpdateLayerView();
 		}
@@ -1624,20 +1654,20 @@ void Enviro::OnMouseSelectRayPick(vtMouseEvent &event)
 			m_bSelectedStruct = false;
 	}
 	// Check for plants
-	else if (v_layer && v_layer->FindPlantFromNode(HitList.front().geode, iOffset))
+	else if (Plants.FindPlantFromNode(HitList.front().geode, iOffset))
 	{
 		VTLOG("  Found plant\n");
-		v_layer->VisualSelect(iOffset);
+		Plants.VisualSelect(iOffset);
 		m_bDragging = true;
 		m_bSelectedPlant = true;
 	}
 	// Check for routes
-	else if (util_map.FindPoleFromNode(HitList.front().geode, iOffset))
+	else if (Routes.FindRouteFromNode(HitList.front().geode, iOffset))
 	{
 		VTLOG("  Found route\n");
 		m_bDragging = true;
 		m_bSelectedUtil = true;
-		m_pSelUtilPole = util_map.GetPole(iOffset);
+		m_pSelRoute = Routes.GetAt(iOffset);
 	}
 	else
 		VTLOG("  Unable to identify node\n");
@@ -1657,63 +1687,59 @@ void Enviro::OnMouseSelectCursorPick(vtMouseEvent &event)
 	//  near a structure's origin.
 	DPoint2 gpos(m_EarthPos.x, m_EarthPos.y);
 
-	// De-select
+	double dist1, dist2, dist3;
 	vtTerrain *pTerr = GetCurrentTerrain();
-	if (!(event.flags & VT_CONTROL))
-	{
-		pTerr->DeselectAllStructures();
-		pTerr->DeselectAllPlants();
-	}
-
-	const vtLocalConversion &conv = pTerr->GetLocalConversion();
+	vtStructureArray3d *structures = pTerr->GetStructureLayer();
+	if (!(event.flags & VT_CONTROL) && structures != NULL)
+		structures->VisualDeselectAll();
 
 	// SelectionCutoff is in meters, but the picking functions work in
 	//  Earth coordinates.  Try to convert it to earth horiz units.
 	DPoint2 eoffset;
-	conv.ConvertVectorToEarth(g_Options.m_fSelectionCutoff, 0, eoffset);
+	g_Conv.ConvertVectorToEarth(g_Options.m_fSelectionCutoff, 0, eoffset);
 	double epsilon = eoffset.x;
 	VTLOG("epsilon %lf, ", epsilon);
 
-	VTLOG("|XY= %lf, %lf, %lf|\n", m_EarthPos.x, m_EarthPos.y, m_EarthPos.z); // BobMaX
-
 	// We also want to use a small (2m) buffer around linear features, so they
 	//  can be picked even if they are inside/on top of a building.
-	conv.ConvertVectorToEarth(2.0f, 0, eoffset);
+	g_Conv.ConvertVectorToEarth(2.0f, 0, eoffset);
 	double linear_buffer = eoffset.x;
 
-	// Look at the distance to each type of object
-	double dist1 = 1E9, dist2 = 1E9, dist3 = 1E9, dist4 = 1E9;
-
 	// Check Structures
-	vtStructureLayer *st_layer;	// layer that contains the closest structure
-	int structure;				// index of closest structure
-	bool result1 = pTerr->FindClosestStructure(gpos, epsilon, structure,
-		&st_layer, dist1, g_Options.m_fMaxPickableInstanceRadius,
-		(float) linear_buffer);
+	int structure;		// index of closest structure
+	bool result1 = pTerr->FindClosestStructure(gpos, epsilon, structure, dist1,
+		g_Options.m_fMaxPickableInstanceRadius, (float) linear_buffer);
 	if (result1)
 		VTLOG("structure at dist %lf, ", dist1);
 	m_bSelectedStruct = false;
 
 	// Check Plants
-	vtVegLayer *v_layer;
+	vtPlantInstanceArray3d &plants = pTerr->GetPlantInstances();
+	plants.VisualDeselectAll();
 	m_bSelectedPlant = false;
-	int plant_index;
-	bool result2 = pTerr->FindClosestPlant(gpos, epsilon, plant_index, &v_layer);
+
+	// find index of closest plant
+	int plant = plants.FindClosestPoint(gpos, epsilon);
+	bool result2 = (plant != -1);
 	if (result2)
 	{
-		dist2 = (gpos - v_layer->GetPoint(plant_index)).Length();
+		dist2 = (gpos - plants.GetPoint(plant)).Length();
 		VTLOG("plant at dist %lf, ", dist2);
 	}
+	else
+		dist2 = 1E9;
 
-	// Check Utilities
-	vtUtilityMap3d &util_map = pTerr->GetUtilityMap();
+	// Check Routes
+	vtRouteMap &routes = pTerr->GetRouteMap();
 	m_bSelectedUtil = false;
-	bool result3 = util_map.FindClosestUtilPole(gpos, epsilon, m_pSelUtilPole, dist3);
+	bool result3 = routes.FindClosestUtilNode(gpos, epsilon, m_pSelRoute,
+		m_pSelUtilNode, dist3);
 
 	// Check Vehicles
 	m_bSelectedVehicle = false;
+	float dist4;
 	FPoint3 wpos;
-	conv.ConvertFromEarth(m_EarthPos, wpos);
+	g_Conv.ConvertFromEarth(m_EarthPos, wpos);
 	m_Vehicles.VisualDeselectAll();
 	int vehicle = m_Vehicles.FindClosestVehicle(wpos, dist4);
 	if (dist4 > g_Options.m_fSelectionCutoff)
@@ -1727,8 +1753,9 @@ void Enviro::OnMouseSelectCursorPick(vtMouseEvent &event)
 	if (click_struct)
 	{
 		VTLOG(" struct is closest.\n");
-		vtStructure *str = st_layer->at(structure);
-		vtStructure3d *str3d = st_layer->GetStructure3d(structure);
+		vtStructureArray3d *structures_picked = pTerr->GetStructureLayer();
+		vtStructure *str = structures_picked->GetAt(structure);
+		vtStructure3d *str3d = structures_picked->GetStructure3d(structure);
 		if (str->GetType() != ST_INSTANCE && str3d->GetGeom() == NULL)
 		{
 			VTLOG("  Warning: unconstructed structure.\n");
@@ -1755,7 +1782,7 @@ void Enviro::OnMouseSelectCursorPick(vtMouseEvent &event)
 			{
 				// perhaps we have clicked on a fence control point
 				double dist;
-				const int idx = fen->GetNearestPointIndex(gpos, dist);
+				int idx = fen->GetNearestPointIndex(gpos, dist);
 				if (idx != -1 && dist < 2.0f)	// distance cutoff
 				{
 					m_pDraggingFence = dynamic_cast<vtFence3d*>(str3d);
@@ -1772,10 +1799,10 @@ void Enviro::OnMouseSelectCursorPick(vtMouseEvent &event)
 			}
 			m_bSelectedStruct = true;
 		}
-		if (st_layer != pTerr->GetActiveLayer())
+		if (structures_picked != structures)
 		{
 			// active structure set (layer) has changed due to picking
-			pTerr->SetActiveLayer(st_layer);
+			structures->VisualDeselectAll();
 			ShowLayerView();
 			UpdateLayerView();
 		}
@@ -1783,17 +1810,9 @@ void Enviro::OnMouseSelectCursorPick(vtMouseEvent &event)
 	else if (click_plant)
 	{
 		VTLOG(" plant is closest.\n");
-		v_layer->VisualSelect(plant_index);
+		plants.VisualSelect(plant);
 		m_bDragging = true;
 		m_bSelectedPlant = true;
-
-		if (v_layer != pTerr->GetActiveLayer())
-		{
-			// active layer has changed due to picking
-			pTerr->SetActiveLayer(v_layer);
-			ShowLayerView();
-			UpdateLayerView();
-		}
 	}
 	else if (click_route)
 	{
@@ -1836,8 +1855,8 @@ void Enviro::OnMouseLeftDownTerrainMove(vtMouseEvent &event)
 	// In move mode, always start dragging
 	m_bDragging = true;
 
-	// Press 'alt' key to drag vertically instead of horizontally
-	if ((event.flags & VT_ALT) != 0)
+	// Press 'shift' key to drag vertically instead of horizontally
+	if ((event.flags & VT_SHIFT) != 0)
 		m_bDragUpDown = true;
 }
 
@@ -1873,7 +1892,7 @@ void Enviro::OnMouseLeftUpBox(vtMouseEvent &event)
 	vtTerrain *terr = GetCurrentTerrain();
 	float fVerticalExag = terr->GetVerticalExag();
 	LayerSet &layers = terr->GetLayers();
-	for (uint i = 0; i < layers.size(); i++)
+	for (unsigned int i = 0; i < layers.size(); i++)
 	{
 		vtAbstractLayer *alay = dynamic_cast<vtAbstractLayer*>(layers[i].get());
 		if (!alay)
@@ -1885,7 +1904,7 @@ void Enviro::OnMouseLeftUpBox(vtMouseEvent &event)
 		if (pset2 || pset3)
 		{
 			FBox3 bbox;
-			for (uint j = 0; j < fset->NumEntities(); j++)
+			for (unsigned int j = 0; j < fset->GetNumEntities(); j++)
 			{
 				vtFeature *feat = fset->GetFeature(j);
 				vtVisual *viz = alay->GetViz(feat);
@@ -1897,7 +1916,7 @@ void Enviro::OnMouseLeftUpBox(vtMouseEvent &event)
 					fset->Select(j, false);
 
 				bool bSelected = false;
-				for (uint k = 0; k < viz->m_meshes.size(); k++)
+				for (unsigned int k = 0; k < viz->m_meshes.size(); k++)
 				{
 					vtMesh *mesh = viz->m_meshes[k];
 					mesh->GetBoundBox(bbox);
@@ -1929,13 +1948,39 @@ void Enviro::OnMouseLeftUpBox(vtMouseEvent &event)
 
 void Enviro::OnMouseRightDown(vtMouseEvent &event)
 {
-	if (m_state == AS_Terrain)
+	if (m_mode == MM_BUILDINGS && m_bLineDrawing)
 	{
-		if (m_mode == MM_BUILDINGS && m_Elastic.NumPoints() > 0)
-			FinishBuilding();
+		VTLOG1("OnMouseRightDown, closing building polygon\n");
 
-		if (m_mode == MM_LINEARS && m_Elastic.NumPoints() > 0)
-			FinishLinear();
+		// Hide the temporary markers which showed the vertices
+		PolygonSelectionClose();
+
+		VTLOG1(" Polygon:");
+		for (unsigned int i = 0; i < m_NewLine.GetSize(); i++)
+			VTLOG(" (%lf %lf)", m_NewLine[i].x, m_NewLine[i].y);
+		VTLOG1("\n");
+
+		// Close and create new building in the current structure array
+		vtTerrain *pTerr = GetCurrentTerrain();
+		vtStructureArray3d *structures = pTerr->GetStructureLayer();
+		vtBuilding3d *pbuilding = (vtBuilding3d*) structures->AddNewBuilding();
+
+		// Force footprint anticlockwise
+		PolyChecker PolyChecker;
+		if (PolyChecker.IsClockwisePolygon(m_NewLine))
+			m_NewLine.ReverseOrder();
+		pbuilding->SetFootprint(0, m_NewLine);
+
+		// Describe the appearance of the new building
+		pbuilding->SetStories(2);
+		pbuilding->SetRoofType(ROOF_HIP);
+		pbuilding->SetColor(BLD_BASIC, RGBi(255,255,255));
+		pbuilding->SetColor(BLD_ROOF, RGBi(230,200,170));
+
+		// Construct it and add it to the terrain
+		pbuilding->CreateNode(pTerr);
+		pTerr->AddNodeToStructGrid(pbuilding->GetContainer());
+		RefreshLayerView();
 	}
 }
 
@@ -1943,23 +1988,19 @@ void Enviro::OnMouseRightUp(vtMouseEvent &event)
 {
 	if (m_state == AS_Terrain)
 	{
-		if (m_mode == MM_POWER)
-			FinishPowerline();
-
+		// close off the fence if we have one
+		if (m_mode == MM_FENCES)
+			close_fence();
+		if (m_mode == MM_ROUTES)
+			close_route();
 		if (m_mode == MM_SELECT || m_mode == MM_SELECTMOVE)
 		{
-			vtTerrain *terr = GetCurrentTerrain();
-			vtStructureArray3d *sa = terr->GetStructureLayer();
-			vtVegLayer *vlay = terr->GetVegLayer();
+			vtTerrain *t = GetCurrentTerrain();
+			vtStructureArray3d *sa = t->GetStructureLayer();
+			vtPlantInstanceArray3d &plants = t->GetPlantInstances();
 
-			bool show = false;
-			if (sa && sa->NumSelected() != 0)
-				show = true;
-			if (vlay && vlay->NumSelected() != 0)
-				show = true;
-			if (m_Vehicles.GetSelected() != -1)
-				show = true;
-			if (show)
+			if (sa->NumSelected() != 0 || plants.NumSelected() != 0 ||
+				m_Vehicles.GetSelected() != -1)
 				ShowPopupMenu(event.pos);
 		}
 		if (m_mode == MM_SELECTBOX)
@@ -1981,23 +2022,20 @@ void Enviro::OnMouseMove(vtMouseEvent &event)
 
 void Enviro::OnMouseMoveTerrain(vtMouseEvent &event)
 {
-	// Many operations only need a 2D point
-	const DPoint2 p2(m_EarthPos.x, m_EarthPos.y);
-
 	if ((m_mode == MM_SELECTMOVE || m_mode == MM_MOVE) &&
 		(m_bDragging || m_bRotating))
 	{
-		const DPoint3 delta = m_EarthPos - m_EarthPosLast;
-		const DPoint2 ground_delta(delta.x, delta.y);
+		DPoint3 delta = m_EarthPos - m_EarthPosLast;
+		DPoint2 ground_delta(delta.x, delta.y);
 
 		//VTLOG("ground_delta %f, %f\n", delta.x, delta.y);
 
-		const float fNewRotation = m_StartRotation + (event.pos.x - m_MouseDown.x) / 100.0f;
+		float fNewRotation = m_StartRotation + (event.pos.x - m_MouseDown.x) / 100.0f;
 
 		vtTerrain *pTerr = GetCurrentTerrain();
 
-		vtStructureLayer *st_layer = pTerr->GetStructureLayer();
-		if (st_layer && st_layer->NumSelected() > 0)
+		vtStructureArray3d *structures = pTerr->GetStructureLayer();
+		if (structures && structures->NumSelected() > 0)
 		{
 			if (m_bDragging)
 			{
@@ -2005,7 +2043,7 @@ void Enviro::OnMouseMoveTerrain(vtMouseEvent &event)
 				{
 					// Moving a whole structure (building or instance)
 					float fDelta = (m_MouseLast.y - event.pos.y) / 20.0f;
-					st_layer->OffsetSelectedStructuresVertical(fDelta);
+					structures->OffsetSelectedStructuresVertical(fDelta);
 				}
 				else if (m_pDraggingFence != NULL)
 				{
@@ -2017,44 +2055,40 @@ void Enviro::OnMouseMoveTerrain(vtMouseEvent &event)
 				else
 				{
 					// Moving a whole structure (building or instance)
-					st_layer->OffsetSelectedStructures(ground_delta);
+					structures->OffsetSelectedStructures(ground_delta);
 				}
 			}
 			else if (m_bRotating)
 			{
-				for (int sel = st_layer->GetFirstSelected(); sel != -1; sel = st_layer->GetNextSelected())
+				for (int sel = structures->GetFirstSelected(); sel != -1; sel = structures->GetNextSelected())
 				{
-					vtStructInstance *inst = st_layer->at(sel)->GetInstance();
-					vtStructInstance3d *str3d = st_layer->GetInstance(sel);
+					vtStructInstance *inst = structures->GetAt(sel)->GetInstance();
+					vtStructInstance3d *str3d = structures->GetInstance(sel);
 
 					inst->SetRotation(fNewRotation);
 					str3d->UpdateTransform(pTerr->GetHeightField());
 				}
 			}
-			st_layer->SetModified();
 		}
 		if (m_bDragging)
 		{
 			if (m_bSelectedPlant)
 			{
-				vtVegLayer *vlay = pTerr->GetVegLayer();
-				if (vlay)
-					vlay->OffsetSelectedPlants(ground_delta);
-				vlay->SetModified();
+				vtPlantInstanceArray3d &plants = pTerr->GetPlantInstances();
+				plants.OffsetSelectedPlants(ground_delta);
 			}
 			if (m_bSelectedUtil)
 			{
-				m_pSelUtilPole->Offset(ground_delta);
-				pTerr->RebuildUtilityGeometry();
+				vtRouteMap &routemap = pTerr->GetRouteMap();
+				m_pSelUtilNode->Offset(ground_delta);
+				m_pSelRoute->Dirty();
+				routemap.BuildGeometry(pTerr->GetHeightField());
 			}
 			if (m_bSelectedVehicle)
 			{
 				CarEngine *eng = m_Vehicles.GetSelectedCarEngine();
 				if (eng)
-				{
-					const vtLocalConversion &conv = pTerr->GetLocalConversion();
-					eng->SetEarthPos(conv, eng->GetEarthPos(conv) + ground_delta);
-				}
+					eng->SetEarthPos(eng->GetEarthPos() + ground_delta);
 			}
 		}
 		else if (m_bRotating)
@@ -2077,29 +2111,19 @@ void Enviro::OnMouseMoveTerrain(vtMouseEvent &event)
 //		VTLOG("MouseMove, MEASURE & Drag & OnTerrain: %.1lf, %.1lf\n", m_EarthPos.x, m_EarthPos.y);
 		if (m_bMeasurePath)
 		{
-			const uint npoints = m_distance_path.GetSize();
-			if (npoints > 1)
-				m_distance_path[npoints-1] = p2;
+			DPoint2 g2(m_EarthPos.x, m_EarthPos.y);
+			unsigned int len = m_distance_path.GetSize();
+			if (len > 1)
+				m_distance_path[len-1] = g2;
 			SetTerrainMeasure(m_distance_path);
 		}
 		else
 		{
-			DPoint2 p1(m_EarthPosDown.x, m_EarthPosDown.y);
-			SetTerrainMeasure(p1, p2);
+			DPoint2 g1(m_EarthPosDown.x, m_EarthPosDown.y);
+			DPoint2 g2(m_EarthPos.x, m_EarthPos.y);
+			SetTerrainMeasure(g1, g2);
 		}
 		UpdateDistanceTool();
-	}
-	if (m_mode == MM_LINEARS)
-	{
-		const uint npoints = m_Elastic.NumPoints();
-		if (npoints > 1)
-			m_Elastic.SetPoint(npoints-1, p2, false);
-	}
-	if (m_mode == MM_BUILDINGS)
-	{
-		const uint npoints = m_Elastic.NumPoints();
-		if (npoints > 1)
-			m_Elastic.SetPoint(npoints-1, p2, m_bConstrainAngles);
 	}
 	if (m_mode == MM_SLOPE && m_bDragging && m_bOnTerrain)
 	{
@@ -2107,10 +2131,6 @@ void Enviro::OnMouseMoveTerrain(vtMouseEvent &event)
 	}
 }
 
-/**
- * Mouse handler should return false if it absorbed the event, true if the
- * event should continue to propagate.
- */
 bool Enviro::OnMouseCompass(vtMouseEvent &event)
 {
 	if (m_pCompassSizer)
@@ -2122,11 +2142,11 @@ bool Enviro::OnMouseCompass(vtMouseEvent &event)
 
 			if (event.type == VT_MOVE)
 			{
-				const FPoint2 center = m_pCompassSizer->GetWindowCenter();
-				const FPoint2 pos(event.pos.x, event.pos.y);
-				const FPoint2 diff = (pos - center);
-				const float angle = atan2(diff.y, diff.x);
-				const float delta = angle - m_fDragAngle;
+				FPoint2 center = m_pCompassSizer->GetWindowCenter();
+				FPoint2 pos(event.pos.x, event.pos.y);
+				FPoint2 diff = (pos - center);
+				float angle = atan2(diff.y, diff.x);
+				float delta = angle - m_fDragAngle;
 				m_fDragAngle = angle;
 
 				vtCamera *cam = vtGetScene()->GetCamera();
@@ -2135,10 +2155,10 @@ bool Enviro::OnMouseCompass(vtMouseEvent &event)
 		}
 		else if (event.type == VT_DOWN)
 		{
-			const FPoint2 center = m_pCompassSizer->GetWindowCenter();
-			const FPoint2 pos(event.pos.x, event.pos.y);
-			const FPoint2 diff = (pos - center);
-			const float dist = diff.Length();
+			FPoint2 center = m_pCompassSizer->GetWindowCenter();
+			FPoint2 pos(event.pos.x, event.pos.y);
+			FPoint2 diff = (pos - center);
+			float dist = diff.Length();
 			if (dist > 20 && dist < 64)
 			{
 				m_bDragCompass = true;
@@ -2153,21 +2173,15 @@ bool Enviro::OnMouseCompass(vtMouseEvent &event)
 }
 
 
-void Enviro::SetupArcMaterials()
+void Enviro::SetupArcMesh()
 {
 	if (!m_pArcMats)
 	{
 		m_pArcMats = new vtMaterialArray;
-		m_pArcMats->AddRGBMaterial(RGBf(1, 1, 0), false, false); // yellow
-		m_pArcMats->AddRGBMaterial(RGBf(1, 0, 0), false, false); // red
-		m_pArcMats->AddRGBMaterial(RGBf(1, 0.5f, 0), true, true); // orange lit
+		m_pArcMats->AddRGBMaterial1(RGBf(1, 1, 0), false, false); // yellow
+		m_pArcMats->AddRGBMaterial1(RGBf(1, 0, 0), false, false); // red
+		m_pArcMats->AddRGBMaterial1(RGBf(1, 0.5f, 0), true, true); // orange lit
 	}
-}
-
-void Enviro::SetupArcMesh()
-{
-	SetupArcMaterials();
-
 	// create geometry container, if needed
 	if (!m_pArc)
 	{
@@ -2193,7 +2207,10 @@ void Enviro::FreeArc()
 void Enviro::FreeArcMesh()
 {
 	if (m_pArc)
-		m_pArc->RemoveAllMeshes();
+	{
+		for (int i = m_pArc->GetNumMeshes()-1; i >= 0; i--)
+			m_pArc->RemoveMesh(m_pArc->GetMesh(i));
+	}
 }
 
 void Enviro::SetTerrainMeasure(const DPoint2 &g1, const DPoint2 &g2)
@@ -2208,11 +2225,7 @@ void Enviro::SetTerrainMeasure(const DPoint2 &g1, const DPoint2 &g2)
 	vtTerrain *pTerr = GetCurrentTerrain();
 	vtGeomFactory mf(m_pArc, osg::PrimitiveSet::LINE_STRIP, 0, 30000, 1);
 	mf.SetLineWidth(2);
-
-	const float fSpacing = pTerr->EstimateGroundSpacingAtPoint(dline[0]);
-
-	m_fArcLength = mf.AddSurfaceLineToMesh(pTerr->GetHeightField(), dline,
-		fSpacing, m_fDistToolHeight, true);
+	m_fArcLength = pTerr->AddSurfaceLineToMesh(&mf, dline, m_fDistToolHeight, true);
 }
 
 void Enviro::SetTerrainMeasure(const DLine2 &path)
@@ -2223,11 +2236,7 @@ void Enviro::SetTerrainMeasure(const DLine2 &path)
 	vtTerrain *pTerr = GetCurrentTerrain();
 	vtGeomFactory mf(m_pArc, osg::PrimitiveSet::LINE_STRIP, 0, 30000, 1);
 	mf.SetLineWidth(2);
-
-	const float fSpacing = pTerr->EstimateGroundSpacingAtPoint(path[0]);
-
-	m_fArcLength = mf.AddSurfaceLineToMesh(pTerr->GetHeightField(), path,
-		fSpacing, m_fDistToolHeight, true);
+	m_fArcLength = pTerr->AddSurfaceLineToMesh(&mf, path, m_fDistToolHeight, true);
 }
 
 void Enviro::SetDistanceToolMode(bool bPath)
@@ -2250,7 +2259,7 @@ void Enviro::SetDistanceTool(const DLine2 &line)
 
 void Enviro::ResetDistanceTool()
 {
-	m_distance_path.Clear();
+	m_distance_path.Empty();
 	m_fArcLength = 0.0;
 	if (m_bMeasurePath)
 		ShowDistance(DLine2(), FLT_MIN, FLT_MIN);
@@ -2283,80 +2292,99 @@ void Enviro::SetWind(int iDirection, float fSpeed)
 	params.SetValueFloat("WindSpeed", fSpeed);
 }
 
+//
+// Use the current cursor position as a point to add to a polygon being
+//  visually selected.
+//
+void Enviro::PolygonSelectionAddPoint()
+{
+	SetupArcMesh();
+	DPoint2 g1(m_EarthPos.x, m_EarthPos.y);
+
+	// Create a marker pole for this corner of the new building
+	int matidx = 2;
+	float fHeight = 10.0f;
+	float fRadius = 0.2f;
+	vtGeode *geode = CreateCylinderGeom(m_pArcMats, matidx, VT_Normals, fHeight,
+		fRadius, 10, true, false, false, 1);
+	vtTransform *trans = new vtTransform;
+	trans->addChild(geode);
+	m_Markers.push_back(trans);
+	vtTerrain *pTerr = GetCurrentTerrain();
+	pTerr->PlantModelAtPoint(trans, g1);
+	pTerr->addNode(trans);
+
+	if (m_bLineDrawing)
+	{
+		// continue existing line
+		m_NewLine.Append(g1);
+
+		vtTerrain *pTerr = GetCurrentTerrain();
+		vtGeomFactory mf(m_pArc, osg::PrimitiveSet::LINE_STRIP, 0, 30000, 1);
+		pTerr->AddSurfaceLineToMesh(&mf, m_NewLine, m_fDistToolHeight, true);
+	}
+	else
+	{
+		// start new line
+		m_bLineDrawing = true;
+		m_NewLine.Empty();
+		m_NewLine.Append(g1);
+	}
+}
+
+void Enviro::PolygonSelectionClose()
+{
+	m_bLineDrawing = false;
+
+	// Hide the temporary markers which showed the vertices
+	SetupArcMesh();
+	for (unsigned int i = 0; i < m_Markers.size(); i++)
+		GetCurrentTerrain()->removeNode(m_Markers[i]);
+
+	m_Markers.clear();
+}
+
 
 ////////////////////////////////////////////////////////////////
-// Elastic
+// Fences
 
-const double kMinimumEdgeLengthDegrees = 2e-6;
-const double kMinimumEdgeLengthMeters = 0.2;
-
-void Enviro::AddElasticPoint(const DPoint2 &p)
+void Enviro::start_new_fence()
 {
-	// Try to prevent the user from making bad geometry with points too close together
-	const int npoints = m_Elastic.NumPoints();
-	if ( npoints >= 3)
+	VTLOG1("start_new_fence");
+	vtFence3d *fence = new vtFence3d;
+	fence->SetParams(m_FenceParams);
+	VTLOG1(" calling AddFence\n");
+	if (GetCurrentTerrain()->AddFence(fence))
 	{
-		const DPoint2 p0 = m_Elastic.GetPolyline().GetAt(npoints-3);
-		const DPoint2 p1 = m_Elastic.GetPolyline().GetAt(npoints-2);
-		const DPoint2 p2 = m_Elastic.GetPolyline().GetAt(npoints-1);
+		m_pCurFence = fence;
 
-		const bool bIsGeo = GetCurrentTerrain()->IsGeographicCRS();
-		const double dMin = (bIsGeo ? kMinimumEdgeLengthDegrees : kMinimumEdgeLengthMeters);
+		// update count shown in layer view
+		RefreshLayerView();
+	}
+	else
+		delete fence;
+}
 
-		if ((p0 - p1).Length() < dMin || (p1 - p2).Length() < dMin)
+void Enviro::finish_fence()
+{
+	VTLOG1("finish_fence\n");
+	m_bActiveFence = false;
+}
+
+void Enviro::close_fence()
+{
+	VTLOG1("close_fence\n");
+	if (m_bActiveFence && m_pCurFence)
+	{
+		DLine2 &pts = m_pCurFence->GetFencePoints();
+		if (pts.GetSize() > 2)
 		{
-			// too close
-			VTLOG1(" too close, omitting point.\n");
-			return;
+			DPoint2 FirstFencePoint = pts.GetAt(0);
+			m_pCurFence->AddPoint(FirstFencePoint);
+			GetCurrentTerrain()->RedrawFence(m_pCurFence);
 		}
 	}
-	// we use two points to begin with
-	if (npoints == 0)
-		m_Elastic.AddPoint(p);
-	m_Elastic.AddPoint(p);
-}
-
-bool Enviro::IsMakingElastic()
-{
-	return (m_Elastic.NumPoints() > 0);
-}
-
-void Enviro::CancelElastic()
-{
-	m_Elastic.Clear();
-}
-
-
-////////////////////////////////////////////////////////////////
-// Linear Structures
-
-void Enviro::FinishLinear()
-{
-	vtTerrain *pTerr = GetCurrentTerrain();
-	vtStructureLayer *st_layer = pTerr->GetStructureLayer();
-	if (!st_layer)
-		return;
-
-	// Must have at least 2 points.
-	if (m_Elastic.NumPoints() < 2)
-		return;
-
-	// Close and create new fence in the current structure array
-	vtFence3d *fence = (vtFence3d*) st_layer->AddNewFence();
-	st_layer->SetModified(true);
-
-	fence->SetParams(m_FenceParams);
-	fence->SetFencePoints(m_Elastic.GetPolyline());
-
-	// Hide the temporary markers which showed the polyline
-	m_Elastic.Clear();
-
-	// Construct it and add it to the terrain
-	fence->CreateNode(pTerr);
-	pTerr->AddNodeToStructGrid(fence->GetGeom());
-
-	// update count shown in layer view
-	RefreshLayerView();
+	m_bActiveFence = false;
 }
 
 void Enviro::SetFenceOptions(const vtLinearParams &param, bool bProfileChanged)
@@ -2368,10 +2396,18 @@ void Enviro::SetFenceOptions(const vtLinearParams &param, bool bProfileChanged)
 	if (!pTerr)
 		return;
 
-	vtStructureArray3d *structures = pTerr->GetStructureLayer();
-	for (uint i = 0; i < structures->size(); i++)
+	if (m_bActiveFence)
 	{
-		vtStructure *str = structures->at(i);
+		m_pCurFence->SetParams(param);
+		if (bProfileChanged)
+			m_pCurFence->ProfileChanged();
+		m_pCurFence->CreateNode(pTerr);	// re-create
+	}
+
+	vtStructureArray3d *structures = pTerr->GetStructureLayer();
+	for (unsigned int i = 0; i < structures->GetSize(); i++)
+	{
+		vtStructure *str = structures->GetAt(i);
 		if (!str->IsSelected() || str->GetType() != ST_LINEAR)
 			continue;
 		vtFence3d *pFence = structures->GetFence(i);
@@ -2384,150 +2420,30 @@ void Enviro::SetFenceOptions(const vtLinearParams &param, bool bProfileChanged)
 
 
 ////////////////////////////////////////////////////////////////
-// Buildings
+// Route
 
-void Enviro::FinishBuilding()
+void Enviro::start_new_route()
 {
-	vtTerrain *pTerr = GetCurrentTerrain();
-	vtStructureLayer *st_layer = pTerr->GetStructureLayer();
-	if (!st_layer)
-		return;
+	vtRoute *route = new vtRoute(GetCurrentTerrain());
+	GetCurrentTerrain()->AddRoute(route);
+	m_pCurRoute = route;
+}
 
-	if (m_bConstrainAngles)
+void Enviro::finish_route()
+{
+	m_bActiveRoute = false;
+}
+
+void Enviro::close_route()
+{
+	if (m_bActiveRoute && m_pCurRoute)
 	{
-		// We can't have all right angles and an odd number of points.
-		const int num = m_Elastic.NumPoints();
-		if (num & 1)
-			m_Elastic.RemovePoint(num-1);
-
-		// To ensure that we have right angles all around, act as if the user
-		//  clicked back on the original point
-		m_Elastic.AddPoint(m_Elastic.GetPolyline().GetAt(0), m_bConstrainAngles);
-		m_Elastic.RemovePoint(m_Elastic.NumPoints()-1);
+		GetCurrentTerrain()->SaveRoute();
 	}
-
-	// Must have at least 3 points.
-	if (m_Elastic.NumPoints() < 3)
-		return;
-
-	// Hide the temporary markers which showed the polyline
-	DLine2 line = m_Elastic.GetPolyline();
-	m_Elastic.Clear();
-
-	// Close and create new building in the current structure array
-	vtBuilding3d *pbuilding = (vtBuilding3d*) st_layer->AddNewBuilding();
-	st_layer->SetModified(true);
-
-	// Force footprint anticlockwise
-	PolyChecker PolyChecker;
-	if (PolyChecker.IsClockwisePolygon(line))
-		line.ReverseOrder();
-	pbuilding->SetFootprint(0, line);
-
-	// Describe the appearance of the new building
-	pbuilding->SetNumStories(2);
-	pbuilding->SetRoofType(ROOF_HIP);
-	pbuilding->SetColor(BLD_BASIC, RGBi(255,255,255));
-	pbuilding->SetColor(BLD_ROOF, RGBi(230,200,170));
-
-	// Construct it and add it to the terrain
-	pbuilding->CreateNode(pTerr);
-	pTerr->AddNodeToStructGrid(pbuilding->GetContainer());
-	RefreshLayerView();
+	m_bActiveRoute = false;
 }
 
-void Enviro::FlipBuildingFooprints()
-{
-	vtTerrain *pTerr = GetCurrentTerrain();
-	vtStructureLayer *structures = pTerr->GetStructureLayer();
-
-	vtStructure *str;
-	vtBuilding3d *bld;
-	for (uint i = 0; i < structures->size(); i++)
-	{
-		str = structures->at(i);
-		if (!str->IsSelected())
-			continue;
-
-		bld = structures->GetBuilding(i);
-		if (!bld)
-			continue;
-		bld->FlipFootprintDirection();
-		structures->ConstructStructure(structures->GetStructure3d(i));
-	}
-}
-
-void Enviro::SetBuildingEaves(float fLength)
-{
-	vtStructureLayer *structures = GetCurrentTerrain()->GetStructureLayer();
-
-	for (uint i = 0; i < structures->size(); i++)
-	{
-		if (structures->at(i)->IsSelected())
-		{
-			vtBuilding3d *bld = structures->GetBuilding(i);
-			if (bld)
-			{
-				bld->SetEaves(fLength);
-				structures->ConstructStructure(structures->GetStructure3d(i));
-			}
-		}
-	}
-}
-
-void Enviro::CopyBuildingStyle()
-{
-	const vtTerrain *pTerr = GetCurrentTerrain();
-	const vtStructureArray3d *sa = pTerr->GetStructureLayer();
-	const vtBuilding *bld = sa->GetFirstSelectedStructure()->GetBuilding();
-
-	// Make a copy of the building
-	m_BuildingStyle = *bld;
-}
-
-void Enviro::PasteBuildingStyle()
-{
-	vtStructureLayer *structures = GetCurrentTerrain()->GetStructureLayer();
-	for (uint i = 0; i < structures->size(); i++)
-	{
-		const vtStructure *str = structures->at(i);
-		if (str->IsSelected())
-		{
-			vtBuilding3d *bld = structures->GetBuilding(i);
-			if (bld)
-			{
-				bool do_height = false;
-				bld->CopyStyleFrom(&m_BuildingStyle, do_height);
-				structures->ConstructStructure(structures->GetStructure3d(i));
-			}
-		}
-	}
-}
-
-bool Enviro::HaveBuildingStyle()
-{
-	return (m_BuildingStyle.NumLevels() != 0);
-}
-
-
-////////////////////////////////////////////////////////////////
-// Utility Map (currently, power transmission lines)
-
-void Enviro::StartPowerline()
-{
-	VTLOG1("StartPowerline\n");
-	vtLine3d *line = GetCurrentTerrain()->NewLine();
-	m_pCurUtilLine = line;
-	m_bActiveUtilLine = true;
-}
-
-void Enviro::FinishPowerline()
-{
-	VTLOG1("FinishPowerline\n");
-	m_bActiveUtilLine = false;
-}
-
-void Enviro::SetPowerOptions(const vtString &sStructType)
+void Enviro::SetRouteOptions(const vtString &sStructType)
 {
 	m_sStructType = sStructType;
 }
@@ -2541,16 +2457,13 @@ void Enviro::SetPlantOptions(const PlantingOptions &opt)
 	m_PlantOpt = opt;
 	if (m_mode == MM_SELECT || m_mode == MM_SELECTMOVE)
 	{
-		vtVegLayer *vlay = GetCurrentTerrain()->GetVegLayer();
-		if (vlay)
+		vtPlantInstanceArray3d &pia = GetCurrentTerrain()->GetPlantInstances();
+		for (unsigned int i = 0; i < pia.GetNumEntities(); i++)
 		{
-			for (uint i = 0; i < vlay->NumEntities(); i++)
+			if (pia.IsSelected(i))
 			{
-				if (vlay->IsSelected(i))
-				{
-					vlay->SetPlant(i, opt.m_fHeight, opt.m_iSpecies);
-					vlay->CreatePlantNode(i);
-				}
+				pia.SetPlant(i, opt.m_fHeight, opt.m_iSpecies);
+				pia.CreatePlantNode(i);
 			}
 		}
 	}
@@ -2566,7 +2479,7 @@ void Enviro::SetVehicleOptions(const VehicleOptions &opt)
  */
 bool Enviro::PlantATree(const DPoint2 &epos)
 {
-	if (!m_pSpeciesList)
+	if (!m_pPlantList)
 		return false;
 
 	vtTerrain *pTerr = GetCurrentTerrain();
@@ -2574,43 +2487,39 @@ bool Enviro::PlantATree(const DPoint2 &epos)
 		return false;
 
 	// check distance from other plants
-	vtVegLayer *vlay = pTerr->GetVegLayer();
-	if (!vlay)
-		return false;
-
-	const int size = vlay->NumEntities();
+	vtPlantInstanceArray &pia = pTerr->GetPlantInstances();
+	int size = pia.GetNumEntities();
 	double len, closest = 1E8;
+	DPoint2 diff;
 
-	bool bValidLocation = true;
+	bool bPlant = true;
 	if (m_PlantOpt.m_fSpacing > 0.0f)
 	{
 		// Spacing is in meters, but the picking functions work in
 		//  Earth coordinates.  Try to convert it to earth horiz units.
 		DPoint2 eoffset;
-		const vtLocalConversion &conv = pTerr->GetLocalConversion();
-		conv.ConvertVectorToEarth(m_PlantOpt.m_fSpacing, 0, eoffset);
-		double mininum_spacing = eoffset.x;
+		g_Conv.ConvertVectorToEarth(m_PlantOpt.m_fSpacing, 0, eoffset);
+		double epsilon = eoffset.x;
 
 		for (int i = 0; i < size; i++)
 		{
-			len = (epos - vlay->GetPoint(i)).Length();
-			if (len < closest)
-				closest = len;
+			diff = epos - pia.GetPoint(i);
+			len = diff.Length();
+
+			if (len < closest) closest = len;
 		}
-		if (closest < mininum_spacing)
-			bValidLocation = false;
-		VTLOG(" closest plant %.2fm,%s planting..", closest, bValidLocation ? "" : " not");
+		if (closest < epsilon)
+			bPlant = false;
+		VTLOG(" closest plant %.2fm,%s planting..", closest, bPlant ? "" : " not");
 	}
-	if (!bValidLocation)
+	if (!bPlant)
 		return false;
 
 	float height = m_PlantOpt.m_fHeight;
-	const float variance = m_PlantOpt.m_iVariance / 100.0f;
+	float variance = m_PlantOpt.m_iVariance / 100.0f;
 	height *= (1.0f + random(variance*2) - variance);
-	if (!pTerr->AddPlant(vlay, epos, m_PlantOpt.m_iSpecies, height))
+	if (!pTerr->AddPlant(epos, m_PlantOpt.m_iSpecies, height))
 		return false;
-
-	vlay->SetModified();
 
 	// If there is a GUI, let it update to show one more plant
 	UpdateLayerView();
@@ -2620,34 +2529,37 @@ bool Enviro::PlantATree(const DPoint2 &epos)
 
 //// Instances
 
-void Enviro::CreateInstance()
+void Enviro::PlantInstance()
 {
+#if 0	// test code
+	#include "CreateWedge.cpp"
+	return;
+#endif
+
+	VTLOG("Plant Instance: ");
 	vtTagArray *tags = GetInstanceFromGUI();
 	if (!tags)
 		return;
-	CreateInstanceAt(DPoint2(m_EarthPos.x, m_EarthPos.y), tags);
-}
 
-// create a new Instance object
-void Enviro::CreateInstanceAt(const DPoint2 &pos, vtTagArray *tags)
-{
+	// create a new Instance object
 	vtTerrain *pTerr = GetCurrentTerrain();
-	vtStructureLayer *st_layer = pTerr->GetStructureLayer();
-	if (!st_layer)
+	vtStructureArray3d *structs = pTerr->GetStructureLayer();
+	if (!structs)
 		return;
-
-	vtStructInstance3d *inst = (vtStructInstance3d *) st_layer->AddNewInstance();
-
+	vtStructInstance3d *inst = (vtStructInstance3d *) structs->NewInstance();
 	inst->CopyTagsFrom(*tags);
-	inst->SetPoint(pos);
-	VTLOG("Create Instance at %.7g, %.7g: ", pos.x, pos.y);
+	inst->SetPoint(DPoint2(m_EarthPos.x, m_EarthPos.y));
+	VTLOG("  at %.7g, %.7g: ", m_EarthPos.x, m_EarthPos.y);
 
-	const int index = st_layer->size() - 1;
-	bool success = pTerr->CreateStructure(st_layer, index);
+	// Allow the rest of the framework to 'ornament' this instance by
+	//  extending it as desired.
+	ExtendStructure(inst);
+
+	int index = structs->Append(inst);
+	bool success = pTerr->CreateStructure(structs, index);
 	if (success)
 	{
 		VTLOG(" succeeded.\n");
-		st_layer->SetModified();
 		RefreshLayerView();
 	}
 	else
@@ -2656,58 +2568,58 @@ void Enviro::CreateInstanceAt(const DPoint2 &pos, vtTagArray *tags)
 		VTLOG(" failed.\n");
 		ShowMessage("Could not create instance.");
 		inst->Select(true);
-		st_layer->DeleteSelected();
+		structs->DeleteSelected();
 		return;
 	}
 }
 
-/**
- There are two message strings set by reference.
-
- The first string should contain the part of the message that will be
- translated (like "Cursor: ").
- 
- The second string can contain the part of the message that should not be
- translated (like "1152.5, 12351.4")
-
- The two strings will be concatenated later.
- */
-void Enviro::DescribeCoordinatesTerrain(vtString &str1, vtString &str2)
+void Enviro::DescribeCoordinatesTerrain(vtString &str)
 {
-	// Ground cursor
 	DPoint3 epos;
-	const bool bOn = m_pTerrainPicker->GetCurrentEarthPos(epos);
+	vtString str1;
+
+	str = "";
+
+#if 0
+	// give location of camera and cursor
+	str = "Camera: ";
+	// get camera pos
+	vtScene *scene = vtGetScene();
+	vtCamera *camera = scene->GetCamera();
+	FPoint3 campos = camera->GetTrans();
+
+	// Find corresponding earth coordinates
+	g_Conv.ConvertToEarth(campos, epos);
+
+	FormatCoordString(str1, epos, g_Conv.GetUnits());
+	str += str1;
+	str1.Format(" elev %.1f", epos.z);
+	str += str1;
+	str += ", ";
+#endif
+
+	// ground cursor
+	str += _("Cursor: ");
+	bool bOn = m_pTerrainPicker->GetCurrentEarthPos(epos);
 	if (bOn)
 	{
-		str1 = _("Cursor: ");
-		vtTerrain *pTerr = GetCurrentTerrain();
-		if (pTerr)
-		{
-			const vtLocalConversion &conv = pTerr->GetLocalConversion();
-			FormatCoordString(str2, epos, conv.GetUnits(), true);
-		}
-		else
-			str2 = "";
+		vtString str1;
+		FormatCoordString(str1, epos, g_Conv.GetUnits(), true);
+		str += str1;
 	}
 	else
-	{
-		str1 = _("Cursor: Not on ground");
-		str2 = "";
-	}
+		str += _("Not on ground");
 }
 
 void Enviro::DescribeCLOD(vtString &str)
 {
 	str = "";
 
-	if (m_state != AS_Terrain)
-		return;
-	const vtTerrain *t = GetCurrentTerrain();
-	if (!t)
-		return;
-	const vtDynTerrainGeom *dtg = t->GetDynTerrain();
-	if (!dtg)
-		return;
+	if (m_state != AS_Terrain) return;
+	vtTerrain *t = GetCurrentTerrain();
+	if (!t) return;
+	vtDynTerrainGeom *dtg = t->GetDynTerrain();
+	if (!dtg) return;
 
 	// McNally and Roettger CLOD algos use a triangle/vertex count target.
 	//  The older implementations use a floating point factor relating to
@@ -2717,43 +2629,36 @@ void Enviro::DescribeCLOD(vtString &str)
 	if (method == LM_MCNALLY || method == LM_ROETTGER)
 	{
 		str.Format("CLOD: target %d, drawn %d ", dtg->GetPolygonTarget(),
-			dtg->NumDrawnTriangles());
+			dtg->GetNumDrawnTriangles());
 	}
 }
 
-/**
- \param which 0 for the "fps" field,
-			  1 for the "cursor" field (location of the cursor),
-			  2 for the "cursor val" (value under the cursor).
- \param str1 The first part of the string (translated).
- \param str2 The seconds part of the string (untranslated).
- */
-void Enviro::GetStatusString(int which, vtString &str1, vtString &str2)
+vtString Enviro::GetStatusString(int which)
 {
 	vtScene *scene = vtGetScene();
 
 	vtString str;
 	if (which == 0)
 	{
-		str1 = _("fps");
-
 		// Fps: get framerate
-		const float fps = scene->GetFrameRate();
+		float fps = scene->GetFrameRate();
 
 		// only show 3 significant digits
 		if (fps < 10)
-			str2.Format(" %1.2f", fps);
+			str.Format("fps %1.2f", fps);
 		else if (fps < 80)
-			str2.Format(" %2.1f", fps);
+			str.Format("fps %2.1f", fps);
 		else
-			str2.Format(" %3.0f", fps);
+			str.Format("fps %3.0f", fps);
+
+		return str;
 	}
 	if (which == 1)
 	{
 		if (m_state == AS_Orbit)
-			DescribeCoordinatesEarth(str1, str2);
+			DescribeCoordinatesEarth(str);
 		else if (m_state == AS_Terrain)
-			DescribeCoordinatesTerrain(str1, str2);
+			DescribeCoordinatesTerrain(str);
 	}
 	if (which == 2)
 	{
@@ -2764,14 +2669,11 @@ void Enviro::GetStatusString(int which, vtString &str1, vtString &str2)
 			m_pGlobePicker->GetCurrentEarthPos(epos);
 			vtTerrain *pTerr = FindTerrainOnEarth(DPoint2(epos.x, epos.y));
 			if (pTerr)
-			{
-				str1 = "";
-				str2 = pTerr->GetName();	// Don't try to translate the name.
-			}
+				str = pTerr->GetName();
 		}
 		else if (m_state == AS_Terrain)
 		{
-			const bool bOn = m_pTerrainPicker->GetCurrentEarthPos(epos);
+			bool bOn = m_pTerrainPicker->GetCurrentEarthPos(epos);
 			if (bOn)
 			{
 				float exag;
@@ -2782,44 +2684,16 @@ void Enviro::GetStatusString(int which, vtString &str1, vtString &str2)
 					exag = GetCurrentTerrain()->GetVerticalExag();
 				}
 				epos.z /= exag;
-				str1 = _("Elev: ");				// Part to translate
-				str2.Format("%.1f", epos.z);	// Part to not translate
+				str = _("Elev: ");
+				vtString str2;
+				str2.Format("%.1f", epos.z);
+				str += str2;
 			}
 			else
-			{
-				str1 = _("Not on ground");
-				str2 = "";
-			}
+				str += _("Not on ground");
 		}
 	}
-}
-
-void Enviro::ActivateAStructureLayer()
-{
-	vtTerrain *terr = GetCurrentTerrain();
-	if (!terr)
-		return;
-
-	vtLayer *active = terr->GetActiveLayer();
-	terr->SetActiveLayer(terr->GetOrCreateLayerOfType(LT_STRUCTURE));
-
-	// If it changed, refresh
-	if (terr->GetActiveLayer() != active)
-		RefreshLayerView();
-}
-
-void Enviro::ActivateAVegetationLayer()
-{
-	vtTerrain *terr = GetCurrentTerrain();
-	if (!terr)
-		return;
-
-	vtLayer *active = terr->GetActiveLayer();
-	terr->SetActiveLayer(terr->GetOrCreateLayerOfType(LT_VEG));
-
-	// If it changed, refresh
-	if (terr->GetActiveLayer() != active)
-		RefreshLayerView();
+	return str;
 }
 
 // Handle the map overview option
@@ -2843,7 +2717,7 @@ void Enviro::CreateMapOverview()
 	// setup the mapoverview engine
 	if (!m_pMapOverview)
 	{
-		m_pMapOverview = new MapOverviewEngine(GetCurrentTerrain());
+		m_pMapOverview = new MapOverviewEngine;
 		m_pMapOverview->setName("Map overview engine");
 		vtGetScene()->AddEngine(m_pMapOverview);
 	}
@@ -2890,11 +2764,11 @@ bool Enviro::GetShowCompass()
 
 void Enviro::UpdateCompass()
 {
-	const vtCamera *cam = vtGetScene()->GetCamera();
+	vtCamera *cam = vtGetScene()->GetCamera();
 	if (!cam)
 		return;
-	const FPoint3 dir = cam->GetDirection();
-	const float theta = atan2(dir.z, dir.x) + PID2f;
+	FPoint3 dir = cam->GetDirection();
+	float theta = atan2(dir.z, dir.x) + PID2f;
 	if (m_pCompassSizer)
 	{
 		m_pCompassSizer->SetRotation(theta);
@@ -2903,119 +2777,10 @@ void Enviro::UpdateCompass()
 	}
 }
 
-void Enviro::SetHUDMessageText(const char *message)
-{
-	// The HUD always has a place to put status messages to the user.
-	if (!m_pHUDMessage && m_pArial)
-	{
-		vtGeode *geode = new vtGeode;
-		geode->setName("Message");
-		m_pHUD->GetContainer()->addChild(geode);
-		m_pHUDMessage = new vtTextMesh(m_pArial, 18);
-		m_pHUDMessage->SetPosition(FPoint3(3,3,0));
-		geode->AddTextMesh(m_pHUDMessage, 0);
-	}
-	if (m_pHUDMessage)
-		m_pHUDMessage->SetText(message);
-}
-
-void Enviro::ShowVerticalLine(bool bShow)
-{
-	if (bShow)
-		MakeVerticalLine();
-	m_bShowVerticalLine = bShow;
-}
-
-bool Enviro::GetShowVerticalLine()
-{
-	return m_bShowVerticalLine;
-}
-
-void Enviro::MakeVerticalLine()
-{
-	// Share materials with the Arc
-	SetupArcMaterials();
-
-	// create geometry container, if needed
-	if (!m_pVertLine)
-	{
-		m_pVertLine = new vtGeode;
-		if (m_state == AS_Terrain)
-			GetCurrentTerrain()->GetTopGroup()->addChild(m_pVertLine);
-		m_pVertLine->SetMaterials(m_pArcMats);
-	}
-}
-
-void Enviro::UpdateVerticalLine()
-{
-	MakeVerticalLine();
-	m_pVertLine->RemoveAllMeshes();
-
-	vtTerrain *pTerr = GetCurrentTerrain();
-	LayerSet &layers = pTerr->GetLayers();
-
-	FPoint3 world_pos;
-	if (!m_pTerrainPicker->GetCurrentPoint(world_pos))
-		return;
-
-	std::vector<float> samples;
-	std::vector<FPoint3> normals;
-	float fMin = world_pos.y, fMax = world_pos.y;
-	for (uint i = 0; i < layers.size(); i++)
-	{
-		if (layers[i]->GetType() == LT_ELEVATION)
-		{
-			vtElevLayer *pEL = dynamic_cast<vtElevLayer *>(layers[i].get());
-
-			float fAlt;
-			FPoint3 normal;
-			if (pEL->GetTin()->FindAltitudeAtPoint(world_pos, fAlt, true, 0, &normal))
-			{
-				samples.push_back(fAlt);
-				normals.push_back(normal);
-				if (fAlt < fMin) fMin = fAlt;
-				if (fAlt > fMax) fMax = fAlt;
-			}
-		}
-	}
-
-	// One yellow bar going through all the points.
-	vtMesh *mesh = new vtMesh(osg::PrimitiveSet::LINES, 0, 2);
-	mesh->AddLine(FPoint3(world_pos.x, fMin, world_pos.z),
-				  FPoint3(world_pos.x, fMax, world_pos.z));
-	m_pVertLine->AddMesh(mesh, 0);	// yellow
-	mesh->SetLineWidth(2);
-
-	// A red cross at the surface of each elevation layer.
-	mesh = new vtMesh(osg::PrimitiveSet::LINES, 0, samples.size() * 4);
-	m_pVertLine->AddMesh(mesh, 1);	// red
-	mesh->SetLineWidth(3);
-
-	// Make them large enough to see at distance
-	const float distance = (m_pNormalCamera->GetTrans() - world_pos).Length();
-	float length = sqrt(distance);
-	if (length < 3) length = 3.0f;
-
-	for (uint j = 0; j < samples.size(); j++)
-	{
-		const FPoint3 &normal = normals[j];
-		const FPoint3 right(1, 0, 0);
-		FPoint3 v1 = normal.Cross(right);
-		v1.Normalize();
-		FPoint3 v2 = normal.Cross(v1);
-
-		const FPoint3 p(world_pos.x, samples[j], world_pos.z);
-		v1 *= length;
-		v2 *= length;
-		mesh->AddLine(p - v1, p + v1);
-		mesh->AddLine(p - v2, p + v2);
-	}
-}
-
 void Enviro::CreateElevationLegend()
 {
 	// Must have a color-mapped texture on the terrain to show a legend
-	ColorMap *cmap = GetCurrentTerrain()->GetTextureColorMap();
+	ColorMap *cmap = GetCurrentTerrain()->GetTextureColors();
 	if (!cmap)
 		return;
 
@@ -3033,8 +2798,9 @@ void Enviro::CreateElevationLegend()
 	const int cbar_left = in_base.x + (in_size.x * 6 / 10);
 	const int cbar_right = in_base.x + in_size.x;
 
-	const int white = m_pHUDMaterials->AddRGBMaterial(RGBf(1, 1, 1), false, false); // white
-	const int grey = m_pHUDMaterials->AddRGBMaterial(RGBf(.2, .2, .2), false, false); // dark grey
+	int i, idx;
+	int white = m_pHUDMaterials->AddRGBMaterial1(RGBf(1, 1, 1), false, false); // white
+	int grey = m_pHUDMaterials->AddRGBMaterial1(RGBf(.2, .2, .2), false, false); // dark grey
 
 	m_pLegendGeom = new vtGeode;
 	m_pLegendGeom->setName("Legend");
@@ -3049,37 +2815,38 @@ void Enviro::CreateElevationLegend()
 	GetCurrentTerrain()->GetHeightField()->GetHeightExtents(fMin, fMax);
 
 	// Big band of color
-	cmap->GenerateColorTable(in_size.y, fMin, fMax);
+	std::vector<RGBi> table;
+	cmap->GenerateColors(table, in_size.y, fMin, fMax);
 	vtMesh *mesh1 = new vtMesh(osg::PrimitiveSet::TRIANGLE_STRIP, VT_Colors, (in_size.y + 1)*2);
-	for (int i = 0; i < in_size.y + 1; i++)
+	for (i = 0; i < in_size.y + 1; i++)
 	{
-		const FPoint3 p1((float) cbar_left,  (float) in_base.y + i, 0.0f);
-		const FPoint3 p2((float) cbar_right, (float) in_base.y + i, 0.0f);
-		const int idx = mesh1->AddLine(p1, p2);
-		mesh1->SetVtxColor(idx, (RGBf) cmap->m_table[i]);
-		mesh1->SetVtxColor(idx+1, (RGBf) cmap->m_table[i]);
+		FPoint3 p1((float) cbar_left,  (float) in_base.y + i, 0.0f);
+		FPoint3 p2((float) cbar_right, (float) in_base.y + i, 0.0f);
+		idx = mesh1->AddLine(p1, p2);
+		mesh1->SetVtxColor(idx, (RGBf) table[i]);
+		mesh1->SetVtxColor(idx+1, (RGBf) table[i]);
 	}
 	mesh1->AddStrip2((in_size.y + 1)*2, 0);
 	m_pLegendGeom->AddMesh(mesh1, white);
 
 	// Small white tick marks
 	vtMesh *mesh2 = new vtMesh(osg::PrimitiveSet::LINES, 0, ticks*2);
-	for (int i = 0; i < ticks; i++)
+	for (i = 0; i < ticks; i++)
 	{
-		const FPoint3 p1((float) cbar_left-border.x*2, (float) in_base.y + i*vert_space, 0.0f);
-		const FPoint3 p2((float) cbar_left,			   (float) in_base.y + i*vert_space, 0.0f);
+		FPoint3 p1((float) cbar_left-border.x*2, (float) in_base.y + i*vert_space, 0.0f);
+		FPoint3 p2((float) cbar_left,			 (float) in_base.y + i*vert_space, 0.0f);
 		mesh2->AddLine(p1, p2);
 	}
 	m_pLegendGeom->AddMesh(mesh2, white);
 
 	// Text labels
-	for (int i = 0; i < ticks; i++)
+	for (i = 0; i < ticks; i++)
 	{
 		vtTextMesh *mesh3 = new vtTextMesh(m_pArial, (float) fontsize, false);
 		vtString str;
 		str.Format("%4.1f", fMin + (fMax - fMin) / (ticks-1) * i);
 		mesh3->SetText(str);
-		const FPoint3 p1((float) in_base.x, (float) in_base.y + i*vert_space - (fontsize*1/3), 0.0f);
+		FPoint3 p1((float) in_base.x, (float) in_base.y + i*vert_space - (fontsize*1/3), 0.0f);
 		mesh3->SetPosition(p1);
 
 		m_pLegendGeom->AddTextMesh(mesh3, white);
@@ -3123,7 +2890,7 @@ void Enviro::SetWindowBox(const IPoint2 &p1, const IPoint2 &p2)
 	if (!m_pWindowBoxMesh)
 	{
 		// create a yellow wireframe polygon we can stretch later
-		const int yellow = m_pHUDMaterials->AddRGBMaterial(RGBf(1,1,0), false, false, true);
+		int yellow = m_pHUDMaterials->AddRGBMaterial1(RGBf(1,1,0), false, false, true);
 		vtGeode *geode = new vtGeode;
 		geode->setName("Selection Box");
 		geode->SetMaterials(m_pHUDMaterials);
@@ -3138,7 +2905,7 @@ void Enviro::SetWindowBox(const IPoint2 &p1, const IPoint2 &p2)
 	}
 	// Invert the coordinates Y, because mouse origin is upper left, and
 	//  HUD origin is lower left
-	const IPoint2 winsize = vtGetScene()->GetWindowSize();
+	IPoint2 winsize = vtGetScene()->GetWindowSize();
 
 	m_pWindowBoxMesh->SetVtxPos(0, FPoint3((float) p1.x, (float) winsize.y-1-p1.y, 0.0f));
 	m_pWindowBoxMesh->SetVtxPos(1, FPoint3((float) p2.x, (float) winsize.y-1-p1.y, 0.0f));
@@ -3194,7 +2961,7 @@ void Enviro::CreateSomeTestVehicles(vtTerrain *pTerrain)
 	// How many four-wheel land vehicles are there in the content catalog?
 	vtStringArray vnames;
 	vtContentManager3d &con = vtGetContent();
-	for (uint i = 0; i < con.NumItems(); i++)
+	for (unsigned int i = 0; i < con.NumItems(); i++)
 	{
 		vtItem *item = con.GetItem(i);
 		const char *type = item->GetValueString("type");
@@ -3204,15 +2971,15 @@ void Enviro::CreateSomeTestVehicles(vtTerrain *pTerrain)
 			vnames.push_back(item->m_name);
 		}
 	}
-	const uint numv = vnames.size();
+	unsigned int numv = vnames.size();
 
 	// put one of each at the center of the terrain
-	const DPoint2 center = pTerrain->GetHeightField()->GetEarthExtents().GetCenter();
+	DPoint2 center = pTerrain->GetHeightField()->GetEarthExtents().GetCenter();
 
 	// add some test vehicles
-	for (uint i = 0; i < numv; i++)
+	for (unsigned int i = 0; i < numv; i++)
 	{
-		const RGBf color(1.0f, 1.0f, 1.0f);	// white
+		RGBf color(1.0f, 1.0f, 1.0f);	// white
 
 		// Create some of each land vehicle type
 		Vehicle *car = m_VehicleManager.CreateVehicle(vnames[i], color);
@@ -3241,137 +3008,16 @@ void Enviro::CreateSomeTestVehicles(vtTerrain *pTerrain)
 
 
 ////////////////////////////////////////////////////////////////////////
-// Import
-
-class KMLVisitor : public XMLVisitor
-{
-public:
-	KMLVisitor()
-	{
-		bInPlacemark = false;
-	}
-	void startElement(const char *name, const XMLAttributes &atts)
-	{
-		m_data = "";
-		if (strcmp(name, "Placemark") == 0)
-			bInPlacemark = true;
-	}
-	void endElement (const char *name)
-	{
-		if (strcmp(name, "Placemark") == 0)
-			bInPlacemark = false;
-
-		if (bInPlacemark)
-		{
-			const char *str = m_data.c_str();
-			if (strcmp(name, "longitude") == 0)
-				m_pos.x = atof(str);
-			if (strcmp(name, "latitude") == 0)
-				m_pos.y = atof(str);
-			if (strcmp(name, "href") == 0)
-				m_href = str;
-		}
-	}
-	void data(const char *s, int length) { m_data.append(string(s, length)); }
-
-	DPoint2 m_pos;
-	bool bInPlacemark;
-	vtString m_href;
-protected:
-	std::string m_data;
-};
-
-bool Enviro::ImportModelFromKML(const char *kmlfile)
-{
-	LocaleWrap normal_numbers(LC_NUMERIC, "C");
-
-	VTLOG("Trying to import a model from KML file '%s'\n", kmlfile);
-
-	KMLVisitor visitor;
-	try
-	{
-		readXML(std::string(kmlfile), visitor);
-	}
-	catch (xh_io_exception &ex)
-	{
-		const string msg = ex.getFormattedMessage();
-		VTLOG(" XML problem: %s\n", msg.c_str());
-		return false;
-	}
-
-	// create a new Instance object
-	vtTerrain *pTerr = GetCurrentTerrain();
-	if (!pTerr)
-		return false;
-
-	// Ensure there is at least one structure layer, then use it
-	pTerr->GetOrCreateLayerOfType(LT_STRUCTURE);
-	vtStructureLayer *st_layer = pTerr->GetStructureLayer();
-	vtStructInstance3d *inst = (vtStructInstance3d *) st_layer->AddNewInstance();
-
-	const vtProjection &tproj = pTerr->GetProjection();
-	DPoint2 p = visitor.m_pos;
-	if (tproj.IsGeographic() == false)
-	{
-		// Must transform from KML's CRS (WGS84 geo) to the terrain's CRS
-		vtProjection wgs84_geo;
-		wgs84_geo.SetGeogCSFromDatum(EPSG_DATUM_WGS84);
-		OCT *trans = CreateCoordTransform(&wgs84_geo, &tproj);
-		if (!trans)
-		{
-			VTLOG1(" Couldn't transform coordinates\n");
-			return false;
-		}
-		trans->Transform(1, &p.x, &p.y);
-		delete trans;
-	}
-	inst->SetPoint(p);
-
-	// Beware the (common) case of a relative path, which will be relative
-	//  to where the kml file was
-	vtString pa = visitor.m_href;
-	if (!PathIsAbsolute(pa))
-	{
-		vtString local = PathLevelUp(kmlfile);
-		pa = local + "/" + pa;
-	}
-
-	inst->SetValueString("filename", pa, true);
-	VTLOG("  Filename: '%s'\n", (const char *)pa);
-	VTLOG("  at %.7g, %.7g: ", p.x, p.y);
-
-	const int index = st_layer->size() - 1;
-	bool success = pTerr->CreateStructure(st_layer, index);
-	if (success)
-	{
-		VTLOG1(" succeeded.\n");
-		st_layer->SetModified();
-		RefreshLayerView();
-	}
-	else
-	{
-		// creation failed
-		VTLOG1(" failed.\n");
-		ShowMessage("Could not create instance.");
-		inst->Select(true);
-		st_layer->DeleteSelected();
-		return false;
-	}
-	return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////
 // Abstract Layers
 
 // Find an appropriate point layer for labels.
-vtAbstractLayer *Enviro::GetLabelLayer() const
+vtAbstractLayer *Enviro::GetLabelLayer()
 {
-	const vtTerrain *pTerr = GetCurrentTerrain();
+	vtTerrain *pTerr = GetCurrentTerrain();
 	if (!pTerr)
-		return NULL;
-	const LayerSet &layers = pTerr->GetLayers();
-	for (uint i = 0; i < layers.size(); i++)
+		return false;
+	LayerSet &layers = pTerr->GetLayers();
+	for (unsigned int i = 0; i < layers.size(); i++)
 	{
 		vtAbstractLayer *alay = dynamic_cast<vtAbstractLayer*>(layers[i].get());
 		if (!alay)
@@ -3383,14 +3029,14 @@ vtAbstractLayer *Enviro::GetLabelLayer() const
 	return NULL;
 }
 
-int Enviro::NumSelectedAbstractFeatures() const
+int Enviro::NumSelectedAbstractFeatures()
 {
-	const vtTerrain *pTerr = GetCurrentTerrain();
+	vtTerrain *pTerr = GetCurrentTerrain();
 	if (!pTerr)
 		return 0;
-	const LayerSet &layers = pTerr->GetLayers();
+	LayerSet &layers = pTerr->GetLayers();
 	int count = 0;
-	for (uint i = 0; i < layers.size(); i++)
+	for (unsigned int i = 0; i < layers.size(); i++)
 	{
 		vtAbstractLayer *alay = dynamic_cast<vtAbstractLayer*>(layers[i].get());
 		if (alay)
@@ -3404,7 +3050,13 @@ int Enviro::NumSelectedAbstractFeatures() const
 
 void ControlEngine::Eval()
 {
-	if (m_pEnvironment)
-		m_pEnvironment->DoControl();
+	Enviro::s_pEnviro->DoControl();
+}
+
+////////////////////////////////////////////////////////////////////////
+
+vtTerrain *GetCurrentTerrain()
+{
+	return Enviro::s_pEnviro->GetCurrentTerrain();
 }
 

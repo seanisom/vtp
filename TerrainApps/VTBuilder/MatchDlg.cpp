@@ -92,11 +92,11 @@ void MatchDlg::UpdateLayers()
 {
 	// (Re-)fill the 'Layers' control with all available layers
 	GetMatchLayer()->Clear();
-	for (uint i = 0; i < g_bld->NumLayers(); i++)
+	for (int i = 0; i < g_bld->NumLayers(); i++)
 	{
 		vtLayer *lay = g_bld->GetLayer(i);
 
-		wxString name = StartOfFilenameWX(lay->GetLayerFilename());
+		wxString name = StartOfFilename(lay->GetLayerFilename());
 		GetMatchLayer()->Append(name);
 	}
 	GetMatchLayer()->SetSelection(0);
@@ -176,8 +176,8 @@ void MatchDlg::OnMatchLayer( wxCommandEvent &event )
 void MatchDlg::OnSpinUp( wxSpinEvent &event )
 {
 	m_iTileSize <<= 1;
-	if (m_iTileSize > 4096)
-		m_iTileSize = 4096;
+	if (m_iTileSize > 2048)
+		m_iTileSize = 2048;
 	UpdateGuess();
 	UpdateValues();
 	TransferDataToWindow();

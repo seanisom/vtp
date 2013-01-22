@@ -116,8 +116,8 @@ class TagDlgBase : public wxDialog
 		wxChoice* m_tagname;
 		wxStaticText* m_text11;
 		wxTextCtrl* m_tagtext;
-		wxButton* m_ok;
-		wxButton* m_cancel;
+		wxButton* wxID_OK;
+		wxButton* wxID_CANCEL;
 	
 	public:
 		

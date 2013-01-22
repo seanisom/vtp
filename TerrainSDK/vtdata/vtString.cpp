@@ -25,7 +25,7 @@ static char vtChNil = '\0';
 // empty string data (and locked)
 static int _vtInitData[] = { -1, 0, 0, 0 };
 static vtStringData* _vtDataNil = (vtStringData*)&_vtInitData;
-pcchar _vtPchNil = (pcchar)(((uchar*)&_vtInitData)+sizeof(vtStringData));
+pcchar _vtPchNil = (pcchar)(((unsigned char*)&_vtInitData)+sizeof(vtStringData));
 
 
 //////////////////////////////////////////////////////////////////////////////
@@ -66,7 +66,7 @@ void vtString::AllocBuffer(int nLen)
 	{
 		vtStringData* pData;
 		pData = (vtStringData*)
-			new uchar[sizeof(vtStringData) + (nLen+1)*sizeof(char)];
+			new unsigned char[sizeof(vtStringData) + (nLen+1)*sizeof(char)];
 		pData->nAllocLength = nLen;
 		pData->nRefs = 1;
 		pData->data()[nLen] = '\0';
@@ -77,7 +77,7 @@ void vtString::AllocBuffer(int nLen)
 
 void vtString::FreeData(vtStringData* pData)
 {
-	delete[] (uchar*)pData;
+	delete[] (unsigned char*)pData;
 }
 
 void vtString::Release()
@@ -99,7 +99,7 @@ void vtString::Release(vtStringData* pData)
 	}
 }
 
-void vtString::Clear()
+void vtString::Empty()
 {
 	if (GetData()->nDataLength == 0)
 		return;
@@ -353,7 +353,7 @@ bool vtString::IsNumber() const
 		s++;
 	while (*s)
 	{
-		if (!isdigit((uchar) (*s))) return false;
+		if (!isdigit((unsigned char) (*s))) return false;
 			s++;
 	}
 	return true;
@@ -481,7 +481,7 @@ int vtString::Find(char ch, int nStart) const
 		return -1;
 
 	// find first single character
-	pchar lpsz = strchr(m_pchData + nStart, (uchar)ch);
+	pchar lpsz = strchr(m_pchData + nStart, (unsigned char)ch);
 
 	// return -1 if not found and index otherwise
 	return (lpsz == NULL) ? -1 : (int)(lpsz - m_pchData);
@@ -745,8 +745,8 @@ void vtString::TrimRight()
 	CopyBeforeWrite();
 
 	// beware trouble with signed characters being cast to negative ints
-	uchar *lpsz = (uchar *) m_pchData;
-	uchar *lpszLast = NULL;
+	unsigned char *lpsz = (unsigned char *) m_pchData;
+	unsigned char *lpszLast = NULL;
 
 	while (*lpsz != '\0')
 	{
@@ -764,7 +764,7 @@ void vtString::TrimRight()
 	{
 		// truncate at trailing space start
 		*lpszLast = '\0';
-		GetData()->nDataLength = lpszLast - (uchar *) m_pchData;
+		GetData()->nDataLength = lpszLast - (unsigned char *) m_pchData;
 	}
 }
 
@@ -1016,7 +1016,7 @@ int vtString::Delete(int iIndex, int nCount)
 		int nCharsToCopy = nLength-(iIndex+nCount)+1;
 		memmove( m_pchData+iIndex, m_pchData+iIndex+nCount, nCharsToCopy );
 
-		// BD added to fix a bug where the end of string is moved in, but vtString
+		// BD added to fix a bug where the end of string is moved in, but vtString 
 		//  still thinks the string is full length.
 		GetData()->nDataLength -= nCount;
 	}
@@ -1113,7 +1113,7 @@ vtString UTF8ToLocal(const char *string_utf8)
 	vtString str = ws.mb_str();
 
 #if 0
-	// In theory, this code should be better, because it does not rely on
+	// In theory, this code should be better, because it does not rely on 
 	//  the fixed-size static buffer in wstring2::mb_str(), but wcsrtombs
 	//  does not behave well.
 	int len = ws.length();
@@ -1129,16 +1129,6 @@ vtString UTF8ToLocal(const char *string_utf8)
 	return str;
 }
 
-#else
-// Fallback for non-WSTRING case: we just hope our string is UTF8 compatible!
-vtString vtString::UTF8ToLocal()
-{
-	return *this;
-}
-vtString UTF8ToLocal(const char *string_utf8)
-{
-	return vtString(string_utf8);
-}
 #endif	// SUPPORT_WSTRING
 
 
@@ -1305,7 +1295,7 @@ const char *wstring2::mb_str() const
 
 #define WC_UTF16
 
-static size_t encode_utf16(uint input, wchar_t *output)
+static size_t encode_utf16(unsigned int input, wchar_t *output)
 {
 	if (input<=0xffff)
 	{
@@ -1327,7 +1317,7 @@ static size_t encode_utf16(uint input, wchar_t *output)
 	}
 }
 
-static size_t decode_utf16(const wchar_t *input, uint &output)
+static size_t decode_utf16(const wchar_t *input, unsigned int &output)
 {
 	if ((*input<0xd800) || (*input>0xdfff))
 	{
@@ -1346,7 +1336,7 @@ static size_t decode_utf16(const wchar_t *input, uint &output)
 	}
 }
 
-static uint utf8_max[]=
+static unsigned int utf8_max[]=
 	{ 0x7f, 0x7ff, 0xffff, 0x1fffff, 0x3ffffff, 0x7fffffff, 0xffffffff };
 
 size_t wstring2::from_utf8(const char *psz)
@@ -1360,7 +1350,7 @@ size_t wstring2::from_utf8(const char *psz)
 
 	while (*psz && ((!buf) || (len < n)))
 	{
-		uchar cc = *psz++, fc = cc;
+		unsigned char cc = *psz++, fc = cc;
 		unsigned cnt;
 		for (cnt = 0; fc & 0x80; cnt++)
 			fc <<= 1;
@@ -1382,7 +1372,7 @@ size_t wstring2::from_utf8(const char *psz)
 			else
 			{
 				unsigned ocnt = cnt - 1;
-				uint res = cc & (0x3f >> cnt);
+				unsigned int res = cc & (0x3f >> cnt);
 				while (cnt--)
 				{
 					cc = *psz++;
@@ -1427,7 +1417,7 @@ const char *wstring2::to_utf8() const
 
 	while (*psz && ((!buf) || (len < n)))
 	{
-		uint cc;
+		unsigned int cc;
 #ifdef WC_UTF16
 		size_t pa = decode_utf16(psz, cc);
 		psz += (pa == (size_t)-1) ? 1 : pa;

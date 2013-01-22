@@ -46,7 +46,7 @@ bool DxfParser::RetrieveEntities(bool progress_callback(int))
 			return false;
 
 		m_iLine = 0;
-		m_pFile = vtFileOpen(m_sFileName, "rb");
+		m_pFile = vtFileOpen(m_sFileName, "r");
 		if (m_pFile == NULL)
 		{
 			return false;
@@ -133,8 +133,6 @@ inline bool DxfParser::ReadCodeValue(DxfCodeValue & pair)
 	sVal.TrimRight();
 	sVal.TrimLeft();
 	pair.m_sValue = sVal;
-
-	m_iLine += 2;
 
 	return true;
 }
@@ -561,8 +559,8 @@ void DxfParser::ReadVertex(std::vector<DPoint3> & points)
 
 int DxfParser::GetLayerIndex(const vtString &sLayer)
 {
-	uint iLayers = m_layers.size();
-	for (uint i = 0; i < iLayers; ++i)
+	unsigned int iLayers = m_layers.size();
+	for (unsigned int i = 0; i < iLayers; ++i)
 	{
 		if (sLayer == m_layers[i].m_name)
 			return i;

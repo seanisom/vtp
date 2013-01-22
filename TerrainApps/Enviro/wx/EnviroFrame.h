@@ -1,7 +1,7 @@
 //
 // Name: EnviroFrame.h
 //
-// Copyright (c) 2001-2011 Virtual Terrain Project
+// Copyright (c) 2001-2008 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -9,12 +9,11 @@
 #define FRAMEH
 
 #include "wx/aui/aui.h"
-#include "wx/dnd.h"
 
 #include "../EnviroEnum.h"
 #include "vtlib/core/Event.h"
 
-// Forward declare the dialogs
+// forward declare dialogs
 class BuildingDlg3d;
 class CameraDlg;
 class DistanceDlg3d;
@@ -36,22 +35,16 @@ class ProfileDlg;
 class VehicleDlg;
 class vtAbstractLayer;
 class vtFeatureSet;
-class vtStructInstance;
 class vtTerrain;
 class vtTimeEngine;
 #ifdef NVIDIA_PERFORMANCE_MONITORING
 class CPerformanceMonitorDialog;
 #endif
-class VIADlg;
 
 // some shortcuts
 #define ADD_TOOL2(bar, id, bmp, label, type) \
 	bar->AddTool(id, label, bmp, wxNullBitmap, type, label, label)
 
-/**
- The main wxWidgets window for the application, subclass of wxFrame.
- Handles all the menu items and toolbars, creates and manages all the dialog.
- */
 class EnviroFrame: public wxFrame
 {
 public:
@@ -70,14 +63,12 @@ public:
 	int GetTerrainDetail();
 	void ChangePagingRange(float prange);
 	void SetFullScreen(bool bFull);
-	void CreateInstance(const DPoint2 &pos, vtTagArray *tags);
 	ProfileDlg *ShowProfileDlg();
 	void OpenFenceDialog();
 	void ShowPopupMenu(const IPoint2 &pos);
 	void SetTimeEngine(vtTimeEngine *pEngine);
 	void Snapshot(bool bNumbered);
 	void CameraChanged();
-	void OnDrop(const wxString &str);
 
 	virtual void SetTerrainToGUI(vtTerrain *pTerrain);
 	virtual void EarthPosUpdated(const DPoint3 &pos);
@@ -89,6 +80,7 @@ public:
 	virtual void FrameArgument(int i, const char *str) { }
 	virtual void PostConstruction() { }
 	virtual void AddTool(int id, const wxBitmap &bmp, const wxString &tooltip, bool tog);
+	virtual void ExtendStructure(vtStructInstance *si) {}
 	virtual void SetScenario(int num) {}
 
 	void UpdateLODInfo();
@@ -110,8 +102,6 @@ public:
 #endif
 
 protected:
-	void DeleteCanvas();
-
 	void OnFileLayers(wxCommandEvent& event);
 
 	void OnLayerCreate(wxCommandEvent& event);
@@ -131,7 +121,6 @@ protected:
 	void OnViewElevLegend(wxCommandEvent& event);
 	void OnViewCompass(wxCommandEvent& event);
 	void OnViewMapOverView(wxCommandEvent& event);
-	void OnViewVertLine(wxCommandEvent& event);
 	void OnViewDrive(wxCommandEvent& event);
 	void OnViewSettings(wxCommandEvent& event);
 	void OnViewLocations(wxCommandEvent& event);
@@ -154,7 +143,6 @@ protected:
 	void OnUpdateViewElevLegend(wxUpdateUIEvent& event);
 	void OnUpdateViewCompass(wxUpdateUIEvent& event);
 	void OnUpdateViewMapOverView(wxUpdateUIEvent& event);
-	void OnUpdateViewVertLine(wxUpdateUIEvent& event);
 	void OnUpdateViewDrive(wxUpdateUIEvent& event);
 	void OnUpdateViewLocations(wxUpdateUIEvent& event);
 	void OnUpdateViewStatusBar(wxUpdateUIEvent& event);
@@ -187,8 +175,8 @@ protected:
 	void OnUpdateToolsFences(wxUpdateUIEvent& event);
 	void OnToolsBuildings(wxCommandEvent& event);
 	void OnUpdateToolsBuildings(wxUpdateUIEvent& event);
-	void OnToolsPower(wxCommandEvent& event);
-	void OnUpdateToolsPower(wxUpdateUIEvent& event);
+	void OnToolsRoutes(wxCommandEvent& event);
+	void OnUpdateToolsRoutes(wxUpdateUIEvent& event);
 	void OnToolsPlants(wxCommandEvent& event);
 	void OnUpdateToolsPlants(wxUpdateUIEvent& event);
 	void OnToolsPoints(wxCommandEvent& event);
@@ -203,16 +191,6 @@ protected:
 	void OnUpdateToolsNavigate(wxUpdateUIEvent& event);
 	void OnToolsMeasure(wxCommandEvent& event);
 	void OnUpdateToolsMeasure(wxUpdateUIEvent& event);
-	void OnToolsConstrain(wxCommandEvent& event);
-	void OnUpdateToolsConstrain(wxUpdateUIEvent& event);
-	// Visual impact submenu
-	void OnVIACalculate(wxCommandEvent& event);
-	void OnUpdateVIACalculate(wxUpdateUIEvent& event);
-	void OnVIAPlot(wxCommandEvent& event);
-	void OnUpdateVIAPlot(wxUpdateUIEvent& event);
-	void OnVIAClear(wxCommandEvent& event);
-	void OnUpdateVIAClear(wxUpdateUIEvent& event);
-
 
 	void OnSceneGraph(wxCommandEvent& event);
 	#ifdef NVIDIA_PERFORMANCE_MONITORING
@@ -230,10 +208,11 @@ protected:
 	void OnTimeStop(wxCommandEvent& event);
 	void OnTimeFaster(wxCommandEvent& event);
 
-	void OnSurface(wxCommandEvent& event);
+	void OnDynamic(wxCommandEvent& event);
 	void OnCullEvery(wxCommandEvent& event);
 	void OnCullOnce(wxCommandEvent& event);
 	void OnSky(wxCommandEvent& event);
+	void OnHorizon(wxCommandEvent& event);
 	void OnOcean(wxCommandEvent& event);
 	void OnPlants(wxCommandEvent& event);
 	void OnStructures(wxCommandEvent& event);
@@ -249,9 +228,10 @@ protected:
 	void OnTerrainWriteElevation(wxCommandEvent& event);
 	void OnTerrainAddContour(wxCommandEvent& event);
 
-	void OnUpdateSurface(wxUpdateUIEvent& event);
+	void OnUpdateDynamic(wxUpdateUIEvent& event);
 	void OnUpdateCullEvery(wxUpdateUIEvent& event);
 	void OnUpdateSky(wxUpdateUIEvent& event);
+	void OnUpdateHorizon(wxUpdateUIEvent& event);
 	void OnUpdateOcean(wxUpdateUIEvent& event);
 	void OnUpdatePlants(wxUpdateUIEvent& event);
 	void OnUpdateStructures(wxUpdateUIEvent& event);
@@ -286,26 +266,17 @@ protected:
 	virtual void OnHelpDocOnline(wxCommandEvent& event);
 
 	void OnPopupProperties(wxCommandEvent& event);
-	void OnPopupCopyStyle(wxCommandEvent& event);
-	void OnPopupPasteStyle(wxCommandEvent& event);
 	void OnPopupFlip(wxCommandEvent& event);
-	void OnPopupSetEaves(wxCommandEvent& event);
 	void OnPopupReload(wxCommandEvent& event);
 	void OnPopupShadow(wxCommandEvent& event);
 	void OnPopupAdjust(wxCommandEvent& event);
 	void OnPopupStart(wxCommandEvent& event);
 	void OnPopupDelete(wxCommandEvent& event);
 	void OnPopupURL(wxCommandEvent& event);
-	void OnPopupVIA(wxCommandEvent& event);
-	void OnUpdatePopupVIA(wxUpdateUIEvent& event);
-	void OnPopupVIATarget(wxCommandEvent& event);
-	void OnUpdatePopupVIATarget(wxUpdateUIEvent& event);
 
 	void DoTestCode();
 	void LoadClouds(const char *fname);
 	void CarveTerrainToFitNode(osg::Node *node);
-
-	void ParseCommandLine(const char *cmdstart, char **argv, char *args, int *numargs, int *numchars);
 
 public:
 	class vtGLCanvas	*m_canvas;
@@ -343,8 +314,6 @@ public:
 	#ifdef NVIDIA_PERFORMANCE_MONITORING
     CPerformanceMonitorDialog *m_pPerformanceMonitorDlg;
     #endif
-	VIADlg				*m_pVIADlg;
-
 	MouseMode			m_ToggledMode;
 
 	// There can be any number of feature dialogs, one for each abstract layer
@@ -364,20 +333,12 @@ protected:
 	// snapshot members
 	wxString m_strSnapshotFilename;
 	int		m_iSnapshotNumber;
+	int		m_iFormat;
 
 	bool m_bCloseOnIdle;
 
 DECLARE_EVENT_TABLE()
 };
-
-#if wxUSE_DRAG_AND_DROP
-class DnDFile : public wxFileDropTarget
-{
-public:
-	virtual bool OnDropFiles(wxCoord x, wxCoord y,
-		const wxArrayString& filenames);
-};
-#endif
 
 // Helper
 EnviroFrame *GetFrame();

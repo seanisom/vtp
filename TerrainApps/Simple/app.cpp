@@ -29,7 +29,7 @@ bool CreateScene()
 
 	// Log messages to make troubleshooting easier
 	VTSTARTLOG("debug.txt");
-	VTLOG("osgViewerSimple\n");
+	VTLOG("glutSimple\n");
 
 	// Look up the camera
 	vtCamera *pCamera = pScene->GetCamera();
@@ -78,13 +78,13 @@ bool CreateScene()
 	float fSpeed = pTerr->GetParams().GetValueFloat(STR_NAVSPEED);
 
 	vtTerrainFlyer *pFlyer = new vtTerrainFlyer(fSpeed);
-	pFlyer->AddTarget(pCamera);
+	pFlyer->SetTarget(pCamera);
 	pFlyer->SetHeightField(pTerr->GetHeightField());
 	pScene->AddEngine(pFlyer);
 
 	// Minimum height over terrain is 100 m
 	vtHeightConstrain *pConstrain = new vtHeightConstrain(100);
-	pConstrain->AddTarget(pCamera);
+	pConstrain->SetTarget(pCamera);
 	pConstrain->SetHeightField(pTerr->GetHeightField());
 	pScene->AddEngine(pConstrain);
 
@@ -105,21 +105,18 @@ int main(int argc, char ** argv)
 	vtGetScene()->Init(argc, argv);
 	osgViewer::Viewer *viewer = vtGetScene()->getViewer();
 
-	// Add a handler for GUI events.
+	// Add a handler for GUI events
 	osg::ref_ptr<vtOSGEventHandler> pHandler = new vtOSGEventHandler;
 	viewer->addEventHandler(pHandler);
 
-	// We must call realize to be certain that a display/context is set up.
-	viewer->realize();
-
-	// Tell our scene about OSG's context.
-	vtGetScene()->SetGraphicsContext(viewer->getCamera()->getGraphicsContext());
-
-	// Only then can we safely get window size.
-	vtGetScene()->GetWindowSizeFromOSG();
-
 	printf("Creating the terrain..\n");
 	CreateScene();
+
+	// We must call realize to be certain that a display/context is set up
+	viewer->realize();
+
+	// Only then can we safely get window size
+	vtGetScene()->GetWindowSizeFromOSG();
 
 	printf("Running..\n");
 	while (!viewer->done())

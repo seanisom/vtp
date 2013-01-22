@@ -1,6 +1,6 @@
-add_executable(Simple app.cpp)
+find_package(OpenGL)
 
-install(TARGETS Simple RUNTIME DESTINATION bin)
+add_executable(Simple app.cpp)
 
 # Internal library dependencies for this target
 target_link_libraries(Simple vtlib minidata vtdata xmlhelper)
@@ -24,10 +24,6 @@ if(GDAL_FOUND)
 	target_link_libraries(Simple ${GDAL_LIBRARIES})
 endif (GDAL_FOUND)
 
-if(MINI_FOUND)
-	target_link_libraries(Simple ${MINI_LIBRARIES})
-endif(MINI_FOUND)
-
 if(OPENGL_FOUND)
 	target_link_libraries(Simple ${OPENGL_LIBRARIES})
 endif(OPENGL_FOUND)
@@ -43,6 +39,10 @@ endif(PNG_FOUND)
 if(JPEG_FOUND)
 	target_link_libraries(Simple ${JPEG_LIBRARY})
 endif(JPEG_FOUND)
+
+if(MINI_FOUND)
+	target_link_libraries(Simple ${MINI_LIBRARIES})
+endif(MINI_FOUND)
 
 if(ZLIB_FOUND)
 	target_link_libraries(Simple ${ZLIB_LIBRARIES})

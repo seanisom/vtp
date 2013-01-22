@@ -76,14 +76,14 @@ struct TransformExtension: public NodeExtension
 
 	/** Apply a relative offset (translation) to the transform, in the frame
 		of its parent. */
-	void Translate(const FPoint3 &pos);
+	void Translate1(const FPoint3 &pos);
 
 	/** Apply a relative offset (translation) to the transform, in its own
 		frame of reference. */
 	void TranslateLocal(const FPoint3 &pos);
 
 	/** Rotate around a given axis by a given angle, in radians. */
-	void Rotate(const FPoint3 &axis, double angle);
+	void Rotate2(const FPoint3 &axis, double angle);
 
 	/** Similar to Rotate2, but operates in the local frame of reference. */
 	void RotateLocal(const FPoint3 &axis, double angle);
@@ -105,15 +105,13 @@ struct TransformExtension: public NodeExtension
 		is the direction the object is facing. */
 	void SetDirection(const FPoint3 &point, bool bPitch = true);
 
-	/** Scale (stretch) by the given factor in all dimensions. */
-	void Scale(float factor);
 	/** Scale (stretch) by given factors in the x,y,z dimensions. */
-	void Scale(float x, float y, float z);
+	void Scale3(float x, float y, float z);
 
 	/** Set the entire transform with a 4x4 matrix. */
-	void SetTransform(const FMatrix4 &mat);
+	void SetTransform1(const FMatrix4 &mat);
 	/** Get the entire transform as a 4x4 matrix. */
-	void GetTransform(FMatrix4 &mat) const;
+	void GetTransform1(FMatrix4 &mat) const;
 
 	/** Rotate the object such that it points toward a given point.  By
 		convention, this means that the object's -Z axis points in the
@@ -121,6 +119,17 @@ struct TransformExtension: public NodeExtension
 	void PointTowards(const FPoint3 &point, bool bPitch = true);
 
 	osg::MatrixTransform *m_pTransform;
+};
+
+class vtMultiTexture
+{
+public:
+	int	m_iTextureUnit;
+#if VTLISPSM
+	int	m_iMode;
+#endif
+	osg::Node *m_pNode;
+	osg::ref_ptr<osg::Texture2D> m_pTexture;
 };
 
 
@@ -133,6 +142,11 @@ osg::Node *FindDescendent(osg::Group *node, const char *pName);
 
 void InsertNodeAbove(osg::Node *node, osg::Group *newnode);
 void InsertNodeBelow(osg::Group *group, osg::Group *newnode);
+
+vtMultiTexture *AddMultiTexture(osg::Node *onode, int iTextureUnit, vtImage *pImage,
+								int iTextureMode, const FPoint2 &scale, const FPoint2 &offset);
+void EnableMultiTexture(osg::Node *node, vtMultiTexture *mt, bool bEnable);
+bool MultiTextureIsEnabled(osg::Node *node, vtMultiTexture *mt);
 
 void LocalToWorld(osg::Node *node, FPoint3 &point);
 void GetBoundSphere(osg::Node *node, FSphere &sphere, bool bGlobal = false);
@@ -177,7 +191,6 @@ public:
 	vtGroup();
 };
 typedef osg::ref_ptr<vtGroup> vtGroupPtr;
-typedef osg::ref_ptr<osg::Group> GroupPtr;
 
 /**
  * A Transform node allows you to apply a transform (scale, rotate, translate)
@@ -227,12 +240,12 @@ public:
 	/// Get the darkness, from 0 to 1.
 	float GetDarkness();
 
-	void AddAdditionalTerrainTextureUnit(const uint Unit, const uint Mode);
-	void RemoveAdditionalTerrainTextureUnit(const uint Unit);
+	void AddAdditionalTerrainTextureUnit(const unsigned int Unit, const unsigned int Mode);
+	void RemoveAdditionalTerrainTextureUnit(const unsigned int Unit);
 	void RemoveAllAdditionalTerrainTextureUnits();
 
 	/// A single texture is used for the shadow.  It's resolution defaults to 1024.
-	void SetShadowTextureResolution(const uint ShadowTextureResolution);
+	void SetShadowTextureResolution(const unsigned int ShadowTextureResolution);
 
 	/// The shadow may be recalculated every frame, or for improved performance, only when desired
 	void SetRecalculateEveryFrame(const bool RecalculateEveryFrame);
@@ -252,11 +265,11 @@ protected:
 typedef osg::ref_ptr<vtShadow> vtShadowPtr;
 
 /**
- * A Light node is placed into the scene graph to illuminate all lit geometry
- * (geometry that has lighting enabled and has vertex normals).
+ * A Light node is placed into the scene graph to illumninate all lit geometry
+ * with vertex normals.
  *
  * If you want a light, you should create a vtLightSource node and add it to your
- * scene graph.  To move or orient the lightsource, make it a child of a vtTransform
+ * scene graph.  To move or orient the light, make it a child of a vtTransform
  * node.  The light will illuminate the entire scene.
  */
 class vtLightSource : public osg::LightSource, public NodeExtension
@@ -305,19 +318,14 @@ public:
 		currently contained. */
 	void RemoveMesh(vtMesh *pMesh);
 
-	/** Remove all meshes from the geomtry. They are refcounted so there is no
-		need to worry about freeing them. */
-	void RemoveAllMeshes();
-
 	/** Add a text mesh to this geometry.
 		\param pMesh The mesh to add
 		\param iMatIdx The material index for this mesh, which is an index
-			into the material array of the geometry.
-		\param bOutline true to put a dark outline around the text for contrast. */
-	void AddTextMesh(vtTextMesh *pMesh, int iMatIdx, bool bOutline = true);
+			into the material array of the geometry. */
+	void AddTextMesh(vtTextMesh *pMesh, int iMatIdx);
 
 	/** Return the number of contained meshes. */
-	uint NumMeshes() const;
+	unsigned int GetNumMeshes() const;
 
 	/** Return a contained vtMesh by index. */
 	vtMesh *GetMesh(int i) const;
@@ -452,12 +460,12 @@ public:
 	OsgDynMesh();
 
 	// overrides
-	virtual osg::Object* cloneType() const { return new OsgDynMesh; }
-	virtual osg::Object* clone(const osg::CopyOp &foo) const { return new OsgDynMesh; }
+	virtual osg::Object* cloneType() const { return new OsgDynMesh(); }
+	virtual osg::Object* clone(const osg::CopyOp &foo) const { return new OsgDynMesh(); }
 	virtual bool isSameKindAs(const osg::Object* obj) const { return dynamic_cast<const OsgDynMesh*>(obj)!=NULL; }
 	virtual const char* className() const { return "OsgDynMesh"; }
 
-	// Implement OSG::Drawable's computeBound.
+	// As of OSG 0.9.9, computeBound returns a BoundingBox
 	virtual osg::BoundingBox computeBound() const;
 	virtual void drawImplementation(osg::RenderInfo& renderInfo) const;
 
@@ -503,10 +511,10 @@ public:
 	//
 	int IsVisible(const FSphere &sphere) const;
 	int IsVisible(const FPoint3 &point0,
-				  const FPoint3 &point1,
-				  const FPoint3 &point2,
-				  const float fTolerance = 0.0f) const;
-	int IsVisible(const FPoint3 &point, float radius) const;
+					const FPoint3 &point1,
+					const FPoint3 &point2,
+					const float fTolerance = 0.0f) const;
+	int IsVisible(const FPoint3 &point, float radius);
 
 	// Tests a single point, returns true if in view
 	bool IsVisible(const FPoint3 &point) const;
@@ -518,8 +526,8 @@ public:
 	virtual void DoCalcBoundBox(FBox3 &box) = 0;
 	virtual void DoCull(const vtCamera *pCam) = 0;
 
-	// The current clipping planes
-	FPlane		m_cullPlanes[6];
+	// A handy shortcut to the current clipping planes
+	FPlane		*m_pPlanes;
 
 protected:
 	OsgDynMesh	*m_pDynMesh;

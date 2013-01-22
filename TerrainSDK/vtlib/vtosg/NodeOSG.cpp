@@ -121,22 +121,24 @@ void GetBoundSphere(osg::Node *node, FSphere &sphere, bool bGlobal)
 	}
 }
 
-
 //////////////////////////////////////////////////////////////////////////////
-/**
- This class visits all nodes and computes bounding box extents.
-*/
+// class ExtentsVisitor
+//
+// description: visit all nodes and compute bounding box extents
+//
 class ExtentsVisitor : public osg::NodeVisitor
 {
 public:
 	// constructor
 	ExtentsVisitor():NodeVisitor(NodeVisitor::TRAVERSE_ALL_CHILDREN) {}
+	// destructor
+	~ExtentsVisitor() {}
 
 	virtual void apply(osg::Geode &node)
 	{
 		// update bounding box
 		osg::BoundingBox bb;
-		for (uint i = 0; i < node.getNumDrawables(); ++i)
+		for (unsigned int i = 0; i < node.getNumDrawables(); ++i)
 		{
 			// expand overall bounding box
 			bb.expandBy(node.getDrawable(i)->getBound());
@@ -144,7 +146,7 @@ public:
 
 		// transform corners by current matrix
 		osg::BoundingBox xbb;
-		for (uint i = 0; i < 8; ++i)
+		for (unsigned int i = 0; i < 8; ++i)
 		{
 			osg::Vec3 xv = bb.corner(i) * m_TransformMatrix;
 			xbb.expandBy(xv);
@@ -175,7 +177,7 @@ protected:
 /**
  Calculates the bounding box of the geometry contained in and under this node
  in the scene graph.  Note that unlike the bounding sphere which is cached,
- this value is calculated each time this method is called.
+ this value is calculated every time.
 
  \param node The node to visit.
  \param box Will receive the bounding box.
@@ -187,34 +189,6 @@ void GetNodeBoundBox(osg::Node *node, FBox3 &box)
 	osg::BoundingBox extents = ev.GetBound();
 	s2v(extents, box);
 }
-
-
-/////////////////////////////////////////////////////////////////////////////
-/**
-	This class visits all matrixtransform nodes and set their datavariance to "STATIC"
-*/
-class TransformStaticVisitor : public osg::NodeVisitor
-{
-public:
-	// constructor
-	TransformStaticVisitor() : NodeVisitor(NodeVisitor::TRAVERSE_ALL_CHILDREN)
-	{
-		count = 0;
-	}
-	// handle matrixtransform objects
-	virtual void apply(osg::MatrixTransform &node)
-	{
-		if (node.getDataVariance() == osg::Object::UNSPECIFIED ||
-			node.getDataVariance() == osg::Object::DYNAMIC)
-		{
-			node.setDataVariance(osg::Object::STATIC);
-			count++;
-		}
-		// continue traversing the graph
-		traverse(node);
-	}
-	int count;
-};
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -236,11 +210,11 @@ public:
 void PolygonCountVisitor::apply(osg::Geode& geode)
 {
 	numObjects++;
-	for (uint i=0; i<geode.getNumDrawables(); ++i)
+	for (unsigned int i=0; i<geode.getNumDrawables(); ++i)
 	{
 		osg::Geometry* geometry = geode.getDrawable(i)->asGeometry();
 		if (!geometry) continue;
-		for (uint j=0; j<geometry->getPrimitiveSetList().size(); ++j)
+		for (unsigned int j=0; j<geometry->getPrimitiveSetList().size(); ++j)
 		{
 			osg::PrimitiveSet *pset = geometry->getPrimitiveSet(j);
 			osg::DrawArrayLengths *dal = dynamic_cast<osg::DrawArrayLengths*>(pset);
@@ -335,13 +309,6 @@ void ApplyVertexTransform(osg::Node *node, const FMatrix4 &mat)
 	if (!node)
 		return;
 
-	// Remember the parent (TODO: beware possible case of multiple parents)
-	//  We must remove the node from the parent temporarily in order for the
-	//  optimization below to work, but we don't want to de-ref the node, so
-	//  order is important.
-	GroupPtr parent = node->getParent(0);
-
-	// Put it under a temporary parent instead
 	vtGroupPtr temp = new vtGroup;
 
 	osg::Matrix omat;
@@ -349,24 +316,23 @@ void ApplyVertexTransform(osg::Node *node, const FMatrix4 &mat)
 
 	osg::MatrixTransform *transform = new osg::MatrixTransform;
 	transform->setMatrix(omat);
-	// Tell OSG that it can be optimized
+	// it's not going to change, so tell OSG that it can be optimized
 	transform->setDataVariance(osg::Object::STATIC);
 
     temp->addChild(transform);
 	transform->addChild(node);
 
-	// carefully remove from the true parent
-	parent->removeChild(node);
-
 	// Now do some OSG voodoo, which should spread the transform downward
 	//  through the loaded model, and delete the transform.
+	//
+	// NOTE: OSG 1.0 seems to have a bug (limitation): Optimizer doesn't
+	//  inform the display lists that they have changed.  So, this doesn't
+	//  produce a visual update for objects which have already been rendered.
+	// It is a one-line fix in Optimizer.cpp (CollectLowestTransformsVisitor::doTransform)
+	// I wrote the OSG list with the fix on 2006.04.12.
+	//
 	osgUtil::Optimizer optimizer;
 	optimizer.optimize(temp.get(), osgUtil::Optimizer::FLATTEN_STATIC_TRANSFORMS);
-
-	// now carefully add back again, whatever remains after the optimization,
-	//  to the true parent. Hopefully, our corrective transform has been applied.
-	// Our original node may have been optimized away too.
-	parent->addChild(temp->getChild(0));
 }
 
 
@@ -399,7 +365,7 @@ void NodeExtension::SetEnabled(bool bOn)
 		if (m_bCastShadow)
 			m_pNode->setNodeMask(nm | 3);
 		else
-			m_pNode->setNodeMask((nm & ~3) | 1);
+			m_pNode->setNodeMask(nm & ~3 | 1);
 	}
 	else
 		m_pNode->setNodeMask(nm & ~3);
@@ -479,7 +445,7 @@ void TransformExtension::SetTrans(const FPoint3 &pos)
 	m_pTransform->dirtyBound();
 }
 
-void TransformExtension::Translate(const FPoint3 &pos)
+void TransformExtension::Translate1(const FPoint3 &pos)
 {
 	// OSG 0.8.43 and later
 	m_pTransform->postMult(osg::Matrix::translate(pos.x, pos.y, pos.z));
@@ -491,7 +457,7 @@ void TransformExtension::TranslateLocal(const FPoint3 &pos)
 	m_pTransform->preMult(osg::Matrix::translate(pos.x, pos.y, pos.z));
 }
 
-void TransformExtension::Rotate(const FPoint3 &axis, double angle)
+void TransformExtension::Rotate2(const FPoint3 &axis, double angle)
 {
 	// OSG 0.8.43 and later
 	m_pTransform->postMult(osg::Matrix::rotate(angle, axis.x, axis.y, axis.z));
@@ -531,7 +497,7 @@ void TransformExtension::SetDirection(const FPoint3 &point, bool bPitch)
 {
 	// get current matrix
 	FMatrix4 m4;
-	GetTransform(m4);
+	GetTransform1(m4);
 
 	// remember where it is now
 	FPoint3 trans = m4.GetTrans();
@@ -545,20 +511,16 @@ void TransformExtension::SetDirection(const FPoint3 &point, bool bPitch)
 	m4.SetTrans(trans);
 
 	// set current matrix
-	SetTransform(m4);
+	SetTransform1(m4);
 }
 
-void TransformExtension::Scale(float factor)
+void TransformExtension::Scale3(float x, float y, float z)
 {
-	m_pTransform->preMult(osg::Matrix::scale(factor, factor, factor));
-}
-
-void TransformExtension::Scale(float x, float y, float z)
-{
+	// OSG 0.8.43 and later
 	m_pTransform->preMult(osg::Matrix::scale(x, y, z));
 }
 
-void TransformExtension::SetTransform(const FMatrix4 &mat)
+void TransformExtension::SetTransform1(const FMatrix4 &mat)
 {
 	osg::Matrix mat_osg;
 
@@ -568,7 +530,7 @@ void TransformExtension::SetTransform(const FMatrix4 &mat)
 	m_pTransform->dirtyBound();
 }
 
-void TransformExtension::GetTransform(FMatrix4 &mat) const
+void TransformExtension::GetTransform1(FMatrix4 &mat) const
 {
 	const osg::Matrix &xform = m_pTransform->getMatrix();
 	ConvertMatrix4(&xform, &mat);
@@ -588,7 +550,7 @@ void TransformExtension::PointTowards(const FPoint3 &point, bool bPitch)
  */
 bool FindAncestor(osg::Node *node, osg::Node *parent)
 {
-	for (uint i = 0; i < node->getNumParents(); i++)
+	for (unsigned int i = 0; i < node->getNumParents(); i++)
 	{
 		if (node->getParent(i) == parent)
 			return true;
@@ -605,7 +567,7 @@ bool FindAncestor(osg::Node *node, osg::Node *parent)
  */
 osg::Node *FindDescendent(osg::Group *group, const char *pName)
 {
-	for (uint i = 0; i < group->getNumChildren(); i++)
+	for (unsigned int i = 0; i < group->getNumChildren(); i++)
 	{
 		osg::Node *child = group->getChild(i);
 		if (child->getName() == pName)
@@ -647,11 +609,83 @@ void InsertNodeAbove(osg::Node *node, osg::Group *newnode)
  */
 void InsertNodeBelow(osg::Group *group, osg::Group *newnode)
 {
-	for (uint i = 0; i < group->getNumChildren(); i++)
+	for (unsigned int i = 0; i < group->getNumChildren(); i++)
 		newnode->addChild(group->getChild(i));
 
 	group->removeChildren(0, group->getNumChildren());
 	group->addChild(newnode);
+}
+
+vtMultiTexture *AddMultiTexture(osg::Node *onode, int iTextureUnit, vtImage *pImage,
+								int iTextureMode, const FPoint2 &scale, const FPoint2 &offset)
+{
+	vtMultiTexture *mt = new vtMultiTexture;
+	mt->m_pNode = onode;
+	mt->m_iTextureUnit = iTextureUnit;
+#if VTLISPSM
+	mt->m_iMode = iTextureMode;
+#endif
+
+	mt->m_pTexture = new osg::Texture2D(pImage);
+
+	mt->m_pTexture->setFilter(osg::Texture2D::MIN_FILTER, osg::Texture2D::NEAREST);
+	mt->m_pTexture->setFilter(osg::Texture2D::MAG_FILTER, osg::Texture2D::LINEAR);
+	mt->m_pTexture->setWrap(osg::Texture2D::WRAP_S, osg::Texture2D::CLAMP_TO_BORDER);
+	mt->m_pTexture->setWrap(osg::Texture2D::WRAP_T, osg::Texture2D::CLAMP_TO_BORDER);
+
+	// Set up the texgen
+	osg::ref_ptr<osg::TexGen> pTexgen = new osg::TexGen;
+	pTexgen->setMode(osg::TexGen::EYE_LINEAR);
+	pTexgen->setPlane(osg::TexGen::S, osg::Vec4(scale.x, 0.0f, 0.0f, -offset.x));
+	pTexgen->setPlane(osg::TexGen::T, osg::Vec4(0.0f, 0.0f, scale.y, -offset.y));
+
+	osg::TexEnv::Mode mode;
+	if (iTextureMode == GL_ADD) mode = osg::TexEnv::ADD;
+	if (iTextureMode == GL_BLEND) mode = osg::TexEnv::BLEND;
+	if (iTextureMode == GL_REPLACE) mode = osg::TexEnv::REPLACE;
+	if (iTextureMode == GL_MODULATE) mode = osg::TexEnv::MODULATE;
+	if (iTextureMode == GL_DECAL) mode = osg::TexEnv::DECAL;
+	osg::ref_ptr<osg::TexEnv> pTexEnv = new osg::TexEnv(mode);
+
+	// Apply state
+	osg::ref_ptr<osg::StateSet> pStateSet = onode->getOrCreateStateSet();
+
+	pStateSet->setTextureAttributeAndModes(iTextureUnit, mt->m_pTexture.get(), osg::StateAttribute::ON);
+	pStateSet->setTextureAttributeAndModes(iTextureUnit, pTexgen.get(), osg::StateAttribute::ON);
+	pStateSet->setTextureMode(iTextureUnit, GL_TEXTURE_GEN_S,  osg::StateAttribute::ON);
+	pStateSet->setTextureMode(iTextureUnit, GL_TEXTURE_GEN_T,  osg::StateAttribute::ON);
+	pStateSet->setTextureAttributeAndModes(iTextureUnit, pTexEnv.get(), osg::StateAttribute::ON);
+
+	// If texture mode is DECAL and intenal texture format does not have an alpha channel then
+	// force the format to be converted on texture binding
+	if ((GL_DECAL == iTextureMode) &&
+		(pImage->getInternalTextureFormat() != GL_RGBA))
+	{
+		// Force the internal format to RGBA
+		pImage->setInternalTextureFormat(GL_RGBA);
+	}
+
+	return mt;
+}
+
+void EnableMultiTexture(osg::Node *onode, vtMultiTexture *mt, bool bEnable)
+{
+	osg::ref_ptr<osg::StateSet> pStateSet = onode->getOrCreateStateSet();
+	if (bEnable)
+		pStateSet->setTextureAttributeAndModes(mt->m_iTextureUnit, mt->m_pTexture.get(), osg::StateAttribute::ON);
+	else
+	{
+		osg::StateAttribute *attr = pStateSet->getTextureAttribute(mt->m_iTextureUnit, osg::StateAttribute::TEXTURE);
+		if (attr != NULL)
+			pStateSet->removeTextureAttribute(mt->m_iTextureUnit, attr);
+	}
+}
+
+bool MultiTextureIsEnabled(osg::Node *onode, vtMultiTexture *mt)
+{
+	osg::ref_ptr<osg::StateSet> pStateSet = onode->getOrCreateStateSet();
+	osg::StateAttribute *attr = pStateSet->getTextureAttribute(mt->m_iTextureUnit, osg::StateAttribute::TEXTURE);
+	return (attr != NULL);
 }
 
 FSphere GetGlobalBoundSphere(osg::Node *node)
@@ -800,7 +834,10 @@ osg::Node *vtLoadModel(const char *filename, bool bAllowCache, bool bDisableMipm
 
 	// Workaround for OSG's OBJ-MTL reader which doesn't like backslashes
 	vtString fname = filename;
-	fname.Replace('\\', '/');
+	for (int i = 0; i < fname.GetLength(); i++)
+	{
+		if (fname.GetAt(i) == '\\') fname.SetAt(i, '/');
+	}
 
 #define HINT osgDB::ReaderWriter::Options::CacheHintOptions
 	// In case of reloading a previously loaded model, we must empty
@@ -830,12 +867,12 @@ osg::Node *vtLoadModel(const char *filename, bool bAllowCache, bool bDisableMipm
 #if VTDEBUG
 	VTLOG("[");
 #endif
-	NodePtr node = osgDB::readNodeFile((const char *)fname_local);
+	osg::Node *node = osgDB::readNodeFile((const char *)fname_local);
 #if VTDEBUG
 	VTLOG("]");
 #endif
 	// If OSG could not load it, there is nothing more to do
-	if (!node.valid())
+	if (!node)
 		return NULL;
 
 	// We must insert a 'Normalize' state above the geometry objects
@@ -859,11 +896,17 @@ osg::Node *vtLoadModel(const char *filename, bool bAllowCache, bool bDisableMipm
 		node->accept(visitor);
 	}
 
-#if 1
 	// We must insert a rotation transform above the model, because OSG's
 	//  file loaders (now mostly consistently) tweak the model to put Z
-	//  up, and the VTP uses OpenGL coordinates which have Y up.
+	//  up, and the VTP uses OpenGL coordinates which has Y up.
 	float fRotation = -PID2f;
+
+	// OSG expects OBJ models to have Y up.  I have seen models with Z
+	//  up, and we used to correct for that here (fRotation = -PIf).
+	//  However, over time it has appeared that there are more OBJ out
+	//  there with Y up than with Z up.  So, we now treat all models from
+	//  OSG the same.
+
 	osg::MatrixTransform *transform = new osg::MatrixTransform;
 	transform->setName("corrective 90 degrees");
 	transform->setMatrix(osg::Matrix::rotate(fRotation, osg::Vec3(1,0,0)));
@@ -873,39 +916,19 @@ osg::Node *vtLoadModel(const char *filename, bool bAllowCache, bool bDisableMipm
 
 	if (s_NodeCallback == NULL)
 	{
+#if 0
 		// Now do some OSG voodoo, which should spread ("flatten") the
 		//  transform downward through the loaded model, and delete the transform.
-		// The voodoo is picky: there must be no other parents of this branch
-		//  of the scenegraph, and all matriced must be STATIC
-		TransformStaticVisitor tsv;
-		node->accept(tsv);
-		if (tsv.count != 0)
-			VTLOG("  Set %d transforms to STATIC\n", tsv.count);
-
-		vtGroupPtr group = new vtGroup;
+		// In practice, i find that it doesn't actually do any flattening.
+		osg::Group *group = new osg::Group;
 		group->addChild(transform);
 
-		//vtLogGraph(group);
 		osgUtil::Optimizer optimizer;
 		optimizer.optimize(group, osgUtil::Optimizer::FLATTEN_STATIC_TRANSFORMS);
-		//vtLogGraph(group);
-
-		// If it worked, the transform will be replaced by a Group
-		osg::Node *child = group->getChild(0);
-		if (dynamic_cast<osg::MatrixTransform*>(child) != NULL)
-		{
-			VTLOG1("  Transform flatten FAILED.\n");
-
-			// We have to return it with the transform still above it
-			node = transform;
-		}
-		else
-		{
-			VTLOG1("  Transform flatten Succeeded.\n");
-
-			// The resulting node is whatever remains under the optimization parent
-			node = child;
-		}
+		node = group;
+#else
+		node = transform;
+#endif
 	}
 	else
 	{
@@ -914,16 +937,11 @@ osg::Node *vtLoadModel(const char *filename, bool bAllowCache, bool bDisableMipm
 	}
 	//VTLOG1("--------------\n");
 	//vtLogGraph(node);
-#endif
 
 	// Use the filename as the node's name
 	node->setName(fname);
 
-	// We are holding a ref_ptr to the object (with refcount=1) so we can't just
-	//  return node.get(), because node will go out of scope, decrement the count
-	//  and delete the object.  Instead, use release(), which will decrease the
-	//  refcount to 0, but NOT delete the object.
-	return node.release();
+	return node;
 }
 
 bool vtSaveModel(osg::Node *node, const char *filename)
@@ -1056,7 +1074,7 @@ float vtShadow::GetDarkness()
 		return 1.0f;
 }
 
-void vtShadow::AddAdditionalTerrainTextureUnit(const uint Unit, const uint Mode)
+void vtShadow::AddAdditionalTerrainTextureUnit(const unsigned int Unit, const unsigned int Mode)
 {
 #if VTLISPSM
 	CLightSpacePerspectiveShadowTechnique *pTechnique = dynamic_cast<CLightSpacePerspectiveShadowTechnique *>(getShadowTechnique());
@@ -1069,7 +1087,7 @@ void vtShadow::AddAdditionalTerrainTextureUnit(const uint Unit, const uint Mode)
 #endif
 }
 
-void vtShadow::RemoveAdditionalTerrainTextureUnit(const uint Unit)
+void vtShadow::RemoveAdditionalTerrainTextureUnit(const unsigned int Unit)
 {
 #if VTLISPSM
 	CLightSpacePerspectiveShadowTechnique *pTechnique = dynamic_cast<CLightSpacePerspectiveShadowTechnique *>(getShadowTechnique());
@@ -1091,7 +1109,7 @@ void vtShadow::RemoveAllAdditionalTerrainTextureUnits()
 #endif
 }
 
-void vtShadow::SetShadowTextureResolution(const uint ShadowTextureResolution)
+void vtShadow::SetShadowTextureResolution(const unsigned int ShadowTextureResolution)
 {
 #if VTLISPSM
 	CLightSpacePerspectiveShadowTechnique *pTechnique = dynamic_cast<CLightSpacePerspectiveShadowTechnique *>(getShadowTechnique());
@@ -1188,11 +1206,9 @@ vtLightSource::vtLightSource(int LightNumber)
 	getLight()->setLightNum(LightNumber);
 	SetOsgNode(this);
 
-	// What does this do, exactly?
-	setLocalStateSetModes(osg::StateAttribute::ON);
-
 	// Because lighting is also a 'state', we need to inform
-	// the whole scene graph that this light is enabled.
+	// the whole scene graph that we will control lighting.
+	setLocalStateSetModes(osg::StateAttribute::ON);
 	setStateSetModes(*(vtGetScene()->GetRootState()), osg::StateAttribute::ON);
 }
 
@@ -1313,7 +1329,7 @@ float vtCamera::GetVertFOV() const
 void vtCamera::ZoomToSphere(const FSphere &sphere, float fPitch)
 {
 	Identity();
-	Translate(sphere.center);
+	Translate1(sphere.center);
 	RotateLocal(FPoint3(1,0,0), fPitch);
 	TranslateLocal(FPoint3(0.0f, 0.0f, sphere.radius));
 }
@@ -1375,7 +1391,7 @@ void vtGeode::CloneFromGeode(const vtGeode *rhs)
 	//  geometry that we are copying from.
 	SetMaterials(rhs->GetMaterials());
 	int idx;
-	for (uint i = 0; i < rhs->NumMeshes(); i++)
+	for (unsigned int i = 0; i < rhs->GetNumMeshes(); i++)
 	{
 		vtMesh *mesh = rhs->GetMesh(i);
 		if (mesh)
@@ -1401,7 +1417,7 @@ void vtGeode::AddMesh(vtMesh *pMesh, int iMatIdx)
 	SetMeshMatIndex(pMesh, iMatIdx);
 }
 
-void vtGeode::AddTextMesh(vtTextMesh *pTextMesh, int iMatIdx, bool bOutline)
+void vtGeode::AddTextMesh(vtTextMesh *pTextMesh, int iMatIdx)
 {
 	// connect the underlying OSG objects
 	addDrawable(pTextMesh);
@@ -1426,16 +1442,6 @@ void vtGeode::AddTextMesh(vtTextMesh *pTextMesh, int iMatIdx, bool bOutline)
 	sset->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
 	// also not useful to see the back of text (mirror writing)
 	sset->setMode(GL_CULL_FACE, osg::StateAttribute::ON);
-
-	// A black outline around the font makes it easier to read against
-	// most backgrounds.
-	// TODO: expose a method to disable this behavior for special cases.
-	if (bOutline)
-		pTextMesh->setBackdropType(osgText::Text::OUTLINE);
-
-	// In most cases, it is very helpful for text to face the user.
-	// TODO: expose a method to disable this behavior for special cases.
-	pTextMesh->setAutoRotateToScreen(true);
 }
 
 void vtGeode::SetMeshMatIndex(vtMesh *pMesh, int iMatIdx)
@@ -1484,13 +1490,7 @@ void vtGeode::RemoveMesh(vtMesh *pMesh)
 	removeDrawable(pMesh);
 }
 
-void vtGeode::RemoveAllMeshes()
-{
-	// This is a vector of ref_ptrs, so it will free meshes as appropriate.
-	_drawables.clear();
-}
-
-uint vtGeode::NumMeshes() const
+unsigned int vtGeode::GetNumMeshes() const
 {
 	return getNumDrawables();
 }
@@ -1587,76 +1587,13 @@ void OsgDynMesh::drawImplementation(osg::RenderInfo& renderInfo) const
 	//  disabling the arrays seems to make things work!
 	cthis->m_pDrawState->disableAllVertexArrays();
 
-    // For the time being convert the osg camera into a vtCamera.
-    // In the longer term it would probably be better to convert all
-    // the implementations vtDynGeon::DocCull to using an osg camera directlty
-	osg::ref_ptr<osg::Camera> pOsgCamera = renderInfo.getCurrentCamera();
-	osg::ref_ptr<vtCamera> pVtCamera = new vtCamera;
-
-	// Set up the vtCamera transform
-	const osg::Matrix &mat2 = pOsgCamera->getViewMatrix();
-	osg::Matrix imat;
-	imat.invert(mat2);
-	pVtCamera->setMatrix(imat);
-
-	// Perspective only
-	double fovy, aspectRatio;
-	// Both
-	double zNear, zFar;
-	// Ortho only
-	double left, right, bottom, top;
-
-    if (pOsgCamera->getProjectionMatrixAsPerspective(fovy, aspectRatio, zNear, zFar))
-    {
-        pVtCamera->SetOrtho(false);
- 		double a = tan(osg::DegreesToRadians(fovy/2));
-		double b = a * aspectRatio;
-		double fovx = atan(b) * 2;
-		pVtCamera->SetFOV(fovx);
-    }
-    else if(pOsgCamera->getProjectionMatrixAsOrtho(left, right, bottom, top, zNear, zFar))
-    {
-        pVtCamera->SetOrtho(true);
-        pVtCamera->SetWidth(right - left);
-    }
-    else
-    {
-        VTLOG("OsgDynMesh::drawImplementation - Cannot set up vtCamera\n");
-        return;
-    }
-
-    pVtCamera->SetHither(zNear);
-    pVtCamera->SetYon(zFar);
-
+	vtScene *pScene = vtGetScene();
+	vtCamera *pCam = pScene->GetCamera();
 
 	// setup the culling planes
-	// Get the view frustum clipping planes directly from OSG.
-	// We can't get the planes from the state, because the state
-	//  includes the funny modelview matrix used to scale the
-	//  heightfield.  We must get it from the camera instead.
+	m_pDynGeom->m_pPlanes = pScene->GetCullPlanes();
 
-	const osg::Matrixd &_projection = renderInfo.getCurrentCamera()->getProjectionMatrix();
-	const osg::Matrixd &_modelView = renderInfo.getCurrentCamera()->getViewMatrix();
-
-	osg::Polytope tope;
-	tope.setToUnitFrustum();
-	tope.transformProvidingInverse((_modelView)*(_projection));
-
-	const osg::Polytope::PlaneList &planes = tope.getPlaneList();
-
-	int i = 0;
-	for (osg::Polytope::PlaneList::const_iterator itr=planes.begin();
-		itr!=planes.end(); ++itr)
-	{
-		// make a copy of the clipping plane
-		osg::Plane plane = *itr;
-
-		// extract the OSG plane to our own structure
-		osg::Vec4 pvec = plane.asVec4();
-		m_pDynGeom->m_cullPlanes[i++].Set(-pvec.x(), -pvec.y(), -pvec.z(), -pvec.w());
-	}
-
-	m_pDynGeom->DoCull(pVtCamera.get());
+	m_pDynGeom->DoCull(pCam);
 	m_pDynGeom->DoRender();
 }
 
@@ -1685,12 +1622,30 @@ vtDynGeom::vtDynGeom() : vtGeode()
  * Test a sphere against the view volume.
  *
  * \return VT_AllVisible if entirely inside the volume,
- *		   VT_Visible if partly inside,
- *		   otherwise 0.
+ *			VT_Visible if partly inside,
+ *			otherwise 0.
  */
 int vtDynGeom::IsVisible(const FSphere &sphere) const
 {
-	return IsVisible(sphere.center, sphere.radius);
+	unsigned int vis = 0;
+
+	// cull against standard frustum
+	int i;
+	for (i = 0; i < 4; i++)
+	{
+		float dist = m_pPlanes[i].Distance(sphere.center);
+		if (dist >= sphere.radius)
+			return 0;
+		if ((dist < 0) &&
+			(dist <= sphere.radius))
+			vis = (vis << 1) | 1;
+	}
+
+	// Notify renderer that object is entirely within standard frustum, so
+	// no clipping is necessary.
+	if (vis == 0x0F)
+		return VT_AllVisible;
+	return VT_Visible;
 }
 
 
@@ -1704,7 +1659,7 @@ bool vtDynGeom::IsVisible(const FPoint3& point) const
 	// cull against standard frustum
 	for (unsigned i = 0; i < 4; i++)
 	{
-		float dist = m_cullPlanes[i].Distance(point);
+		float dist = m_pPlanes[i].Distance(point);
 		if (dist > 0.0f)
 			return false;
 	}
@@ -1720,26 +1675,26 @@ bool vtDynGeom::IsVisible(const FPoint3& point) const
  *			otherwise 0.
  */
 int vtDynGeom::IsVisible(const FPoint3& point0,
-						 const FPoint3& point1,
-						 const FPoint3& point2,
-						 const float fTolerance) const
+							const FPoint3& point1,
+							const FPoint3& point2,
+							const float fTolerance) const
 {
-	uint outcode0 = 0, outcode1 = 0, outcode2 = 0;
+	unsigned int outcode0 = 0, outcode1 = 0, outcode2 = 0;
 	register float dist;
 
 	// cull against standard frustum
 	int i;
 	for (i = 0; i < 4; i++)
 	{
-		dist = m_cullPlanes[i].Distance(point0);
+		dist = m_pPlanes[i].Distance(point0);
 		if (dist > fTolerance)
 			outcode0 |= (1 << i);
 
-		dist = m_cullPlanes[i].Distance(point1);
+		dist = m_pPlanes[i].Distance(point1);
 		if (dist > fTolerance)
 			outcode1 |= (1 << i);
 
-		dist = m_cullPlanes[i].Distance(point2);
+		dist = m_pPlanes[i].Distance(point2);
 		if (dist > fTolerance)
 			outcode2 |= (1 << i);
 	}
@@ -1766,14 +1721,14 @@ int vtDynGeom::IsVisible(const FPoint3& point0,
  *			VT_Visible if partly intersecting,
  *			otherwise 0.
  */
-int vtDynGeom::IsVisible(const FPoint3 &point, float radius) const
+int vtDynGeom::IsVisible(const FPoint3 &point, float radius)
 {
-	uint incode = 0;
+	unsigned int incode = 0;
 
 	// cull against standard frustum
 	for (int i = 0; i < 4; i++)
 	{
-		float dist = m_cullPlanes[i].Distance(point);
+		float dist = m_pPlanes[i].Distance(point);
 		if (dist > radius)
 			return 0;			// entirely outside this plane
 		if (dist < -radius)

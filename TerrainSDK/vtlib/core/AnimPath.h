@@ -13,7 +13,6 @@
 #include "Engine.h"
 #include "vtdata/CubicSpline.h"
 #include "vtdata/Features.h"
-#include "vtdata/LocalConversion.h"
 
 /** \addtogroup nav */
 /*@{*/
@@ -62,7 +61,7 @@ public:
 	virtual ~vtAnimPath();
 
 	/// Must tell the AnimPath what projection its points are in, for serialization.
-	bool SetProjection(const vtProjection &proj, const vtLocalConversion &conv);
+	bool SetProjection(const vtProjection &proj);
 
 	/// Get the transformation matrix for a point in time.
 	bool GetMatrix(double time, FMatrix4 &matrix, bool bPosOnly) const
@@ -82,7 +81,7 @@ public:
 	/// Remove a control point from this path, by index.
 	void RemovePoint(int index);
 	/// Return number of control points in this path.
-	uint NumPoints() { return m_TimeControlPointMap.size(); }
+	unsigned int GetNumPoints() { return m_TimeControlPointMap.size(); }
 
 	void SetTimeFromLinearDistance();
 	void ProcessPoints();
@@ -113,7 +112,7 @@ public:
 	TimeControlPointMap &GetTimeControlPointMap() { return m_TimeControlPointMap; }
 	const TimeControlPointMap &GetTimeControlPointMap() const { return m_TimeControlPointMap; }
 
-	void Clear() { m_TimeControlPointMap.clear(); }
+	void Empty() { m_TimeControlPointMap.clear(); }
 	bool IsEmpty() const { return m_TimeControlPointMap.empty(); }
 
 	/** If Loop is true, interpolation of the control points will loop back
@@ -148,7 +147,6 @@ protected:
 	vtProjection	m_proj;
 	OCT			*m_pConvertToWGS;
 	OCT			*m_pConvertFromWGS;
-	vtLocalConversion m_conv;
 	friend class AnimPathVisitor;
 };
 typedef osg::ref_ptr<vtAnimPath> vtAnimPathPtr;

@@ -1,11 +1,11 @@
 //
-// SRTerrain class : a subclass of vtDynTerrainGeom which encapsulates
+// SRTerrain class : a subclass of vtDynTerrainGeom which exposes
 //  Stefan Roettger's CLOD algorithm.
 //
 // Utilizes: Roettger's MINI library implementation
 // http://stereofx.org/#Terrain
 //
-// Copyright (c) 2002-2011 Virtual Terrain Project
+// Copyright (c) 2002-2007 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -44,6 +44,7 @@ public:
 	DTErr ReInit(const vtElevationGrid *pGrid);
 
 	void LoadSingleMaterial();
+	void LoadBlockMaterial(int a, int b);
 
 	int		m_iBlockSize;
 

@@ -4,7 +4,7 @@
 // This dialog is for defining a set of colors which map onto elevations,
 //  to define how the user wants an elevation dataset to be colored.
 //
-// Copyright (c) 2004-2013 Virtual Terrain Project
+// Copyright (c) 2004-2011 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -18,7 +18,6 @@
 #include <wx/colordlg.h>	// for wxColourDialog
 #include <wx/imaglist.h>	// for wxImageList
 #include "ColorMapDlg.h"
-#include "vtdata/FileFilters.h"
 #include "vtdata/FilePath.h"
 #include "vtui/Helper.h"
 
@@ -83,7 +82,7 @@ void ColorMapDlg::UpdateItems()
 {
 	GetList()->DeleteAllItems();
 
-	uint i, num = m_cmap.Num();
+	unsigned int i, num = m_cmap.Num();
 
 	// First refresh the color bitmaps
 	m_imlist.RemoveAll();
@@ -91,7 +90,7 @@ void ColorMapDlg::UpdateItems()
 	m_imlist.Create(32, 16);
 	for (i = 0; i < num; i++)
 	{
-		const RGBi &c = m_cmap.Color(i);
+		RGBi c = m_cmap.m_color[i];
 		color.Set(c.r, c.g, c.b);
 		wxBitmap *bitmap = MakeColorBitmap(32, 16, color);
 		m_imlist.Add(*bitmap);
@@ -102,7 +101,7 @@ void ColorMapDlg::UpdateItems()
 	wxString str;
 	for (i = 0; i < num; i++)
 	{
-		str.Printf(_("%.2f meters"), m_cmap.Elev(i));
+		str.Printf(_("%.2f meters"), m_cmap.m_elev[i]);
 		int item = GetList()->InsertItem(i, str, i);
 	}
 }
@@ -123,7 +122,7 @@ void ColorMapDlg::UpdateEnabling()
 void ColorMapDlg::OnLoad( wxCommandEvent &event )
 {
 	wxFileDialog loadFile(NULL, _("Load ColorMap"), _T(""), _T(""),
-		FSTRING_CMT, wxFD_OPEN);
+		_("ColorMap Files (*.cmt)|*.cmt"), wxFD_OPEN);
 	bool bResult = (loadFile.ShowModal() == wxID_OK);
 	if (!bResult)
 		return;
@@ -158,12 +157,12 @@ void ColorMapDlg::OnSaveAs( wxCommandEvent &event )
 	vtString previous = (const char *) m_strFile.mb_str(wxConvUTF8);
 	if (previous != "")
 	{
-		default_file = StartOfFilenameWX(m_strFile);
+		default_file = wxString(StartOfFilename(previous), wxConvUTF8);
 		default_dir = wxString(ExtractPath(previous, false), wxConvUTF8);
 	}
 
 	wxFileDialog saveFile(NULL, _("Save ColorMap"), default_dir, default_file,
-		FSTRING_CMT, wxFD_SAVE);
+		_("ColorMap Files (*.cmt)|*.cmt"), wxFD_SAVE);
 	bool bResult = (saveFile.ShowModal() == wxID_OK);
 	if (!bResult)
 		return;
@@ -223,10 +222,10 @@ void ColorMapDlg::OnDeleteColor( wxCommandEvent &event )
 
 void ColorMapDlg::OnChangeColor( wxCommandEvent &event )
 {
-	RGBi rgb = m_cmap.Color(m_iItem);
+	RGBi rgb = m_cmap.m_color[m_iItem];
 	if (AskColor(rgb))
 	{
-		m_cmap.SetColor(m_iItem, rgb);
+		m_cmap.m_color[m_iItem] = rgb;
 		UpdateItems();
 	}
 }

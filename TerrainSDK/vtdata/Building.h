@@ -3,7 +3,7 @@
 //
 // Implements the vtBuilding class which represents a single built structure.
 //
-// Copyright (c) 2001-2013 Virtual Terrain Project
+// Copyright (c) 2001-2008 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -17,6 +17,7 @@
 #include "ogrsf_frmts.h"
 
 class vtHeightField;
+class vtStructureArray;
 
 ////////////////////////////////////////////////////
 
@@ -81,21 +82,23 @@ class vtEdge
 public:
 	vtEdge();
 	vtEdge(const vtEdge &lhs);
+	~vtEdge();
 
 	void Set(int doors, int windows, const char *material);
 	void AddFeature(int code, float width = -1.0f, float vf1 = 0.0f, float vf2 = 1.0f);
 	size_t NumFeatures() const { return m_Features.size(); }
-	int NumFeaturesOfCode(int code) const;
-	float FixedFeaturesWidth() const;
-	float ProportionTotal() const;
-	bool IsUniform() const;
-	float SlopeRadians() const { return m_iSlope / 180.0f * PIf; }
+	int NumFeaturesOfCode(int code);
+	float FixedFeaturesWidth();
+	float ProportionTotal();
 
 	// color
 	RGBi	m_Color;	// overall edge color
 
 	// slope in degrees: 90 is vertical, 0 is horizontal
 	int	m_iSlope;
+
+	// eave_length
+	float m_fEaveLength;
 
 	// members
 	const vtString		*m_pMaterial;
@@ -135,27 +138,25 @@ public:
 	void DeleteEdge(int iEdge);
 	bool AddEdge(const int iEdge, const DPoint2 &Point);
 	int NumEdges() const { return m_Edges.GetSize(); }
-	vtEdge *GetEdge(uint i) const;
-	float GetEdgeLength(uint i) const;
-	float GetLocalEdgeLength(uint i) const;
+	vtEdge *GetEdge(unsigned int i) const;
+	float GetEdgeLength(unsigned int i) const;
 	const vtString GetOverallEdgeMaterial();
 	bool GetOverallEdgeColor(RGBi &color);
-	RoofType GuessRoofType() const;
+	RoofType GuessRoofType();
 	void FlipFootprintDirection();
 
-	bool HasSlopedEdges() const;
-	bool IsHorizontal() const;
+	bool HasSlopedEdges();
+	bool IsHorizontal();
 	bool IsEdgeConvex(int i);
 	bool IsCornerConvex(int i);
-	bool IsUniform() const;
+	bool IsUniform();
 
 	void SetEdgeMaterial(const char *matname);
-	void SetEdgeMaterial(const vtString *matname);
 	void SetEdgeColor(RGBi color);
 	void SetRoofType(RoofType rt, int iSlopeDegrees);
 	void SetEaveLength(float fMeters);
 
-	uint m_iStories;
+	unsigned int m_iStories;
 	float	m_fStoryHeight;
 
 	void SetFootprint(const DLine2 &dl);
@@ -170,11 +171,11 @@ public:
 	const DLine2 &GetOuterFootprint() const { return m_Foot[0]; }
 
 	void DetermineLocalFootprint(float fHeight);
-	const FPolygon3 &GetLocalFootprint() const { return m_LocalFootprint; }
+	const FPolygon3 &GetLocalFootprint() { return m_LocalFootprint; }
 
 private:
-	void RebuildEdges(uint n);
-	void GetEdgePlane(uint i, FPlane &plane);
+	void RebuildEdges(unsigned int n);
+	void GetEdgePlane(unsigned int i, FPlane &plane);
 	bool DetermineHeightFromSlopes();
 	void DeleteEdges();
 
@@ -224,18 +225,16 @@ public:
 
 	// roof methods
 	void SetRoofType(RoofType rt, int iSlope = -1, int iLev = -1);
-	RoofType GetRoofType() const;
-	RGBi GuessRoofColor() const;
-	void SetRoofColor(const RGBi &rgb);
+	RoofType GetRoofType();
 
-	void SetColor(BldColor which, const RGBi &color);
+	void SetColor(BldColor which, RGBi col);
 	RGBi GetColor(BldColor which) const;
 
-	void SetNumStories(int i);
-	int NumStories() const;
+	void SetStories(int i);
+	int GetStories() const;
 	float GetTotalHeight() const;
 
-	uint NumLevels() const { return m_Levels.GetSize(); }
+	unsigned int GetNumLevels() const { return m_Levels.GetSize(); }
 	vtLevel *GetLevel(int i) { return (i < (int)m_Levels.GetSize()) ? m_Levels[i] : NULL; }
 	const vtLevel *GetLevel(int i) const { return (i < (int)m_Levels.GetSize()) ? m_Levels[i] : NULL; }
 	vtLevel *CreateLevel(const DPolygon2 &footprint);
@@ -250,7 +249,7 @@ public:
 	void WriteXML(GZOutput &out, bool bDegrees) const;
 	void AddDefaultDetails();
 	void DetermineLocalFootprints();
-	const FPolygon3 &GetLocalFootprint(int i) const { return m_Levels[i]->GetLocalFootprint(); }
+	const FPolygon3 &GetLocalFootprint(int i) { return m_Levels[i]->GetLocalFootprint(); }
 
 	static vtLocalConversion s_Conv;
 	static const char *GetEdgeFeatureString(int edgetype);
@@ -258,21 +257,11 @@ public:
 
 	bool IsContainedBy(const DRECT &rect) const;
 	void SwapLevels(int lev1, int lev2);
-	void SetEaves(float fLength);
-	void SetEavesSimple(float fLength);
-	void SetEavesFelkel(float fLength);
-	void CopyStyleFrom(const vtBuilding * const pSource, bool bDoHeight);
-
-	void SetCRS(vtProjection *proj) { m_pCRS = proj; }
+	void CopyFromDefault(vtBuilding *pDefBld, bool bDoHeight);
 
 protected:
 	// information about each story
 	vtArray<vtLevel *> m_Levels;
-
-	// Every building needs a link back up to its containing array, because
-	// that's where its CRS is stored, which it needs to know for LocalCoords.
-	// This is more simple and efficient than storing a CRS on every building.
-	vtProjection *m_pCRS;
 
 private:
 	void DeleteLevels();

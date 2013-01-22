@@ -38,7 +38,7 @@ public:
 		as series of triangles. */
 	static bool Process(const FLine2 &contour, FLine2 &result);
 	static bool Process(const FLine3 &contour, FLine3 &result);
-	static bool Process(const FLine3 &contour, std::vector<int> &result);
+	static bool Process(const FLine3 &contour, vtArray<int> &result);
 
 	/** compute area of a contour/polygon */
 	static float Area(const FLine2 &contour);
@@ -86,12 +86,6 @@ private:
  */
 void CallTriangle(const DLine2 &contour, DLine2 &result);
 void CallTriangle(const DPolygon2 &contour, DLine2 &result);
-
-/**
- * Third algorithm: poly2tri
- */
-void CallPoly2Tri(const DLine2 &contour, DLine2 &result);
-void CallPoly2Tri(const DPolygon2 &contour, DLine2 &result);
 
 #endif	// TRIANGULATE_H
 

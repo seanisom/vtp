@@ -1,7 +1,7 @@
 //
 // vtHeightField.h
 //
-// Copyright (c) 2002-2013 Virtual Terrain Project
+// Copyright (c) 2002-2008 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -10,10 +10,32 @@
 
 #include <limits.h>			// for SHRT_MIN
 #include "LocalConversion.h"
-#include "ColorMap.h"
 
 class vtBitmapBase;
 #define INVALID_ELEVATION	SHRT_MIN
+
+/**
+ * This small class describes how to map elevation (as from a heightfield)
+ * onto a set of colors.
+ */
+class ColorMap
+{
+public:
+	ColorMap();
+	bool Save(const char *fname) const;
+	bool Load(const char *fname);
+	void Add(float elev, const RGBi &color);
+	void RemoveAt(int num);
+	void Clear();
+	int Num() const;
+	void GenerateColors(std::vector<RGBi> &table, int iTableSize, float fMin, float fMax) const;
+
+	bool m_bBlend;
+	bool m_bRelative;
+	std::vector<float> m_elev;
+	std::vector<RGBi> m_color;
+};
+
 
 /**
  * A heightfield is any collection of surfaces such that, given a horizontal
@@ -114,15 +136,12 @@ public:
 	int PointIsAboveTerrain(const FPoint3 &p) const;
 
 	bool ConvertEarthToSurfacePoint(const DPoint2 &epos, FPoint3 &p3,
-		int iCultureFlags = 0, bool bTrue = false) const;
+		int iCultureFlags = 0, bool bTrue = false);
 
-	bool ContainsWorldPoint(float x, float z) const;
-	void GetCenter(FPoint3 &center) const;
+	bool ContainsWorldPoint(float x, float z);
+	void GetCenter(FPoint3 &center);
 
 	void SetCulture(CultureExtension *ext) { m_pCulture = ext; }
-
-	float LineOnSurface(const DLine2 &line, float fSpacing, float fOffset,
-		bool bInterp, bool bCurve, bool bTrue, FLine3 &output);
 
 	FRECT	m_WorldExtents;		// cooked (OpenGL) extents (in the XZ plane)
 	vtLocalConversion	m_Conversion;
@@ -154,14 +173,11 @@ public:
 	bool CastRayToSurface(const FPoint3 &point, const FPoint3 &dir,
 		FPoint3 &result) const;
 	bool LineOfSight(const FPoint3 &point1, const FPoint3 &point2) const;
-
-	/** Get the grid spacing, the width of each column and row. */
-	const DPoint2 &GetSpacing() const { return m_dStep; }
-	const FPoint2 &GetWorldSpacing() const { return m_fStep; }
+	DPoint2 GetSpacing() const;
+	FPoint2 GetWorldSpacing() const;
 	void GetDimensions(int &nColumns, int &nRows) const;
-	const IPoint2 &GetDimensions() const { return m_iSize; }
-	int NumColumns() const { return m_iSize.x; }
-	int NumRows() const { return m_iSize.y; }
+	int NumColumns() { return m_iColumns; }
+	int NumRows() { return m_iRows; }
 	void EarthToGrid(const DPoint2 &epos, IPoint2 &ipos);
 	void WorldToGrid(const FPoint3 &pos, IPoint2 &ipos);
 
@@ -172,23 +188,23 @@ public:
 	virtual float GetElevation(int iX, int iZ, bool bTrue = false) const = 0;
 	virtual void GetWorldLocation(int i, int j, FPoint3 &loc, bool bTrue = false) const = 0;
 
-	bool ColorDibFromElevation(vtBitmapBase *pBM, ColorMap *cmap,
-		int iGranularity, const RGBAi &nodata, bool progress_callback(int) = NULL) const;
-	bool ColorDibFromTable(vtBitmapBase *pBM, const ColorMap *color_map,
-		const RGBAi &nodata, bool progress_callback(int) = NULL) const;
+	bool ColorDibFromElevation(vtBitmapBase *pBM, const ColorMap *cmap,
+		int iGranularity, const RGBAi &nodata, bool progress_callback(int) = NULL);
+	bool ColorDibFromTable(vtBitmapBase *pBM, std::vector<RGBi> &table,
+		float fMin, float fMax, const RGBAi &nodata, bool progress_callback(int) = NULL);
 
 	void ShadeDibFromElevation(vtBitmapBase *pBM, const FPoint3 &light_dir,
 		float fLightFactor, float fAmbient = 0.1f, float fGamma = 1.0f,
-		bool bTrue = false, bool progress_callback(int) = NULL) const;
+		bool bTrue = false, bool progress_callback(int) = NULL);
 	void ShadeQuick(vtBitmapBase *pBM, float light_factor, bool bTrue = false,
 		bool progress_callback(int) = NULL);
 	void ShadowCastDib(vtBitmapBase *pBM, const FPoint3 &ight_dir,
-		float fLightFactor, float fAmbient, bool progress_callback(int) = NULL) const;
+		float fLightFactor, float fAmbient, bool progress_callback(int) = NULL);
 
 protected:
-	IPoint2	m_iSize;
-	FPoint2	m_fStep;			// step size (x, z) between the World grid points
-	DPoint2	m_dStep;			// step size (z, y) between the Earth grid points
+	int		m_iColumns, m_iRows;
+	float	m_fXStep, m_fZStep;	// step size between the World grid points
+	double	m_dXStep, m_dYStep;	// step size between the Earth grid points
 };
 
 #endif	// HEIGHTFIELDH

@@ -1,7 +1,7 @@
 //
 // WaterLayer.cpp
 //
-// Copyright (c) 2001-2012 Virtual Terrain Project
+// Copyright (c) 2001-2009 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -15,6 +15,7 @@
 
 #include "WaterLayer.h"
 #include "ScaledView.h"
+#include "Helper.h"
 #include "ogrsf_frmts.h"
 
 
@@ -63,7 +64,6 @@ bool vtWaterLayer::TransformCoords(vtProjection &proj_new)
 		}
 	}
 	delete trans;
-	SetModified(true);
 	return true;
 }
 
@@ -134,10 +134,10 @@ void vtWaterLayer::SetProjection(const vtProjection &proj)
 
 void vtWaterLayer::Offset(const DPoint2 &p)
 {
-	uint size = (uint)m_Lines.size();
-	for (uint i = 0; i < size; i++)
+	unsigned int size = (unsigned int)m_Lines.size();
+	for (unsigned int i = 0; i < size; i++)
 	{
-		for (uint c = 0; c < m_Lines[i].GetSize(); c++)
+		for (unsigned int c = 0; c < m_Lines[i].GetSize(); c++)
 			m_Lines[i].GetAt(c) += p;
 	}
 }
@@ -148,7 +148,7 @@ void vtWaterLayer::GetPropertyText(wxString &strIn)
 	str.Printf(_("Features: %d\n"), m_Lines.size());
 	strIn += str;
 
-	uint i;
+	unsigned int i;
 	int count = 0;
 	for (i = 0; i < m_Lines.size(); i++)
 		if (m_IsBody[i]) count++;
@@ -247,8 +247,10 @@ void vtWaterLayer::AddElementsFromSHP(const wxString &filename,
 
 		// Copy each SHP Poly Coord
 		for (int j = 0; j < psShape->nVertices; j++)
-			dline[j].Set(psShape->padfX[j], psShape->padfY[j]);
-
+		{
+			dline.GetAt(j).x = psShape->padfX[j];
+			dline.GetAt(j).y = psShape->padfY[j];
+		}
 		m_Lines[i] = dline;
 		m_IsBody[i] = false;
 

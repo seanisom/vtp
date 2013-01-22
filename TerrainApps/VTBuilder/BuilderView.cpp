@@ -1,7 +1,7 @@
 //
 // BuilderView.cpp
 //
-// Copyright (c) 2001-2013 Virtual Terrain Project
+// Copyright (c) 2001-2011 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -20,6 +20,7 @@
 #include "BuilderView.h"
 #include "Builder.h"
 #include "MenuEnum.h"
+#include "Helper.h"
 #include "VTBuilder_UI.h"
 // Layers
 #include "ElevLayer.h"
@@ -31,7 +32,6 @@
 // Dialogs
 #include "vtui/DistanceDlg.h"
 #include "vtui/Helper.h"	// for GuessZoneFromGeo
-#include "vtui/InstanceDlg.h"
 
 #include "cpl_error.h"
 #include <float.h>
@@ -152,18 +152,22 @@ void BuilderView::OnDraw(wxDC& dc)  // overridden to draw this view
 		return;
 
 	vtLayerPtr lp;
-	const int iLayers = g_bld->NumLayers();
+	int i, iLayers = g_bld->NumLayers();
 
 	// Draw 'interrupted projection outline' for current projection
-	if (g_bld->GetAtProjection().IsDymaxion())
+	vtProjection proj;
+	g_bld->GetProjection(proj);
+	if (proj.IsDymaxion())
+	{
 		DrawDymaxionOutline(&dc);
+	}
 
 	// Draw the world map SHP file of country outline polys in latlon
 	if (m_bShowMap)
 		DrawWorldMap(&dc);
 
 	// Draw the solid layers first
-	for (int i = 0; i < iLayers; i++)
+	for (i = 0; i < iLayers; i++)
 	{
 		lp = g_bld->GetLayer(i);
 		if (lp->GetType() != LT_IMAGE && lp->GetType() != LT_ELEVATION)
@@ -172,7 +176,7 @@ void BuilderView::OnDraw(wxDC& dc)  // overridden to draw this view
 			lp->DrawLayer(&dc, this);
 	}
 	// Then the poly/vector/point layers
-	for (int i = 0; i < iLayers; i++)
+	for (i = 0; i < iLayers; i++)
 	{
 		lp = g_bld->GetLayer(i);
 		if (lp->GetType() == LT_IMAGE || lp->GetType() == LT_ELEVATION)
@@ -208,7 +212,7 @@ void BuilderView::DrawDymaxionOutline(wxDC *pDC)
 
 	m_icosa.GetDymaxEdges(polys);
 
-	for (uint i = 0; i < polys.size(); i++)
+	for (unsigned int i = 0; i < polys.size(); i++)
 	{
 		DrawPolyLine(pDC, polys[i], true);
 	}
@@ -233,18 +237,16 @@ void BuilderView::SetMode(LBMode m)
 
 	switch (m_ui.mode)
 	{
-	case LB_Dir:
-		vtRoadLayer::SetShowDirection(true);
-		Refresh();
-		break;
-	case LB_Node:
-		if (!vtRoadLayer::GetDrawNodes()) {
-			vtRoadLayer::SetDrawNodes(true);
+		case LB_Dir:
+			vtRoadLayer::SetShowDirection(true);
 			Refresh();
-		}
-		break;
-	default:	// Keep picky compilers quiet.
-		break;
+			break;
+		case LB_Node:
+			if (!vtRoadLayer::GetDrawNodes()) {
+				vtRoadLayer::SetDrawNodes(true);
+				Refresh();
+			}
+			break;
 	}
 
 	g_bld->OnSetMode(m);
@@ -266,7 +268,8 @@ void BuilderView::DrawUTMBounds(wxDC *pDC)
 	pDC->SetLogicalFunction(wxCOPY);
 	pDC->SetPen(orange);
 
-	const vtProjection &proj = g_bld->GetAtProjection();
+	vtProjection proj;
+	g_bld->GetProjection(proj);
 
 	int width, height;
 	GetClientSize(&width, &height);
@@ -293,6 +296,7 @@ void BuilderView::DrawUTMBounds(wxDC *pDC)
 	{
 		int zone_start = 0;
 		int zone_end = 60;
+		int zone;
 		DPoint2 proj_point;
 
 		vtProjection geo;
@@ -317,7 +321,7 @@ void BuilderView::DrawUTMBounds(wxDC *pDC)
 		// to the current projection
 		trans = CreateCoordTransform(&geo, &proj);
 
-		for (int zone = zone_start; zone < zone_end; zone++)
+		for (zone = zone_start; zone < zone_end; zone++)
 		{
 			ll.x = -180.0f + zone * 6.0;
 			j = 0;
@@ -344,7 +348,7 @@ bool BuilderView::ImportWorldMap()
 {
 	SHPHandle	hSHP;
 	int			nShapeType, nShapeCount;
-	uint i;
+	unsigned int i;
 	int j, k;
 
 	vtString fname = FindFileOnPaths(vtGetDataPath(), "WorldMap/gnv19.shp");
@@ -363,7 +367,7 @@ bool BuilderView::ImportWorldMap()
 	SHPGetInfo(hSHP, &nShapeCount, &nShapeType, NULL, NULL);
 	if (nShapeType != SHPT_POLYGON)
 		return false;
-	uint iShapeCount = nShapeCount;
+	unsigned int iShapeCount = nShapeCount;
 
 	// Copy SHP data into World Map Poly data
 	WMPoly.reserve(iShapeCount * 11 / 10);
@@ -407,7 +411,7 @@ bool BuilderView::ImportWorldMap()
 	SHPClose(hSHP);
 
 	// Initialize the drawn World Map WMPolyDraw to original (latlon)
-	m_iEntities = (uint)WMPoly.size();
+	m_iEntities = (unsigned int)WMPoly.size();
 	WMPolyDraw.resize(m_iEntities);
 	for (i = 0; i < m_iEntities; i++)
 		WMPolyDraw[i] = WMPoly[i];
@@ -417,7 +421,7 @@ bool BuilderView::ImportWorldMap()
 
 void BuilderView::SetWMProj(const vtProjection &proj)
 {
-	uint i, j;
+	unsigned int i, j;
 
 	if (WMPoly.size() == 0)
 		return;
@@ -490,7 +494,7 @@ void BuilderView::SetWMProj(const vtProjection &proj)
 		WMPolyExtents[i].GrowToContainLine(WMPoly[i]);
 
 		// and project into current CRS
-		WMPolyDraw[i].Clear();
+		WMPolyDraw[i].Empty();
 		for (j = 0; j < WMPoly[i].GetSize(); j++)
 		{
 			point = WMPoly[i].GetAt(j);
@@ -556,7 +560,7 @@ void BuilderView::DrawWorldMap(wxDC *pDC)
 
 #if 1
 	// Draw each poly in WMPolyDraw
-	for (uint i = 0; i < m_iEntities; i++)
+	for (unsigned int i = 0; i < m_iEntities; i++)
 	{
 		if (bHaveBounds)
 		{
@@ -567,7 +571,7 @@ void BuilderView::DrawWorldMap(wxDC *pDC)
 	}
 #else
 	// Draw each poly in WMPolyDraw
-	for (uint i = 0; i < m_iEntities; i++)
+	for (unsigned int i = 0; i < m_iEntities; i++)
 	{
 		if (bHaveBounds)
 		{
@@ -803,43 +807,41 @@ void BuilderView::EndBox(const wxMouseEvent& event)
 	m_world_rect = CanvasToWorld(rect);
 	switch (m_ui.mode)
 	{
-	case LB_Mag:
-		if (event.AltDown())
-			ZoomOutToRect(m_world_rect);
-		else
-			ZoomToRect(m_world_rect, 0.0f);
-		break;
-	case LB_Box:
-		DrawAreaTool(&dc, g_bld->GetAtArea());
-		g_bld->SetArea(m_world_rect);
-		DrawAreaTool(&dc, g_bld->GetAtArea());
-		break;
-	case LB_Node:
-	case LB_Link:
-		{
-			// select everything in the highlighted box.
-			vtRoadLayer *pRL = g_bld->GetActiveRoadLayer();
-			if (pRL->SelectArea(m_world_rect, (m_ui.mode == LB_Node),
-				m_bCrossSelect))
-			{
-				rect = WorldToWindow(m_world_rect);
-				IncreaseRect(rect, 5);
-				if (m_bCrossSelect)
-					Refresh();
-				else
-					Refresh(TRUE, &rect);
-			}
+		case LB_Mag:
+			if (event.AltDown())
+				ZoomOutToRect(m_world_rect);
 			else
-				DeselectAll();
-		}
-		break;
-	case LB_Move:
-		Refresh();
-		break;
-	case LB_FSelect:
-		EndBoxFeatureSelect(event);
-	default:	// Keep picky compilers quiet.
-		break;
+				ZoomToRect(m_world_rect, 0.0f);
+			break;
+		case LB_Box:
+			DrawAreaTool(&dc, g_bld->GetAtArea());
+			g_bld->SetArea(m_world_rect);
+			DrawAreaTool(&dc, g_bld->GetAtArea());
+			break;
+		case LB_Node:
+		case LB_Link:
+			{
+			// select everything in the highlighted box.
+				vtRoadLayer *pRL = g_bld->GetActiveRoadLayer();
+				if (pRL->SelectArea(m_world_rect, (m_ui.mode == LB_Node),
+							m_bCrossSelect))
+				{
+					rect = WorldToWindow(m_world_rect);
+					IncreaseRect(rect, 5);
+					if (m_bCrossSelect)
+						Refresh();
+					else
+						Refresh(TRUE, &rect);
+				}
+				else
+					DeselectAll();
+			}
+			break;
+		case LB_Move:
+			Refresh();
+			break;
+		case LB_FSelect:
+			EndBoxFeatureSelect(event);
 	}
 }
 
@@ -983,7 +985,7 @@ void BuilderView::DrawDistanceTool(wxDC *pDC)
 		DrawPolyLine(pDC, m_distance_path, false);
 
 		// draw small crosshairs
-		uint i, len = m_distance_path.GetSize();
+		unsigned int i, len = m_distance_path.GetSize();
 		for (i = 0; i < len; i++)
 		{
 			wxPoint p1 = g_screenbuf[i];
@@ -1041,7 +1043,7 @@ void BuilderView::CheckForTerrainSelect(const DPoint2 &loc)
 	// perhaps the user clicked on a terrain
 	bool bFound = false;
 	DRECT rect;
-	for (uint l = 0; l < g_bld->NumLayers(); l++)
+	for (int l = 0; l < g_bld->NumLayers(); l++)
 	{
 		vtLayerPtr lp = g_bld->GetLayer(l);
 		if (lp->GetType() != LT_ELEVATION) continue;
@@ -1120,7 +1122,6 @@ void BuilderView::HighlightArea(wxDC *pDC, const DRECT &rect)
 	pDC->SetLogicalFunction(wxINVERT);
 
 	wxRect sr = WorldToCanvas(rect);
-
 	int sx = sr.width / 3;
 	int sy = sr.height / 3;
 	int left = sr.x, right = sr.x+sr.width,
@@ -1128,20 +1129,32 @@ void BuilderView::HighlightArea(wxDC *pDC, const DRECT &rect)
 	int d=2,e=4;
 
 	//
-	pDC->DrawLine(left - e, top - d, left - e,  top + sy);
-	pDC->DrawLine(left - d, top - e, left + sx, top - e);
+	pDC->DrawLine(left - e, top - d,
+		left - e, top + sy);
+
+	pDC->DrawLine(left - d, top - e,
+		left + sx, top - e);
 
 	//
-	pDC->DrawLine(right - sx, top - e, right + e, top - e);
-	pDC->DrawLine(right + e,  top - d, right + e, top + sy);
+	pDC->DrawLine(right - sx, top - e,
+		right + e, top - e);
+
+	pDC->DrawLine(right + e, top - d,
+		right + e, top + sy);
 
 	//
-	pDC->DrawLine(right + e,  bottom - sy, right + e, bottom + d);
-	pDC->DrawLine(right - sx, bottom + e,  right + e, bottom + e);
+	pDC->DrawLine(right + e, bottom - sy,
+		right + e, bottom + d);
+
+	pDC->DrawLine(right - sx, bottom + e,
+		right + e, bottom + e);
 
 	//
-	pDC->DrawLine(left - e,  bottom - sy, left - e, bottom + d);
-	pDC->DrawLine(left + sx, bottom + e,  left - e, bottom + e);
+	pDC->DrawLine(left - e, bottom - sy,
+		left - e, bottom + d);
+
+	pDC->DrawLine(left + sx, bottom + e,
+		left - e, bottom + e);
 }
 
 ////////////////////////////////////////////////////////////
@@ -1410,7 +1423,7 @@ void BuilderView::MatchZoomToElev(vtElevLayer *pEL)
 	if (!pEL || !pEL->GetGrid())
 		return;
 
-	const DPoint2 &spacing = pEL->GetGrid()->GetSpacing();
+	DPoint2 spacing = pEL->GetGrid()->GetSpacing();
 	SetScale(1.0f / spacing.x);
 
 	DPoint2 center;
@@ -1421,13 +1434,12 @@ void BuilderView::MatchZoomToElev(vtElevLayer *pEL)
 
 	Refresh();
 }
-
 void BuilderView::MatchZoomToImage(vtImageLayer *pIL)
 {
 	if (!pIL)
 		return;
 
-	const DPoint2 &spacing = pIL->GetSpacing();
+	DPoint2 spacing = pIL->GetSpacing();
 	SetScale(1.0f / spacing.x);
 
 	DPoint2 center;
@@ -1497,36 +1509,34 @@ void BuilderView::OnLeftDown(wxMouseEvent& event)
 	vtLayerPtr pL = g_bld->GetActiveLayer();
 	switch (m_ui.mode)
 	{
-	case LB_TSelect:
-		CheckForTerrainSelect(m_ui.m_DownLocation);
-		break;
+		case LB_TSelect:
+			CheckForTerrainSelect(m_ui.m_DownLocation);
+			break;
 
-	case LB_Pan:
-		BeginPan();
-		break;
+		case LB_Pan:
+			BeginPan();
+			break;
 
-	case LB_Mag:
-	case LB_Node:
-	case LB_Link:
-	case LB_FSelect:
-		BeginBox();
-		break;
+		case LB_Mag:
+		case LB_Node:
+		case LB_Link:
+		case LB_FSelect:
+			BeginBox();
+			break;
 
-	case LB_Box:
-		BeginArea();
-		break;
+		case LB_Box:
+			BeginArea();
+			break;
 
-	case LB_Dist:
-		BeginDistance();
-		break;
-	default:	// Keep picky compilers quiet.
-		break;
+		case LB_Dist:
+			BeginDistance();
+			break;
 	}
 	// Dispatch for layer-specific handling
 	if (pL)
 		pL->OnLeftDown(this, m_ui);
 
-	// Allow wxWidgets to pass the event along.  This is important because
+	// Allow wxWindows to pass the event along.  This is important because
 	//  otherwise (with wx>2.4) we may not receive keyboard focus.
 	event.Skip();
 }
@@ -1680,7 +1690,7 @@ void BuilderView::OnLButtonClickFeature(vtLayerPtr pL)
 				building, distance);
 		if (found)
 		{
-			vtStructure *str = pSL->at(building);
+			vtStructure *str = pSL->GetAt(building);
 			str->Select(!str->IsSelected());
 		}
 		Refresh(false);
@@ -1832,8 +1842,6 @@ void BuilderView::OnMouseMove(wxMouseEvent& event)
 
 	// update new mouse coordinates, etc. in status bar
 	g_bld->RefreshStatusBar();
-	if (g_bld->m_pInstanceDlg)
-		g_bld->m_pInstanceDlg->SetLocation(m_ui.m_CurLocation);
 
 	m_ui.m_LastPoint = m_ui.m_CurPoint;
 	m_ui.m_PrevLocation = m_ui.m_CurLocation;
@@ -1854,11 +1862,6 @@ void BuilderView::OnMouseWheel(wxMouseEvent& event)
 
 void BuilderView::OnIdle(wxIdleEvent& event)
 {
-	// Prevent re-entrance, which may happen on Idle -> ProgressDialog -> Idle
-	static bool s_in = false;
-	if (s_in) return;
-	s_in = true;
-
 	if (!m_bGotFirstIdle)
 	{
 		m_bGotFirstIdle = true;
@@ -1902,7 +1905,6 @@ void BuilderView::OnIdle(wxIdleEvent& event)
 		CloseProgressDialog2();
 		Refresh(true);
 	}
-	s_in = false;
 }
 
 void BuilderView::OnSize(wxSizeEvent& event)
@@ -1938,6 +1940,10 @@ void BuilderView::OnSize(wxSizeEvent& event)
 //////////////////
 // Keyboard shortcuts
 
+//#include <wx/Dir.h>
+//#include <wx/File.h>
+//#include "vtdata/TripDub.h"
+//#include "vtdata/vtDIB.h"
 #include <map>
 
 void BuilderView::OnChar(wxKeyEvent& event)
@@ -1969,6 +1975,12 @@ void BuilderView::OnChar(wxKeyEvent& event)
 void BuilderView::RunTest()
 {
 	// a place to put quick hacks and tests
+#if 0
+	vtRawLayer *pRaw = g_bld->GetActiveRawLayer();
+	if (!pRaw) return;
+	pRaw->ReadGeoURL();
+	Refresh();
+#endif
 #if 0
 	vtRoadLayer *pR = (vtRoadLayer *)g_bld->FindLayerOfType(LT_ROAD);
 	vtElevLayer *pE = (vtElevLayer *)g_bld->FindLayerOfType(LT_ELEVATION);
@@ -2057,7 +2069,7 @@ void BuilderView::RunTest()
 	vtStructureArray str;
 	vtBuilding *bld = str.NewBuilding();
 	bld->SetFootprint(0, dline);
-	bld->SetNumStories(2);
+	bld->SetStories(2);
 	bld->SetRoofType(RT_HIP);
 	bld->SetColor(BLD_BASIC, RGBi(255,0,0))
 		bld->SetColor(BLD_ROOF, RGBi(255,255,255))
@@ -2147,7 +2159,7 @@ void BuilderView::RunTest()
 #endif
 #if 0
 	{
-		vtStructureArray *sa = new vtStructureArray;
+		vtStructureArray *sa = new vtStructureArray();
 		sa->m_proj.SetGeogCSFromDatum(EPSG_DATUM_WGS84);
 		// 1557 buildings
 		sa->ReadXML("G:/Data-USA/Data-Hawaii/BuildingData/stage5.vtst");
@@ -2212,13 +2224,6 @@ void BuilderView::RunTest()
 			}
 		}
 	}
-#endif
-#if 0
-	vtRawLayer *pRaw = g_bld->GetActiveRawLayer();
-	if (!pRaw) return;
-	vtFeatureSetPolygon *fsp = (vtFeatureSetPolygon*) pRaw->GetFeatureSet();
-	int fixed = fsp->SelectBadFeatures(0.05);	// 5 cm
-	Refresh();
 #endif
 }
 

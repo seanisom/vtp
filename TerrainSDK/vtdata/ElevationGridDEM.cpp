@@ -257,18 +257,9 @@ bool vtElevationGrid::LoadFromDEM(const char *szFileName,
 
 	// Special case.  Some old DEMs claim to be NAD27, but they are of Hawai'i,
 	//  and Hawai'i has no NAD27, it is actually OHD.
-	if (iDatum == EPSG_DATUM_NAD27)
+	if (bGeographic && iDatum == EPSG_DATUM_NAD27)
 	{
-		DRECT Hawaii(0,0,0,0);
-		if (bGeographic)
-			Hawaii.SetRect(-164, 24, -152, 17);
-		else if (iCoordSystem == 1)	// UTM
-		{
-			if (iUTMZone == 4)
-				Hawaii.SetRect(240000, 2600000, 1000000, 2000000);
-			else if (iUTMZone == 5)
-				Hawaii.SetRect(-400000, 2600000, 400000, 2000000);
-		}
+		DRECT Hawaii(-164, 24, -152, 17);
 		for (i = 0; i < 4; i++)
 		{
 			if (Hawaii.ContainsPoint(m_Corners[i]))
@@ -347,7 +338,7 @@ bool vtElevationGrid::LoadFromDEM(const char *szFileName,
 	IConvert(fp, 6, iProfiles);
 	VTLOG("DEM profiles: %d\n", iProfiles);
 
-	m_iSize.x = iProfiles;
+	m_iColumns = iProfiles;
 
 	// values we'll need while scanning the elevation profiles
 	int		iProfileRows, iProfileCols;
@@ -433,17 +424,17 @@ bool vtElevationGrid::LoadFromDEM(const char *szFileName,
 	{
 		// degrees
 		fRows = m_EarthExtents.Height() / dydelta * 3600.0f;
-		m_iSize.y = (int)fRows + 1;	// 1 more than quad spacing
+		m_iRows = (int)fRows + 1;	// 1 more than quad spacing
 	}
 	else
 	{
 		// some linear coordinate system
 		fRows = m_EarthExtents.Height() / dydelta;
-		m_iSize.y = (int)(fRows + 0.5) + 1;	// round to the nearest integer
+		m_iRows = (int)(fRows + 0.5) + 1;	// round to the nearest integer
 	}
 
 	// safety check
-	if (m_iSize.y > 10000)
+	if (m_iRows > 10000)
 		return false;
 
 	if (!_AllocateArray())
@@ -477,7 +468,7 @@ bool vtElevationGrid::LoadFromDEM(const char *szFileName,
 
 		for (j = ygap; j < (ygap + iProfileRows); j++)
 		{
-			//assert(j >=0 && j < m_iSize.y);	// useful safety check
+			//assert(j >=0 && j < m_iRows);	// useful safety check
 
 			// We cannot use IConvert here, because there *might* be a spurious LF
 			// after the number - seen in some rare files.
@@ -486,14 +477,8 @@ bool vtElevationGrid::LoadFromDEM(const char *szFileName,
 			if (iElev == -32767 || iElev == -32768)
 				SetValue(i, j, INVALID_ELEVATION);
 			else
-			{
-				// The DEM spec says:
-				// "A value in this array would be multiplied by the "z" spatial
-				// resolution (data element 15, record type A) and added to the
-				// "Elevation of local datum for the profile" (data element 4, record
-				// type B) to obtain the elevation for the point."
-				SetValue(i, j, (short) iElev + (short) dLocalDatumElev);
-			}
+//				SetValue(i, j, (short) (dProfileMin+iElev));
+				SetValue(i, j, (short) iElev);
 		}
 	}
 	fclose(fp);

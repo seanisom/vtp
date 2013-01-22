@@ -4,7 +4,7 @@
 // Implements the vtStructure3d class which extends vtStructure with the
 // ability to create 3D geometry.
 //
-// Copyright (c) 2001-2012 Virtual Terrain Project
+// Copyright (c) 2001-2011 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -15,12 +15,52 @@
 /*@{*/
 
 #include "vtdata/StructArray.h"
-#include "MaterialDescriptor3d.h"
+
+#define COLOR_SPREAD	216		// 216 color variations
 
 class vtBuilding3d;
 class vtFence3d;
 class vtTerrain;
 class vtTransform;
+
+extern const vtString BMAT_NAME_HIGHLIGHT;
+
+/**
+ * This class extents vtMaterialDescriptorArray with the ability to construct
+ * real vtlib Materials.  You won't need to use this class directly, unless
+ * you wish to use the shared pool of materials used by the vtBuilding3d
+ * class.
+ */
+class vtMaterialDescriptorArray3d : public vtMaterialDescriptorArray
+{
+public:
+	vtMaterialDescriptorArray3d();
+
+	vtMaterial *MakeMaterial(vtMaterialDescriptor *desc, const RGBf &color);
+	int FindMatIndex(const vtString & Material, const RGBf &inputColor = RGBf(),
+		int iType = -1);
+	vtMaterialDescriptor *FindMaterialDescriptor(const vtString& MaterialName,
+		const RGBf &color = RGBf(), int iType = -1) const;
+	void InitializeMaterials();
+	void CreateMaterials();
+	vtMaterialArray *GetMatArray() const { return m_pMaterials; };
+
+protected:
+	// There is a single array of materials, shared by all buildings.
+	// This is done to save memory.  For a list of 16000+ buildings, this can
+	//  save about 200MB of RAM.
+	vtMaterialArrayPtr m_pMaterials;
+
+	bool m_bMaterialsCreated;
+
+	void CreateSelfColoredMaterial(vtMaterialDescriptor *descriptor);
+	void CreateColorableTextureMaterial(vtMaterialDescriptor *descriptor);
+
+	RGBf m_Colors[COLOR_SPREAD];
+
+	// indices of internal materials
+	int m_hightlight1, m_hightlight2, m_hightlight3, m_wire;
+};
 
 
 /**
@@ -30,7 +70,7 @@ class vtTransform;
 class vtStructure3d
 {
 public:
-	vtStructure3d() { m_pContainer = NULL; m_bIsVIAContributor = false; m_bIsVIATarget = false; }
+	vtStructure3d() { m_pContainer = NULL; }
 
 	vtTransform *GetContainer() { return m_pContainer; }
 	virtual osg::Node *GetContained() = 0;
@@ -49,52 +89,34 @@ public:
 	void SetCastShadow(bool b);
 	bool GetCastShadow();
 
-	// Visual Impact
-	const bool GetVIAContributor() const { return m_bIsVIAContributor; }
-	const bool GetVIATarget() const { return m_bIsVIATarget; }
-	void SetVIAContributor(const bool bVIAContributor) { m_bIsVIAContributor = bVIAContributor; }
-	void SetVIATarget(const bool bVIATarget) { m_bIsVIATarget = bVIATarget; }
-
-public:
-	// A number of convenience methods access the global materials table.
-	static void InitializeMaterialArrays();
-
 	// Get the material descriptors
 	static vtMaterialDescriptorArray3d& GetMaterialDescriptors()
 	{
 		return s_MaterialDescriptors;
 	}
 
+	static void InitializeMaterialArrays();
+
+	// all fences share the same set of materials
+	static void CreateSharedMaterials();
+
 protected:
-	// You can get a material index directly from its name.
-	static int GetMatIndex(const vtString &Material, const RGBf &inputColor = RGBf(), int iType = -1)
+	// material
+	int FindMatIndex(const vtString &Material, const RGBf &inputColor = RGBf(), int iType = -1)
 	{
-		return s_MaterialDescriptors.GetMatIndex(Material, inputColor, iType);
+		return s_MaterialDescriptors.FindMatIndex(Material, inputColor, iType);
 	}
-	// Or you can get its descriptor, then use that to get its material index.
-	static vtMaterialDescriptor *GetMatDescriptor(const vtString &name,
-		const RGBf &color = RGBf(), int type = -1)
-	{
-		return s_MaterialDescriptors.GetMatDescriptor(name, color, type);
-	}
-	static int GetMatIndex(vtMaterialDescriptor *desc, const RGBf &color = RGBf())
-	{
-		return s_MaterialDescriptors.GetMatIndex(desc, color);
-	}
-	static vtMaterialArray *GetSharedMaterialArray()
+	vtMaterialArray *GetSharedMaterialArray() const
 	{
 		return s_MaterialDescriptors.GetMatArray();
 	}
-
-protected:
 	vtTransformPtr m_pContainer;	// The transform which is used to position the object
 
-	static vtMaterialDescriptorArray3d s_MaterialDescriptors;
-	static bool s_bMaterialsInitialized;
+protected:
+	float ColorDiff(const RGBi &c1, const RGBi &c2);
 
-	// Visual Impact
-    bool m_bIsVIAContributor;
-	bool m_bIsVIATarget;
+	static vtMaterialDescriptorArray3d s_MaterialDescriptors;
+	static bool s_bMaterialsLoaded;
 };
 
 
@@ -127,7 +149,6 @@ public:
 protected:
 	vtGeode		*m_pHighlight;	// The wireframe highlight
 	osg::ref_ptr<osg::Node> m_pModel; // the contained model
-	double		m_RadiusInEarthCoords;
 };
 
 
@@ -145,9 +166,9 @@ public:
 	virtual vtStructInstance *NewInstance();
 
 	vtStructure3d *GetStructure3d(int i);
-	vtBuilding3d *GetBuilding(int i) const { return (vtBuilding3d *) at(i)->GetBuilding(); }
-	vtFence3d *GetFence(int i) { return (vtFence3d *) at(i)->GetFence(); }
-	vtStructInstance3d *GetInstance(int i) { return (vtStructInstance3d *) at(i)->GetInstance(); }
+	vtBuilding3d *GetBuilding(int i) { return (vtBuilding3d *) GetAt(i)->GetBuilding(); }
+	vtFence3d *GetFence(int i) { return (vtFence3d *) GetAt(i)->GetFence(); }
+	vtStructInstance3d *GetInstance(int i) { return (vtStructInstance3d *) GetAt(i)->GetInstance(); }
 
 	/// Indicate the heightfield which will be used for the structures in this array
 	void SetTerrain(vtTerrain *pTerr) { m_pTerrain = pTerr; }

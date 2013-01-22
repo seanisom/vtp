@@ -1,7 +1,7 @@
 //
 // Plants.cpp
 //
-// Copyright (c) 2001-2011 Virtual Terrain Project
+// Copyright (c) 2001-2008 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -53,7 +53,7 @@ vtPlantSpecies::vtPlantSpecies()
 
 vtPlantSpecies::~vtPlantSpecies()
 {
-	for (uint i = 0; i < m_Apps.GetSize(); i++)
+	for (unsigned int i = 0; i < m_Apps.GetSize(); i++)
 	{
 		delete m_Apps[i];
 	}
@@ -84,10 +84,10 @@ void vtPlantSpecies::AddCommonName(const char *Name, const char *Lang)
  * Return the number of common names of this species in a given language.
  * Language is a two-letter ISO 639 code, e.g. "fr" for French.
  */
-uint vtPlantSpecies::CommonNamesOfLanguage(const char *lang)
+unsigned int vtPlantSpecies::CommonNamesOfLanguage(const char *lang)
 {
-	uint count = 0;
-	for (uint j = 0; j < NumCommonNames(); j++)
+	unsigned int count = 0;
+	for (unsigned int j = 0; j < NumCommonNames(); j++)
 	{
 		if (m_CommonNames[j].m_strLang == lang)
 			count++;
@@ -114,7 +114,7 @@ vtSpeciesList::vtSpeciesList()
 
 vtSpeciesList::~vtSpeciesList()
 {
-	for (uint i = 0; i < m_Species.GetSize(); i++)
+	for (unsigned int i = 0; i < m_Species.GetSize(); i++)
 	{
 		delete m_Species[i];
 	}
@@ -135,20 +135,20 @@ bool vtSpeciesList::WriteXML(const char *fname) const
 	fprintf(fp, "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n\n");
 	fprintf(fp, "<species-file file-format-version=\"1.1\">\n");
 
-	for (uint i = 0; i < NumSpecies(); i++)
+	for (unsigned int i = 0; i < NumSpecies(); i++)
 	{
 		vtPlantSpecies *spe = GetSpecies(i);
 		fprintf(fp, "\t<species name=\"%s\" max_height=\"%.2f\">\n",
 			spe->GetSciName(),
 			spe->GetMaxHeight());
-		for (uint j = 0; j < spe->NumCommonNames(); j++)
+		for (unsigned int j = 0; j < spe->NumCommonNames(); j++)
 		{
 			vtPlantSpecies::CommonName cname = spe->GetCommonName(j);
 			fprintf(fp, "\t\t<common name=\"%s\" lang=\"%s\" />\n",
 				(const char *) cname.m_strName,
 				(const char *) cname.m_strLang);
 		}
-		for (uint j = 0; j < GetSpecies(i)->NumAppearances(); j++)
+		for (unsigned int j = 0; j < GetSpecies(i)->NumAppearances(); j++)
 		{
 			vtPlantAppearance* app = GetSpecies(i)->GetAppearance(j);
 			fprintf(fp, "\t\t<appearance type=\"%d\" filename=\"%s\" "
@@ -163,63 +163,10 @@ bool vtSpeciesList::WriteXML(const char *fname) const
 	return true;
 }
 
-bool vtSpeciesList::WriteHTML(const char *fname) const
-{
-	FILE *fp = fopen(fname, "wb");
-	if (!fp)
-		return false;
-	fprintf(fp, "<html>\n\
-<head>\n\
-<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\">\n\
-<title>VTP Plant Library: List of species</title>\n\
-<link rel=\"stylesheet\" href=\"../../vtp.css\">\n\
-</head>\n\
-\n\
-<body>\n\
-<script language=\"JavaScript\" type=\"text/javascript\" src=\"../../header3.js\"></script>\n\
-<h2>VTP Plant Library: List of species</h2>\n\
-\n");
-	fprintf(fp, "<blockquote>\n\
-<p><a href=\"index.html\">About the VTP Plant Library</a></p>\n\
-");
-	time_t t = time(NULL);
-	fprintf(fp, "<p>Generated on %s GMT</p>\n", asctime(gmtime(&t)));
-
-	int total = 0;
-	for (uint i = 0; i < NumSpecies(); i++)
-		total += GetSpecies(i)->NumAppearances();
-
-	fprintf(fp, "<p>Total: %d species with %d appearances</p>\n", NumSpecies(), total);
-	fprintf(fp, "</blockquote>\n\n");
-
-	fprintf(fp, "<ul>\n");
-	for (uint i = 0; i < NumSpecies(); i++)
-	{
-		vtPlantSpecies *sp = GetSpecies(i);
-		fprintf(fp, "  <li><i><font size=\"4\">%s</font></i>\n    <ul>\n", sp->GetSciName());
-		fprintf(fp, "      <li>Common names: ");
-		for (uint j = 0; j < sp->NumCommonNames(); j++)
-		{
-			if (j > 0)
-				fprintf(fp, ", ");
-			vtPlantSpecies::CommonName cn = sp->GetCommonName(j);
-			fprintf(fp, "%s", (const char *) cn.m_strName);
-			if (cn.m_strLang != "" && cn.m_strLang != "en")
-				fprintf(fp, " (%s)", (const char *) cn.m_strLang);
-		}
-		fprintf(fp, "</li>\n");
-		fprintf(fp, "      <li>Appearances: %d images</li>\n", sp->NumAppearances());
-		fprintf(fp, "    </ul>\n");
-	}
-	fprintf(fp, "  </ul>\n  </li>\n");
-	fprintf(fp, "</ul>\n</body>\n</html>\n");
-	fclose(fp);
-	return true;
-}
 
 short vtSpeciesList::FindSpeciesId(vtPlantSpecies *ps)
 {
-	for (uint i = 0; i < m_Species.GetSize(); i++)
+	for (unsigned int i = 0; i < m_Species.GetSize(); i++)
 	{
 		if (m_Species[i] == ps)
 			return (short) i;
@@ -240,12 +187,12 @@ vtString RemSpaces(const vtString &str)
 
 /*void vtSpeciesList::LookupPlantIndices(vtBioType *bt)
 {
-	for (uint i = 0; i < bt->m_Densities.GetSize(); i++)
+	for (unsigned int i = 0; i < bt->m_Densities.GetSize(); i++)
 	{
 		vtString common_name = RemSpaces(bt->m_Densities[i]->m_common_name);
 
 		bt->m_Densities[i]->m_list_index = -1;
-		for (uint j = 0; j < NumSpecies(); j++)
+		for (unsigned int j = 0; j < NumSpecies(); j++)
 		{
 			vtPlantSpecies *ps = GetSpecies(j);
 			if (common_name == RemSpaces(ps->GetCommonName()))
@@ -267,7 +214,7 @@ vtString RemSpaces(const vtString &str)
  */
 short vtSpeciesList::GetSpeciesIdByName(const char *name) const
 {
-	for (uint j = 0; j < NumSpecies(); j++)
+	for (unsigned int j = 0; j < NumSpecies(); j++)
 	{
 		if (!strcmp(name, m_Species[j]->GetSciName()))
 			return (short) j;
@@ -285,7 +232,7 @@ short vtSpeciesList::GetSpeciesIdByName(const char *name) const
  */
 short vtSpeciesList::GetSpeciesIdByCommonName(const char *name) const
 {
-	uint i, j;
+	unsigned int i, j;
 	for (i = 0; i < NumSpecies(); i++)
 	{
 		vtPlantSpecies *spe = GetSpecies(i);
@@ -305,15 +252,15 @@ short vtSpeciesList::GetSpeciesIdByCommonName(const char *name) const
 }
 
 ////////////////////////////////////////////////////////////////////////
-// Visitor class, for XML parsing of SpeciesList files.
+// Visitor class, for XML parsing of PlantList files.
 
-class SpeciesListVisitor : public XMLVisitor
+class PlantListVisitor : public XMLVisitor
 {
 public:
-	SpeciesListVisitor(vtSpeciesList *pl) :
+	PlantListVisitor(vtSpeciesList *pl) :
 		m_state(0), m_pPL(pl) { m_pSpecies = NULL; }
 
-	virtual ~SpeciesListVisitor () { delete m_pSpecies; }
+	virtual ~PlantListVisitor () { delete m_pSpecies; }
 
 	void startXML() { m_state = 0; }
 	void startElement(const char *name, const XMLAttributes &atts);
@@ -325,7 +272,7 @@ private:
 	int m_state;
 };
 
-void SpeciesListVisitor::startElement(const char *name, const XMLAttributes &atts)
+void PlantListVisitor::startElement(const char *name, const XMLAttributes &atts)
 {
 	const char *attval;
 
@@ -401,7 +348,7 @@ void SpeciesListVisitor::startElement(const char *name, const XMLAttributes &att
 	}
 }
 
-void SpeciesListVisitor::endElement(const char *name)
+void PlantListVisitor::endElement(const char *name)
 {
 	if (m_pSpecies != NULL && m_state == 2)
 	{
@@ -416,7 +363,7 @@ bool vtSpeciesList::ReadXML(const char *pathname, vtString *msg)
 	// Avoid trouble with '.' and ',' in Europe
 	LocaleWrap normal_numbers(LC_NUMERIC, "C");
 
-	SpeciesListVisitor visitor(this);
+	PlantListVisitor visitor(this);
 	try
 	{
 		readXML(pathname, visitor);
@@ -440,7 +387,7 @@ vtBioRegion::vtBioRegion()
 
 vtBioRegion::~vtBioRegion()
 {
-	for (uint i = 0; i < m_Types.GetSize(); i++)
+	for (unsigned int i = 0; i < m_Types.GetSize(); i++)
 	{
 		delete m_Types[i];
 	}
@@ -660,7 +607,7 @@ vtBioType::vtBioType()
 
 vtBioType::~vtBioType()
 {
-	for (uint i = 0; i < m_Densities.GetSize(); i++)
+	for (unsigned int i = 0; i < m_Densities.GetSize(); i++)
 		delete m_Densities[i];
 }
 
@@ -677,7 +624,7 @@ void vtBioType::AddPlant(vtPlantSpecies *pSpecies, float plant_per_m2, float typ
 
 void vtBioType::ResetAmounts()
 {
-	for (uint i = 0; i < m_Densities.GetSize(); i++)
+	for (unsigned int i = 0; i < m_Densities.GetSize(); i++)
 		m_Densities[i]->ResetAmounts();
 }
 
@@ -730,7 +677,7 @@ int vtPlantInstanceArray::AddPlant(const DPoint2 &pos, float size,
 int vtPlantInstanceArray::AddPlant(const DPoint2 &pos, float size,
 									vtPlantSpecies *ps)
 {
-	short species_id = m_pSpeciesList->FindSpeciesId(ps);
+	short species_id = m_pPlantList->FindSpeciesId(ps);
 	if (species_id == -1)
 		return -1;
 	return AddPlant(pos, size, species_id);
@@ -751,9 +698,9 @@ void vtPlantInstanceArray::GetPlant(int iNum, float &size, short &species_id) co
 /**
  * Given a species index, return the number of instances which are of that species.
  */
-uint vtPlantInstanceArray::InstancesOfSpecies(short species_id)
+unsigned int vtPlantInstanceArray::InstancesOfSpecies(short species_id)
 {
-	uint i, count = 0, numinstances = NumEntities();
+	unsigned int i, count = 0, numinstances = GetNumEntities();
 	float size;
 	short species;
 	for (i = 0; i < numinstances; i++)
@@ -768,7 +715,7 @@ uint vtPlantInstanceArray::InstancesOfSpecies(short species_id)
 /*void vtPlantInstanceArray::AppendFrom(const vtPlantInstanceArray &from)
 {
 	// TODO: match actual species
-	for (uint i = 0; i < from.GetSize(); i++)
+	for (unsigned int i = 0; i < from.GetSize(); i++)
 	{
 		Append(from[i]);
 	}
@@ -854,7 +801,7 @@ bool vtPlantInstanceArray::ReadVF(const char *fname)
 {
 	VTLOG("Reading VF file '%s'\n", fname);
 
-	if (m_pSpeciesList == NULL)
+	if (m_pPlantList == NULL)
 	{
 		VTLOG(" can't read, because there are no known species.\n");
 		return false;
@@ -910,7 +857,7 @@ bool vtPlantInstanceArray::ReadVF(const char *fname)
 		quiet = fread(&len, sizeof(short), 1, fp);
 		quiet = fread(name, len, 1, fp);
 		name[len] = 0;
-		species_id = m_pSpeciesList->GetSpeciesIdByName(name);
+		species_id = m_pPlantList->GetSpeciesIdByName(name);
 		if (species_id == -1)
 		{
 			VTLOG("  Unknown species: %s\n", name);
@@ -970,12 +917,12 @@ bool vtPlantInstanceArray::ReadVF(const char *fname)
 
 bool vtPlantInstanceArray::WriteVF(const char *fname) const
 {
-	int i, numinstances = NumEntities();
+	int i, numinstances = GetNumEntities();
 	if (numinstances == 0)
 		return false;	// empty files not allowed
-	if (!m_pSpeciesList)
+	if (!m_pPlantList)
 		return false;
-	int numspecies = m_pSpeciesList->NumSpecies();
+	int numspecies = m_pPlantList->NumSpecies();
 	short len;	// for string lengths
 	short species_id;
 	float size;
@@ -1020,7 +967,7 @@ bool vtPlantInstanceArray::WriteVF(const char *fname) const
 	for (i = 0; i < used; i++)
 	{
 		species_id = index_table[i];
-		const char *name = m_pSpeciesList->GetSpecies(species_id)->GetSciName();
+		const char *name = m_pPlantList->GetSpecies(species_id)->GetSciName();
 		len = (short) strlen(name);
 		fwrite(&len, sizeof(short), 1, fp);
 		fwrite(name, len, 1, fp);

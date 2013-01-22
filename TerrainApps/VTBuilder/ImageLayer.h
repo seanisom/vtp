@@ -18,7 +18,8 @@ class vtImageLayer : public vtLayer
 {
 public:
 	vtImageLayer();
-	vtImageLayer(const DRECT &area, const IPoint2 &size, const vtProjection &proj);
+	vtImageLayer(const DRECT &area, int xsize, int ysize,
+		const vtProjection &proj);
 	virtual ~vtImageLayer();
 
 	// overrides for vtLayer methods
@@ -36,7 +37,7 @@ public:
 	bool SetExtent(const DRECT &rect);
 	void GetPropertyText(wxString &str);
 
-	vtImage *GetImage() const { return m_pImage; }
+	vtImage *GetImage() { return m_pImage; }
 	DPoint2 GetSpacing() const;
 	bool ImportFromFile(const wxString &strFileName, bool progress_callback(int) = NULL);
 	bool ImportFromDB(const char *szFileName, bool progress_callback(int) = NULL);
@@ -48,6 +49,6 @@ protected:
 
 // Helper
 int GetBitDepthUsingGDAL(const char *fname);
-void MakeSampleOffsets(const DPoint2 cellsize, uint N, DLine2 &offsets);
+void MakeSampleOffsets(const DPoint2 cellsize, unsigned int N, DLine2 &offsets);
 
 #endif	// IMAGELAYER_H

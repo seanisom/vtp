@@ -42,15 +42,20 @@ public:
 	virtual DTErr Init(const vtElevationGrid *pGrid, float fZScale) = 0;
 	virtual void Init2() {}
 	DTErr BasicInit(const vtElevationGrid *pGrid);
+	void SetOptions(bool bUseTriStrips, int iBlockArrayDim, int iTextureSize);
 	virtual void SetVerticalExag(float fExag) {}
 	virtual float GetVerticalExag() const = 0;
 
 	virtual void SetPolygonTarget(int iPolygonCount);
-	int GetPolygonTarget() const;
+	int GetPolygonTarget();
 
-	int NumDrawnTriangles() const;
+	int GetNumDrawnTriangles();
 
+	void SetDetailMaterial(vtMaterial *pApp, float fTiling, float fDistance);
+	void EnableDetail(bool bOn);
+	bool GetDetail() { return m_bDetailTexture; }
 	void SetupTexGen(float fTiling);
+	void SetupBlockTexGen(int a, int b);
 	void DisableTexGen();
 
 	// overrides for vtDynGeom
@@ -76,6 +81,9 @@ public:
 	void PreRender() const;
 	void PostRender() const;
 
+	int		m_iTPatchDim;
+	int		m_iTPatchSize;		// size of each texture patch in texels
+
 	// statistics
 	int m_iTotalTriangles;
 	int m_iDrawnTriangles;
@@ -88,8 +96,15 @@ protected:
 	int		m_iPolygonTarget;
 
 	// flags
+	bool m_bUseTriStrips;
 	bool m_bCulleveryframe;
 	bool m_bCullonce;
+
+	// detail texture
+	float m_fDetailTiling;
+	float m_fDetailDistance;
+	bool m_bDetailTexture;
+	vtMaterial *m_pDetailMat;
 
 protected:
 	~vtDynTerrainGeom();

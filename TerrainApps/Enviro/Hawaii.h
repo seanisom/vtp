@@ -21,9 +21,6 @@
 #define	TRANS_YAxis	FPoint3(0,1,0)
 #define	TRANS_ZAxis	FPoint3(0,0,1)
 
-/**
- A specific vtTerrain implementation which exists to hold a variety of test code.
- */
 class IslandTerrain : public vtTerrain
 {
 public:
@@ -31,6 +28,9 @@ public:
 
 	// methods
 	void CreateCustomCulture();
+
+	// override for texture tests
+	void PaintDib(bool progress_callback(int) = NULL);
 
 	vtGeode *make_test_cone();
 	vtGeode *make_red_cube();
@@ -52,7 +52,7 @@ enum AirportCodes {ITO, KOA, MUE, UPP};
 class PlaneEngine : public vtEngine
 {
 public:
-	PlaneEngine(const vtLocalConversion &conv, float fSpeedExag, AirportCodes code);
+	PlaneEngine(float fSpeedExag, AirportCodes code);
 	void Eval();
 	void SetHoop(int i);
 

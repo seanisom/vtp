@@ -23,15 +23,13 @@ public:
 	  const wxSize &size, long style, const wxString &name, int *gl_attrib);
 	~vtGLCanvas(void);
 
-	// Initialization
-	void InitGraphicsWindowWX();
-
 	// SpaceNavigator methods
-	void EnableSpaceNav();
 	void SetSpaceNavSpeed(float f);
 	void SetSpaceNavAllowRoll(bool b);
 
+#ifndef __WXMAC__
 	void OnPaint(wxPaintEvent& event);
+#endif
 	void OnSize(wxSizeEvent& event);
 	void OnEraseBackground(wxEraseEvent& event);
 	void OnMouseCaptureLost(wxMouseCaptureLostEvent & event);
@@ -42,8 +40,10 @@ public:
 	void OnClose(wxCloseEvent& event);
 	void OnIdle(wxIdleEvent &event);
 
+#ifndef __WXMAC__
 	bool m_bPainting;
 	bool m_bFirstPaint;
+#endif
 	bool m_bRunning;
 	bool m_bCapture;
 

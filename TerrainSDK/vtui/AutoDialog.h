@@ -17,10 +17,6 @@
 #ifndef NUMERIC_VALIDATOR
 #define NUMERIC_VALIDATOR
 
-/**
- A useful extension of wxWidgets's validators, to automatically transfer a numeric
- value to and from the string shown.
- */
 class wxNumericValidator: public wxValidator
 {
 public:
@@ -68,10 +64,7 @@ protected:
 
 #endif // NUMERIC_VALIDATOR
 
-/**
- AutoDialog extends the normal wxWidgets dialog class with the ability to easily
- add validators which automatically connect variables to controls.
- */
+
 class AutoDialog : public wxDialog
 {
 public:
@@ -92,10 +85,6 @@ public:
 	wxNumericValidator *AddNumValidator(long id, double *dptr, int digits = -1);
 };
 
-/**
- AutoPanel extends the normal wxWidgets panel class with the ability to easily
- add validators which automatically connect variables to controls.
- */
 class AutoPanel : public wxPanel
 {
 public:

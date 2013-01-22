@@ -1,16 +1,16 @@
 add_subdirectory(wx)
 
 set(ENVIRO_SOURCE_FILES
-	EarthView.cpp Engines.cpp Enviro.cpp Hawaii.cpp Nevada.cpp Options.cpp)
+	EarthView.cpp Engines.cpp Enviro.cpp Hawaii.cpp Nevada.cpp Options.cpp SpecificTerrain.cpp)
 
 set(ENVIRO_SOURCE_FILES_WX
-	wx/EnviroCanvas.cpp wx/EnviroApp.cpp wx/EnviroFrame.cpp wx/EnviroGUI.cpp wx/EnviroMenus.cpp wx/StatusBar.cpp)
+	wx/canvas.cpp wx/EnviroApp.cpp wx/EnviroFrame.cpp wx/EnviroGUI.cpp wx/StatusBar.cpp)
 
 set(ENVIRO_HEADER_FILES
-	Engines.h Enviro.h EnviroEnum.h Hawaii.h Nevada.h Options.h PlantingOptions.h)
+	Engines.h Enviro.h EnviroEnum.h Hawaii.h Nevada.h Options.h PlantingOptions.h SpecificTerrain.h)
 
 set(ENVIRO_HEADER_FILES_WX
-	wx/EnviroCanvas.h wx/EnviroApp.h wx/EnviroFrame.h wx/EnviroGUI.h wx/menu_id.h wx/StatusBar.h)
+	wx/canvas.h wx/EnviroApp.h wx/EnviroFrame.h wx/EnviroGUI.h wx/menu_id.h wx/StatusBar.h)
 
 set(ENVIRO_RC_FILES
 	wx/enviro-wx.rc)
@@ -26,12 +26,9 @@ if(MSVC)
 	set_source_files_properties(${ENVIRO_SOURCE_FILES_WX} PROPERTIES COMPILE_FLAGS /Yuwx/wxprec.h)
 	set_source_files_properties(wx/wx_headers.cpp PROPERTIES COMPILE_FLAGS /Ycwx/wxprec.h)
 else(MSVC)
-	add_executable(Enviro WIN32 MACOSX_BUNDLE ${ENVIRO_SOURCE_FILES} ${ENVIRO_SOURCE_FILES_WX} ${ENVIRO_HEADER_FILES}
+	add_executable(Enviro WIN32 ${ENVIRO_SOURCE_FILES} ${ENVIRO_SOURCE_FILES_WX} ${ENVIRO_HEADER_FILES}
 		${ENVIRO_HEADER_FILES_WX} ${ENVIRO_RC_FILES})
 endif(MSVC)
-
-install(TARGETS Enviro RUNTIME DESTINATION bin
-                       BUNDLE DESTINATION bin)
 
 # Internal dependencies for this target
 target_link_libraries(Enviro envdlg wxosg vtlib vtui minidata vtdata xmlhelper)
@@ -103,10 +100,6 @@ if(OPENGL_gl_LIBRARY)
 	target_link_libraries(Enviro ${OPENGL_gl_LIBRARY})
 endif(OPENGL_gl_LIBRARY)
 
-if(OPENGL_glu_LIBRARY)
-	target_link_libraries(Enviro ${OPENGL_glu_LIBRARY})
-endif(OPENGL_glu_LIBRARY)
-
 # Set up include directories for all targets at this level
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/wx/icons)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/wx/bitmap)
@@ -131,3 +124,4 @@ endif (GLEXT_INCLUDE_DIR)
 if(wxWidgets_FOUND)
 	include(${wxWidgets_USE_FILE})
 endif(wxWidgets_FOUND)
+

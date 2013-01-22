@@ -1,7 +1,7 @@
 //
 // The main Frame window of the VTBuilder application
 //
-// Copyright (c) 2001-2012 Virtual Terrain Project
+// Copyright (c) 2001-2010 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -27,6 +27,7 @@
 #include "TreeView.h"
 #include "MenuEnum.h"
 #include "App.h"
+#include "Helper.h"
 #include "BuilderView.h"
 #include "VegGenOptions.h"
 #include "vtImage.h"
@@ -47,6 +48,8 @@
 #include "DistanceDlg2d.h"
 #include "FeatInfoDlg.h"
 #include "OptionsDlg.h"
+#include "ResampleDlg.h"
+#include "SampleImageDlg.h"
 #include "vtui/InstanceDlg.h"
 #include "vtui/LinearStructDlg.h"
 #include "vtui/ProjectionDlg.h"
@@ -195,7 +198,8 @@ MainFrame::MainFrame(wxFrame *frame, const wxString& title,
 MainFrame::~MainFrame()
 {
 	VTLOG1("Frame destructor\n");
-	WriteXML("VTBuilder.xml");
+	WriteXML(APPNAME ".xml");
+	DeleteContents();
 
 	m_mgr.UnInit();
 }
@@ -252,10 +256,10 @@ void MainFrame::SetupUI()
 	m_pView->Show(FALSE);
 
 	// Read INI file after creating the view
-	if (!ReadXML("VTBuilder.xml"))
+	if (!ReadXML(APPNAME ".xml"))
 	{
 		// fall back on older ini file
-		ReadINI("VTBuilder.ini");
+		ReadINI(APPNAME ".ini");
 	}
 
 	// Safety checks
@@ -429,8 +433,8 @@ void MainFrame::AddMainToolbars()
 	ADD_TOOL2(m_pToolbar, ID_VIEW_SETAREA, wxBITMAP(elev_box), _("Area Tool"), wxITEM_CHECK);
 	ADD_TOOL2(m_pToolbar, ID_VIEW_PROFILE, wxBITMAP(view_profile), _("Elevation Profile"), wxITEM_CHECK);
 	m_pToolbar->AddSeparator();
-	ADD_TOOL(m_pToolbar, ID_AREA_SAMPLE_ELEV, wxBITMAP(elev_resample), _("Sample Elevation"));
-	ADD_TOOL(m_pToolbar, ID_AREA_SAMPLE_IMAGE, wxBITMAP(image_resample), _("Sample Imagery"));
+	ADD_TOOL(m_pToolbar, ID_AREA_EXPORT_ELEV, wxBITMAP(elev_resample), _("Merge/Resample Elevation"));
+	ADD_TOOL(m_pToolbar, ID_AREA_EXPORT_IMAGE, wxBITMAP(image_resample), _("Merge/Resample Imagery"));
 	m_pToolbar->Realize();
 
 	// Raw
@@ -798,54 +802,22 @@ LinearStructureDlg *MainFrame::ShowLinearStructureDlg(bool bShow)
 	return m_pLinearStructureDlg;
 }
 
-class InstanceDlg2d: public InstanceDlg
-{
-public:
-	InstanceDlg2d( wxWindow *parent, wxWindowID id, const wxString &title,
-		const wxPoint& pos, const wxSize& size, long style) :
-		InstanceDlg( parent, id, title, pos, size, style ) {}
-	virtual void OnCreate()
-	{
-		if (!m_pFrame)
-			return;
-		m_pFrame->CreateInstance(m_pos, GetTagArray());
-	}
-	MainFrame *m_pFrame;
-};
 
 InstanceDlg *MainFrame::ShowInstanceDlg(bool bShow)
 {
 	if (bShow && !m_pInstanceDlg)
 	{
-		// Create new Instance Dialog
-		InstanceDlg2d *dlg = new InstanceDlg2d(this, -1, _("Structure Instances"),
-			wxPoint(120, 80), wxSize(600, 200), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER);
-		dlg->m_pFrame = this;
-		m_pInstanceDlg = dlg;
+		// Create new Distance Dialog
+		m_pInstanceDlg = new InstanceDlg(this, -1,
+			_("Structure Instances"), wxPoint(120, 80), wxSize(600, 200));
 
-		for (uint i = 0; i < m_contents.size(); i++)
+		for (unsigned int i = 0; i < m_contents.size(); i++)
 			m_pInstanceDlg->AddContent(m_contents[i]);
 		m_pInstanceDlg->SetProjection(m_proj);
 	}
 	if (m_pInstanceDlg)
 		m_pInstanceDlg->Show(bShow);
 	return m_pInstanceDlg;
-}
-
-void MainFrame::CreateInstance(const DPoint2 &pos, vtTagArray *tags)
-{
-	vtStructureLayer *slayer = g_bld->GetActiveStructureLayer();
-	if (!slayer)
-		return;
-
-	vtStructInstance *inst = slayer->AddNewInstance();
-	inst->SetPoint(pos);
-	inst->CopyTagsFrom(*tags);
-
-	g_bld->ResolveInstanceItem(inst);
-
-	slayer->SetModified(true);
-	GetView()->Refresh();
 }
 
 class BuildingProfileCallback : public ProfileCallback
@@ -899,31 +871,19 @@ void MainFrame::OnSelectionChanged()
 	}
 }
 
-void MainFrame::UpdateFeatureDialog(vtRawLayer *raw, vtFeatureSet *pSet, int iEntity)
+void MainFrame::UpdateFeatureDialog(vtRawLayer *raw,
+									vtFeatureSetPoint2D *pSetP2, int iEntity)
 {
+	DPoint2 &p2 = pSetP2->GetPoint(iEntity);
+	vtArray<int> found;
+	pSetP2->FindAllPointsAtLocation(p2, found);
+
 	FeatInfoDlg	*fdlg = ShowFeatInfoDlg();
 	fdlg->SetLayer(raw);
-	fdlg->SetFeatureSet(pSet);
-	pSet->DePickAll();
-
-	// Handle point features specially: there might be more than one feature
-	// under the cursor at that point.
-	vtFeatureSetPoint2D *pSetP2 = dynamic_cast<vtFeatureSetPoint2D *>(pSet);
-	if (pSetP2)
-	{
-		DPoint2 &p2 = pSetP2->GetPoint(iEntity);
-		std::vector<int> found;
-		pSetP2->FindAllPointsAtLocation(p2, found);
-
-		for (uint i = 0; i < found.size(); i++)
-			pSetP2->Pick(found[i]);
-	}
-	else
-	{
-		// Otherwise just pick the single feature.
-		pSet->Pick(iEntity);
-	}
-
+	fdlg->SetFeatureSet(pSetP2);
+	pSetP2->DePickAll();
+	for (unsigned int i = 0; i < found.GetSize(); i++)
+		pSetP2->Pick(found[i]);
 	fdlg->ShowPicked();
 }
 
@@ -987,13 +947,13 @@ bool MainFrame::SaveProject(const wxString &strPathName) const
 	}
 
 	// write list of layers
-	int iLayers = m_Layers.size();
+	int iLayers = m_Layers.GetSize();
 	fprintf(fp, "layers: %d\n", iLayers);
 
 	vtLayer *lp;
 	for (int i = 0; i < iLayers; i++)
 	{
-		lp = m_Layers[i];
+		lp = m_Layers.GetAt(i);
 
 		bool bNative = lp->IsNative();
 
@@ -1059,12 +1019,12 @@ void MainFrame::ShowOptionsDialog()
 		vtElevLayer::m_draw = opt;
 
 		// tell them to redraw themselves
-		for (uint i = 0; i < m_Layers.size(); i++)
+		for (unsigned int i = 0; i < m_Layers.GetSize(); i++)
 		{
-			vtLayer *lp = m_Layers[i];
+			vtLayer *lp = m_Layers.GetAt(i);
 			if (lp->GetType() == LT_ELEVATION)
 			{
-				vtElevLayer *elp = (vtElevLayer *) lp;
+				vtElevLayer *elp = (vtElevLayer *)lp;
 				elp->ReRender();
 				bNeedRefresh = true;
 			}

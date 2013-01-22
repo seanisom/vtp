@@ -42,12 +42,12 @@
 
 namespace daylon {
 
-typedef uchar	uint8, uchar, byte;
+typedef unsigned char	uint8, uchar, byte;
 typedef char			int8;
 typedef short			int16;
 typedef unsigned short	uint16, word;
 typedef int				int32;
-typedef uint	uint32, dword;
+typedef unsigned int	uint32, dword;
 typedef float			float32;
 typedef double			float64;
 
@@ -142,7 +142,7 @@ class CRootTag
 		size_t CalcBinaryTagStorage(size_t binSize) const;
 
 		void SetStorage(void* p, size_t n)
-			{ m_pRoot = (uchar*)p;
+			{ m_pRoot = (unsigned char*)p;
 			m_mark = 0; m_size = n; m_openMode = 0; }
 
 		void Open(const char* pszMode);
@@ -198,7 +198,7 @@ class CRootTag
 #endif
 
 	private:
-		uchar*	m_pRoot;
+		unsigned char*	m_pRoot;
 		size_t			m_mark;
 		size_t			m_size;
 		int				m_openMode;

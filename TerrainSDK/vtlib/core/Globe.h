@@ -16,10 +16,6 @@
 
 class vtTerrainScene;
 
-/**
- A GIS-style feature layer, on the globe.
- An collection of these is maintained by vtIcoGlobe.
- */
 class GlobeLayer : public vtGroup
 {
 public:

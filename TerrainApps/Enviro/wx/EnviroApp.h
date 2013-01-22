@@ -1,17 +1,15 @@
 //
 // Name: EnviroApp.h
 //
-// Copyright (c) 2001-2013 Virtual Terrain Project
+// Copyright (c) 2001-2008 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
 class EnviroFrame;
 class vtTerrain;
 
-#include "vtui/LocaleApp.h"
-
-/** The wxWidgets application for Enviro. */
-class EnviroApp: public LocaleApp
+// Define a new application type
+class EnviroApp: public wxApp
 {
 public:
 	EnviroApp();
@@ -35,7 +33,11 @@ public:
 protected:
 	void StartLog();
 	void LoadOptions();
+	void SetupLocale();
 	EnviroFrame *CreateMainFrame();
+
+	wxLocale m_locale; // locale we'll be using
+	vtString m_locale_name;
 };
 
 // helpers

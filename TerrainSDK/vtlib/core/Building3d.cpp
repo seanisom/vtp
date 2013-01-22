@@ -4,12 +4,11 @@
 // The vtBuilding3d class extends vtBuilding with the ability to procedurally
 // create 3D geometry of the buildings.
 //
-// Copyright (c) 2001-2013 Virtual Terrain Project
+// Copyright (c) 2001-2011 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
 #include "vtlib/vtlib.h"
-#include "vtlib/vtosg/GeometryUtils.h"
 #include "vtdata/DataPath.h"
 #include "vtdata/HeightField.h"
 #include "vtdata/PolyChecker.h"
@@ -79,7 +78,7 @@ void vtBuilding3d::DestroyGeometry()
 
 	m_pContainer->removeChild(m_pGeode);
 	m_pGeode = NULL;
-	m_Mesh.clear();
+	m_Mesh.Empty();
 }
 
 void vtBuilding3d::AdjustHeight(vtHeightField3d *pHeightField)
@@ -88,7 +87,7 @@ void vtBuilding3d::AdjustHeight(vtHeightField3d *pHeightField)
 	m_pContainer->SetTrans(m_center);
 }
 
-void vtBuilding3d::CreateUpperPolygon(const vtLevel *lev, FPolygon3 &polygon,
+void vtBuilding3d::CreateUpperPolygon(vtLevel *lev, FPolygon3 &polygon,
 									  FPolygon3 &polygon2)
 {
 	int i, prev, next;
@@ -166,34 +165,29 @@ void vtBuilding3d::CreateUpperPolygon(const vtLevel *lev, FPolygon3 &polygon,
 
 bool vtBuilding3d::CreateGeometry(vtHeightField3d *pHeightField)
 {
-#if USE_EXPERIMENTAL_BUILDING_GEOMETRY_GENERATOR
-	UpdateWorldLocation(pHeightField);
-
-	osg::ref_ptr<OSGGeomUtils::GenerateBuildingGeometry> pGenerator =
-		new OSGGeomUtils::GenerateBuildingGeometry(*this);
-	m_pGeode = pGenerator->Generate();
-#else
+	PolyChecker PolyChecker;
+	int i;
+	unsigned int j, k;
 
 	UpdateWorldLocation(pHeightField);
 
 	// TEMP: we can handle complex polys now - i think
-	// PolyChecker PolyChecker;
-	// if (!PolyChecker.IsSimplePolygon(GetLocalFootprint(0)))
-	//	 return false;
+	//if (!PolyChecker.IsSimplePolygon(GetLocalFootprint(0)))
+	//	return false;
 
 	// create the edges (walls and roof)
 	float fHeight = 0.0f;
-	const int iLevels = NumLevels();
+	int iLevels = GetNumLevels();
 
 	int level_show = -1, edge_show = -1;
 	GetValueInt("level", level_show);
 	GetValueInt("edge", edge_show);
 
-	for (int i = 0; i < iLevels; i++)
+	for (i = 0; i < iLevels; i++)
 	{
-		const vtLevel *lev = m_Levels[i];
+		vtLevel *lev = m_Levels[i];
 		const FPolygon3 &foot = GetLocalFootprint(i);
-		const uint edges = lev->NumEdges();
+		unsigned int edges = lev->NumEdges();
 
 		// safety check
 		if (foot[0].GetSize() < 3)
@@ -232,22 +226,22 @@ bool vtBuilding3d::CreateGeometry(vtHeightField3d *pHeightField)
 			FPolygon3 poly2;
 
 			// Build a set of walls for each storey of the level
-			for (uint j = 0; j < lev->m_iStories; j++)
+			for (j = 0; j < lev->m_iStories; j++)
 			{
-				for (uint r = 0; r < poly.size(); r++)
+				for (unsigned int r = 0; r < poly.size(); r++)
 				{
-					for (uint k = 0; k < poly[r].GetSize(); k++)
+					for (k = 0; k < poly[r].GetSize(); k++)
 					{
 						poly[r][k].y = fHeight;
 					}
 				}
 				CreateUpperPolygon(lev, poly, poly2);
 				int edge_start = 0;
-				for (uint r = 0; r < poly.size(); r++)
+				for (unsigned int r = 0; r < poly.size(); r++)
 				{
-					for (uint k = edge_start; k < edge_start + poly[r].GetSize(); k++)
+					for (k = edge_start; k < edge_start + poly[r].GetSize(); k++)
 					{
-						const bool bShowEdge = (level_show == i && edge_show == k);
+						bool bShowEdge = (level_show == i && edge_show == k);
 						CreateEdgeGeometry(lev, poly, poly2, k, bShowEdge);
 					}
 					edge_start += poly[r].GetSize();
@@ -269,91 +263,37 @@ bool vtBuilding3d::CreateGeometry(vtHeightField3d *pHeightField)
 	vtMaterialArray *pShared = GetSharedMaterialArray();
 	m_pGeode->SetMaterials(pShared);
 
-	for (uint j = 0; j < m_Mesh.size(); j++)
+	for (j = 0; j < m_Mesh.GetSize(); j++)
 	{
 		vtMesh *mesh = m_Mesh[j].m_pMesh;
-		const int index = m_Mesh[j].m_iMatIdx;
+		int index = m_Mesh[j].m_iMatIdx;
 		m_pGeode->AddMesh(mesh, index);
 	}
-#endif
 
 	// resize bounding box
 	if (m_pHighlight)
 	{
-		const bool bEnabled = m_pHighlight->GetEnabled();
+		bool bEnabled = m_pHighlight->GetEnabled();
 
 		m_pContainer->removeChild(m_pHighlight);
-		m_pHighlight = NULL;
-		ShowBounds(bEnabled);
+
+		FSphere sphere;
+		s2v(m_pGeode->getBound(), sphere);
+		m_pHighlight = CreateBoundSphereGeom(sphere);
+		m_pHighlight->SetCastShadow(false);		// no shadow
+		m_pContainer->addChild(m_pHighlight);
+
+		m_pHighlight->SetEnabled(bEnabled);
 	}
 	return true;
 }
 
-vtGeode *vtBuilding3d::CreateHighlight()
-{
-	vtGeode *geode = new vtGeode;
-	vtMaterialArray *pShared = GetSharedMaterialArray();
-	geode->SetMaterials(pShared);
-
-	vtMesh *mesh = new vtMesh(osg::PrimitiveSet::LINE_STRIP, 0, 40);
-	const int mat_idx = GetMatIndex("Highlight", RGBf(1,1,0));
-
-	geode->AddMesh(mesh, mat_idx);
-	mesh->SetLineWidth(2.0f);
-
-	unsigned short idx[MAX_WALLS];
-	for (uint i = 0; i < NumLevels(); i++)
-	{
-		const FPolygon3 &foot = GetLocalFootprint(i);
-
-		// safety check
-		if (foot[0].GetSize() < 3)
-			continue;
-
-		const int outer_corners = foot[0].GetSize();
-
-		for (int j = 0; j <= outer_corners; j++)
-		{
-			FPoint3 p = foot[0][j % outer_corners];
-			p *= 1.01f;		// Slightly larger to not intersect the building
-			idx[j] = mesh->AddVertex(p);
-		}
-		mesh->AddStrip(outer_corners + 1, idx);
-	}
-	// Center of top level
-	const FLine3 &top_foot = GetLocalFootprint(NumLevels()-1).at(0);
-	FPoint3 top_center(0, 0, 0);
-	for (uint i = 0; i < top_foot.GetSize(); i++)
-		top_center += top_foot[i];
-	top_center /= top_foot.GetSize();
-	top_center.y += 10.0;
-	int top_idx = mesh->AddVertex(top_center);
-
-	const FPolygon3 &foot0 = GetLocalFootprint(0);
-	for (uint j = 0; j < foot0[0].GetSize(); j++)
-	{
-		int count = 0;
-		for (uint i = 0; i < NumLevels(); i++)
-		{
-			const FLine3 &foot = GetLocalFootprint(i).at(0);
-			if (j >= foot.GetSize())
-				continue;		// Safety check
-			FPoint3 p = foot[j];
-			p *= 1.01f;
-			idx[count++] = mesh->AddVertex(p);
-		}
-		idx[count++] = top_idx;
-		mesh->AddStrip(count, idx);
-	}
-
-	return geode;
-}
 
 ////////////////////////////////////////////////////////////////////////////
 
 //
 // Since each set of primitives with a specific material requires its own
-// mesh, this method looks up or creates a mesh as needed, per color/material.
+// mesh, this method looks up or creates the mesh as needed.
 //
 vtMesh *vtBuilding3d::FindMatMesh(const vtString &Material,
 								  const RGBi &color, vtMesh::PrimType ePrimType)
@@ -365,20 +305,20 @@ vtMesh *vtBuilding3d::FindMatMesh(const vtString &Material,
 	// wireframe is a special case, used for highlight materials
 	if (ePrimType == osg::PrimitiveSet::LINE_STRIP)
 	{
-		mi = GetMatIndex(BMAT_NAME_HIGHLIGHT, fcolor);
+		mi = FindMatIndex(BMAT_NAME_HIGHLIGHT, fcolor);
 		VertType = 0;
 	}
 	else
 	{
 		// otherwise, find normal stored material
 		if (&Material == NULL)
-			mi = GetMatIndex(BMAT_NAME_PLAIN, fcolor);
+			mi = FindMatIndex(BMAT_NAME_PLAIN, fcolor);
 		else
-			mi = GetMatIndex(Material, fcolor);
+			mi = FindMatIndex(Material, fcolor);
 		VertType = VT_Normals | VT_TexCoords;
 	}
 
-	int i, size = m_Mesh.size();
+	int i, size = m_Mesh.GetSize();
 	for (i = 0; i < size; i++)
 	{
 		if (m_Mesh[i].m_iMatIdx == mi && m_Mesh[i].m_ePrimType == ePrimType)
@@ -394,14 +334,14 @@ vtMesh *vtBuilding3d::FindMatMesh(const vtString &Material,
 	// just use 40 as a reasonable starting point for each mesh.
 
 	mm.m_pMesh = new vtMesh(ePrimType, VertType, 40);
-	m_Mesh.push_back(mm);
+	m_Mesh.Append(mm);
 	return mm.m_pMesh;
 }
 
 //
 // Edges are created from a series of features ("panels", "sections")
 //
-void vtBuilding3d::CreateEdgeGeometry(const vtLevel *pLev, const FPolygon3 &polygon1,
+void vtBuilding3d::CreateEdgeGeometry(vtLevel *pLev, const FPolygon3 &polygon1,
 									  const FPolygon3 &polygon2, int iEdge, bool bShowEdge)
 {
 	// Get edge from complete list
@@ -435,14 +375,16 @@ void vtBuilding3d::CreateEdgeGeometry(const vtLevel *pLev, const FPolygon3 &poly
 		dir2.Normalize();
 
 	if (bShowEdge)
+	{
 		AddHighlightSection(pEdge, quad);
+	}
 
 	// How wide should each feature be?
 	// Determine how much space we have for the proportional features after
 	// accounting for the fixed-width features
-	const float fixed_width = pEdge->FixedFeaturesWidth();
-	const float total_prop = pEdge->ProportionTotal();
-	const float dyn_width = total_length1 - fixed_width;
+	float fixed_width = pEdge->FixedFeaturesWidth();
+	float total_prop = pEdge->ProportionTotal();
+	float dyn_width = total_length1 - fixed_width;
 
 	if (pEdge->m_Facade != "")
 	{
@@ -587,7 +529,7 @@ void vtBuilding3d::AddWallSection(vtEdge *pEdge, bool bUniform,
 		float u2 = (p2 - p0).Dot(axis0);
 		float u3 = (p3 - p0).Dot(axis0);
 		float v2 = (p2 - p0).Dot(axis1);
-		vtMaterialDescriptor *md = GetMatDescriptor(*pEdge->m_pMaterial, pEdge->m_Color);
+		vtMaterialDescriptor *md = s_MaterialDescriptors.FindMaterialDescriptor(*pEdge->m_pMaterial, pEdge->m_Color);
 		uv0.Set(0, 0);
 		uv1.Set(u1, 0);
 		uv2.Set(u2, v2);
@@ -659,8 +601,8 @@ void vtBuilding3d::AddDoorSection(vtEdge *pEdge, vtEdgeFeature *pFeat,
 void vtBuilding3d::AddWindowSection(vtEdge *pEdge, vtEdgeFeature *pFeat,
 	const FLine3 &quad)
 {
-	const float vf1 = pFeat->m_vf1;
-	const float vf2 = pFeat->m_vf2;
+	float vf1 = pFeat->m_vf1;
+	float vf2 = pFeat->m_vf2;
 
 	// build wall to base of window.
 	AddWallSection(pEdge, false, quad, 0, vf1);
@@ -669,19 +611,20 @@ void vtBuilding3d::AddWindowSection(vtEdge *pEdge, vtEdgeFeature *pFeat,
 	AddWallSection(pEdge, false, quad, vf2, 1.0f);
 
 	// determine 4 points at corners of section
-	const FPoint3 up1 = (quad[2] - quad[0]);
-	const FPoint3 up2 = (quad[3] - quad[1]);
-	const FPoint3 p0 = quad[0] + (up1 * vf1);
-	const FPoint3 p1 = quad[1] + (up2 * vf1);
-	const FPoint3 p3 = quad[0] + (up1 * vf2);
-	const FPoint3 p2 = quad[1] + (up2 * vf2);
+	FPoint3 up1 = (quad[2] - quad[0]);
+	FPoint3 up2 = (quad[3] - quad[1]);
+	FPoint3 p0 = quad[0] + (up1 * vf1);
+	FPoint3 p1 = quad[1] + (up2 * vf1);
+	FPoint3 p3 = quad[0] + (up1 * vf2);
+	FPoint3 p2 = quad[1] + (up2 * vf2);
 
 	vtMesh *mesh = FindMatMesh(BMAT_NAME_WINDOW, pEdge->m_Color, osg::PrimitiveSet::TRIANGLE_FAN);
 
 	// determine normal (flat shading, all vertices have the same normal)
-	const FPoint3 norm = Normal(p0,p1,p2);
+	FPoint3 norm = Normal(p0,p1,p2);
 
-	const int start = mesh->AddVertexNUV(p0, norm, FPoint2(0.0f, 0.0f));
+	int start =
+		mesh->AddVertexNUV(p0, norm, FPoint2(0.0f, 0.0f));
 	mesh->AddVertexNUV(p1, norm, FPoint2(1.0f, 0.0f));
 	mesh->AddVertexNUV(p2, norm, FPoint2(1.0f, 1.0f));
 	mesh->AddVertexNUV(p3, norm, FPoint2(0.0f, 1.0f));
@@ -689,17 +632,19 @@ void vtBuilding3d::AddWindowSection(vtEdge *pEdge, vtEdgeFeature *pFeat,
 	mesh->AddFan(start, start+1, start+2, start+3);
 }
 
-void vtBuilding3d::AddFlatRoof(const FPolygon3 &pp, const vtLevel *pLev)
+
+void vtBuilding3d::AddFlatRoof(const FPolygon3 &pp, vtLevel *pLev)
 {
-	const FPoint3 up(0.0f, 1.0f, 0.0f);	// vector pointing up
-	const int rings = pp.size();
-	const int outer_corners = pp[0].GetSize();
+	FPoint3 up(0.0f, 1.0f, 0.0f);	// vector pointing up
+	int rings = pp.size();
+	int outer_corners = pp[0].GetSize();
+	int i, j;
 	FPoint2 uv;
 
-	const vtEdge *pEdge = pLev->GetEdge(0);
+	vtEdge *pEdge = pLev->GetEdge(0);
 	const vtString& Material = *pEdge->m_pMaterial;
 	vtMesh *mesh = FindMatMesh(Material, pEdge->m_Color, osg::PrimitiveSet::TRIANGLES);
-	const vtMaterialDescriptor *md = GetMatDescriptor(Material, pEdge->m_Color);
+	vtMaterialDescriptor *md = s_MaterialDescriptors.FindMaterialDescriptor(Material, pEdge->m_Color);
 
 	if (outer_corners > 4 || rings > 1)
 	{
@@ -742,9 +687,9 @@ void vtBuilding3d::AddFlatRoof(const FPolygon3 &pp, const vtLevel *pLev)
 		FPoint2 gp;
 		FPoint3 p;
 
-		for (int i=0; i<tcount; i++)
+		for (i=0; i<tcount; i++)
 		{
-			for (int j = 0; j < 3; j++)
+			for (j = 0; j < 3; j++)
 			{
 				p = result[i*3+j];
 				uv.Set(p.x, p.z);
@@ -758,7 +703,7 @@ void vtBuilding3d::AddFlatRoof(const FPolygon3 &pp, const vtLevel *pLev)
 	else
 	{
 		int idx[MAX_WALLS];
-		for (int i = 0; i < outer_corners; i++)
+		for (i = 0; i < outer_corners; i++)
 		{
 			FPoint3 p = pp[0][i];
 			uv.Set(p.x, p.z);
@@ -774,7 +719,7 @@ void vtBuilding3d::AddFlatRoof(const FPolygon3 &pp, const vtLevel *pLev)
 }
 
 
-float vtBuilding3d::MakeFelkelRoof(const FPolygon3 &EavePolygons, const vtLevel *pLev)
+float vtBuilding3d::MakeFelkelRoof(const FPolygon3 &EavePolygons, vtLevel *pLev)
 {
 	vtStraightSkeleton StraightSkeleton;
 	CSkeleton Skeleton;
@@ -879,7 +824,7 @@ float vtBuilding3d::MakeFelkelRoof(const FPolygon3 &EavePolygons, const vtLevel 
 			// and build the vertex array
 			const vtString bmat = *points[pi].m_pMaterial;
 			vtMesh *pMesh = FindMatMesh(bmat, points[pi].m_Color, osg::PrimitiveSet::TRIANGLES);
-			vtMaterialDescriptor *pMd = GetMatDescriptor(bmat, points[pi].m_Color);
+			vtMaterialDescriptor *pMd = s_MaterialDescriptors.FindMaterialDescriptor(bmat, points[pi].m_Color);
 			FPoint2 UVScale;
 			if (NULL != pMd)
 				UVScale = pMd->GetUVScale();
@@ -893,7 +838,7 @@ float vtBuilding3d::MakeFelkelRoof(const FPolygon3 &EavePolygons, const vtLevel 
 			FPoint3 VAxis;
 			FPoint3 TextureOrigin;
 			int i, j;
-			std::vector<int> iaVertices;
+			vtArray<int> iaVertices;
 
 			C3DPoint& p1 = points[pi].m_Point;
 			C3DPoint& p2 = points[(pi+1)%points.size()].m_Point;
@@ -914,7 +859,7 @@ float vtBuilding3d::MakeFelkelRoof(const FPolygon3 &EavePolygons, const vtLevel 
 #ifdef FELKELDEBUG
 			VTLOG("Building panel\n");
 #endif
-			uint iNumberofPoints = 0;
+			unsigned int iNumberofPoints = 0;
 			do
 			{
 				if (iNumberofPoints++ > Skeleton.size())
@@ -1009,7 +954,7 @@ float vtBuilding3d::MakeFelkelRoof(const FPolygon3 &EavePolygons, const vtLevel 
 				FPoint3 Vertex = RoofSection3D[i];
 				FPoint2 UV = FPoint2((Vertex - TextureOrigin).Dot(UAxis), (Vertex - TextureOrigin).Dot(VAxis));
 				UV.Div(UVScale);
-				iaVertices.push_back(pMesh->AddVertexNUV(Vertex, PanelNormal, UV));
+				iaVertices.Append(pMesh->AddVertexNUV(Vertex, PanelNormal, UV));
 			}
 
 			if ((PanelNormal.x != 0) && (PanelNormal.z != 0))
@@ -1072,8 +1017,8 @@ bool vtBuilding3d::Collinear2d(const FPoint3& Previous, const FPoint3& Current, 
 		return false;
 }
 
-int vtBuilding3d::FindVertex(const FPoint3 &Point, const FLine3 &RoofSection3D,
-	const std::vector<int> &iaVertices)
+int vtBuilding3d::FindVertex(FPoint3 Point, FLine3 &RoofSection3D,
+	vtArray<int> &iaVertices)
 {
 	int iSize = RoofSection3D.GetSize();
 
@@ -1110,7 +1055,7 @@ void vtBuilding3d::CreateUniformLevel(int iLevel, float fHeight,
 
 	int i;
 	int base_edge = 0;
-	for (uint ring = 0; ring < polygon1.size(); ring++)
+	for (unsigned int ring = 0; ring < polygon1.size(); ring++)
 	{
 		FLine3 poly1 = polygon1[ring];
 		FLine3 poly2;
@@ -1157,7 +1102,7 @@ void vtBuilding3d::CreateUniformLevel(int iLevel, float fHeight,
 
 			if (base_edge+i == iHighlightEdge)
 			{
-				for (uint j = 0; j < pLev->m_iStories; j++)
+				for (unsigned int j = 0; j < pLev->m_iStories; j++)
 				{
 					AddHighlightSection(pEdge, quad);
 					quad[0].y += pLev->m_fStoryHeight;
@@ -1195,7 +1140,7 @@ bool vtBuilding3d::MakeFacade(vtEdge *pEdge, FLine3 &quad, int stories)
 		return false;
 	}
 
-	mm.m_iMatIdx = GetSharedMaterialArray()->AddTextureMaterial(fname,
+	mm.m_iMatIdx = GetSharedMaterialArray()->AddTextureMaterial2(fname,
 			true, true, false, false,
 			TERRAIN_AMBIENT,
 			TERRAIN_DIFFUSE,
@@ -1204,7 +1149,7 @@ bool vtBuilding3d::MakeFacade(vtEdge *pEdge, FLine3 &quad, int stories)
 
 	// Create a mesh for the new material and add this to the mesh array
 	mm.m_pMesh = new vtMesh(osg::PrimitiveSet::TRIANGLE_FAN, VT_Normals | VT_TexCoords, 6);
-	m_Mesh.push_back(mm);
+	m_Mesh.Append(mm);
 
 	// Calculate the vertices and add them to the mesh
 	float v = (float) stories;
@@ -1238,10 +1183,10 @@ void vtBuilding3d::Randomize(int iStories)
 	{
 		// unset color
 		// random pastel color
-		uchar r, g, b;
-		r = (uchar) (128 + random(127));
-		g = (uchar) (128 + random(127));
-		b = (uchar) (128 + random(127));
+		unsigned char r, g, b;
+		r = (unsigned char) (128 + random(127));
+		g = (unsigned char) (128 + random(127));
+		b = (unsigned char) (128 + random(127));
 		SetColor(BLD_BASIC, RGBi(r, g, b));
 	}
 
@@ -1319,26 +1264,12 @@ void vtBuilding3d::ShowBounds(bool bShow)
 	{
 		if (!m_pHighlight)
 		{
-			// The highlight geometry doesn't exist, so create it.
-#if 0
-			// Use bounding sphere; this is OK but quite large, so it's hard to
-			// tell which building if there are several close together.
+			// the highlight geometry doesn't exist, so create it
+			// get bounding sphere
 			FSphere sphere;
 			s2v(m_pGeode->getBound(), sphere);
 
-			m_pHighlight = CreateBoundSphereGeode(sphere);
-#elif 0
-			// Use the axis-aligned bounding box, which looks funny when square
-			// buildings are not aligned with the world axes.
-			FBox3 box;
-			GetNodeBoundBox(m_pGeode, box);
-			vtDynBoundBox *dbox = new vtDynBoundBox(RGBf(1,1,0));
-			dbox->SetBox(box);
-			m_pHighlight = dbox->pGeode;
-#else
-			// Use the building's geometry itself.
-			m_pHighlight = CreateHighlight();
-#endif
+			m_pHighlight = CreateBoundSphereGeom(sphere);
 			m_pHighlight->SetCastShadow(false);		// no shadow
 			m_pContainer->addChild(m_pHighlight);
 		}

@@ -22,9 +22,6 @@
 // OptionsDlg
 //----------------------------------------------------------------------------
 
-/**
- Dialog to edit Enviro's global options, EnviroOptions.
- */
 class OptionsDlg: public OptionsDlgBase
 {
 public:
@@ -37,6 +34,8 @@ public:
 	// WDR: method declarations for OptionsDlg
 	wxTextCtrl* GetSelectionRadius()  { return (wxTextCtrl*) FindWindow( ID_SELECTION_RADIUS ); }
 	wxTextCtrl* GetSelectionCutoff()  { return (wxTextCtrl*) FindWindow( ID_SELECTION_CUTOFF ); }
+	wxRadioButton* GetStereo2()  { return (wxRadioButton*) FindWindow( ID_STEREO2 ); }
+	wxRadioButton* GetStereo1()  { return (wxRadioButton*) FindWindow( ID_STEREO1 ); }
 	wxCheckBox* GetSizeInside()  { return (wxCheckBox*) FindWindow( ID_SIZE_INSIDE ); }
 	wxTextCtrl* GetWinYsize()  { return (wxTextCtrl*) FindWindow( ID_WIN_YSIZE ); }
 	wxTextCtrl* GetWinXsize()  { return (wxTextCtrl*) FindWindow( ID_WIN_XSIZE ); }
@@ -53,7 +52,6 @@ private:
 	bool	m_bFullscreen;
 	bool	m_bStereo;
 	int		m_iStereoMode;
-	int		m_iMultiSamples;
 	IPoint2 m_WinPos, m_WinSize;
 	bool	m_bLocationInside;
 
@@ -74,8 +72,6 @@ private:
 	wxString   m_strContentFile;
 	bool	m_bShowProgress;
 	bool	m_bFlyIn;
-	bool	m_bUseJoystick;
-	bool	m_bUseSpaceNav;
 
 private:
 	// WDR: handler declarations for OptionsDlg

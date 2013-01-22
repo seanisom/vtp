@@ -53,14 +53,14 @@ int DPolyArray::FindPoly(const DPoint2 &p) const
 
 void DLine2::Add(const DPoint2 &p)
 {
-	uint i, size = GetSize();
+	unsigned int i, size = GetSize();
 	for (i=0; i < size; i++)
 		GetAt(i) += p;
 }
 
 void DLine2::Mult(double factor)
 {
-	uint i, size = GetSize();
+	unsigned int i, size = GetSize();
 	for (i=0; i < size; i++)
 		GetAt(i) *= factor;
 }
@@ -101,61 +101,14 @@ void DLine2::ReverseOrder()
  *  line is a triangle not a rectangle.  Remove the identical points to
  *  produce A B D.  Points are identical if they are within dEpsilon
  *  of each other.
- *
- * \param dEpsilon Distance.
- * \param bClosed If true, treat this as a closed polyline (a simple
- *  polygon) by wrapping around from the last to the first point.
  */
-int DLine2::RemoveDegeneratePoints(double dEpsilon, bool bClosed)
+int DLine2::RemoveDegeneratePoints(double dEpsilon)
 {
 	int removed = 0;
-
-	// If closed, the wrap around when looking for adjacent points.
-	// Otherwise, never consider removing the first or last point.
-	int preserve_endpoints = bClosed ? 0 : 1;
-
-	for (int i = preserve_endpoints; i < (int) GetSize() - preserve_endpoints; i++)
+	for (int i = 0; i < (int) GetSize(); i++)
 	{
-		// Compare each point to the previous
-		const double dist = (GetAt(i) - GetSafePoint(i-1)).Length();
-		if (dist < dEpsilon)
-		{
-			RemoveAt(i);
-			removed++;
-			i--;
-		}
-	}
-	return removed;
-}
-
-/**
- Given three points A B C, where the distance from B to the line A-C
-  is less than dEpsilon units, B is co-linear and should be removed.
-
- We could use another measure of linearity, the angle between (B-A)
- and (C-A), but didn't do that.
- 
- \param dEpsilon Distance.
- \param bClosed If true, treat this as a closed polyline (a simple
-   polygon) by wrapping around from the last to the first point.
- */
-int DLine2::RemoveColinearPoints(double dEpsilon, bool bClosed)
-{
-	int removed = 0;
-
-	// If closed, the wrap around when looking for adjacent points.
-	// Otherwise, never consider removing the first or last point.
-	int preserve_endpoints = bClosed ? 0 : 1;
-
-	for (int i = preserve_endpoints; i < (int) GetSize() - preserve_endpoints; i++)
-	{
-		const DPoint2 &prev = GetSafePoint(i-1);
-		const DPoint2 &next = GetSafePoint(i+1);
-
-		DPoint2 ray = next - prev;
-		ray.Normalize();
-		const double dist = ray.Cross(GetAt(i) - prev);
-		if (fabs(dist) < dEpsilon)
+		DPoint2 diff = GetSafePoint(i+1) - GetAt(i);
+		if (fabs(diff.x) < dEpsilon && fabs(diff.y) < dEpsilon)
 		{
 			RemoveAt(i);
 			removed++;
@@ -169,13 +122,13 @@ bool DLine2::IsConvex() const
 {
 	int positive = 0;
 	int negative = 0;
-	uint length = GetSize();
+	unsigned int length = GetSize();
 
-	for (uint i = 0; i < length; i++)
+	for (unsigned int i = 0; i < length; i++)
 	{
 		DPoint2 &p0 = GetAt(i);
-		DPoint2 &p1 = GetSafePoint(i+1);
-		DPoint2 &p2 = GetSafePoint(i+2);
+		DPoint2 &p1 = GetAt((i+1) % length);
+		DPoint2 &p2 = GetAt((i+2) % length);
 		double cross = (p1-p0).Cross(p2-p1);
 
 		if ( cross < 0 )
@@ -262,11 +215,11 @@ bool DLine2::NearestSegment(const DPoint2 &Point, int &iIndex,
 */
 void DLine2::NearestPoint(const DPoint2 &Point, int &iIndex, double &dClosest) const
 {
-	uint iNumPoints = GetSize();
+	unsigned int iNumPoints = GetSize();
 	dClosest = 1E9;
 	double dDistance;
 
-	for (uint i = 0; i < iNumPoints; i++)
+	for (unsigned int i = 0; i < iNumPoints; i++)
 	{
 		dDistance = (Point - GetAt(i)).Length();
 		if (dDistance < dClosest)
@@ -307,15 +260,15 @@ void DLine2::SetSafePoint(int index, const DPoint2 &p)
 * between points N and N+1.  If the length of the last segment is requested,
 * a closed polygon is assumed.
 */
-double DLine2::SegmentLength(uint i) const
+double DLine2::SegmentLength(unsigned int i) const
 {
-	uint j = (i < GetSize()-1) ? i+1 : 0;
+	unsigned int j = (i < GetSize()-1) ? i+1 : 0;
 	return (GetAt(j) - GetAt(i)).Length();
 }
 
 double DLine2::Length() const
 {
-	uint i, iNumPoints = GetSize();
+	unsigned int i, iNumPoints = GetSize();
 	double length = 0.0;
 
 	if (!iNumPoints)
@@ -328,7 +281,7 @@ double DLine2::Length() const
 }
 
 /** Centroid (centre of gravity/mass) of the polygon
- *
+ * 
  * Note: I've observed some numerical precision issues with this method.
  * With 7-digit coordinates (e.g. x=2388836, y=4690396) the centroid computed
  * may be several units away from its correct location, in fact even outside
@@ -338,8 +291,8 @@ DPoint2 DLine2::Centroid() const
 {
 	DPoint2 pt(0,0);
 	double dA = 0.0;
-	uint n = GetSize();
-	for (uint i=0; i<n; ++i)
+	unsigned int n = GetSize();
+	for (unsigned int i=0; i<n; ++i)
 	{
 		int j = i + 1;
 		if (j == n) j = 0;
@@ -360,8 +313,8 @@ DPoint2 DLine2::Centroid() const
 DPoint2 DLine2::Centroid2() const
 {
 	DPoint2 result(0,0);
-	uint n = GetSize();
-	for (uint i=0; i<n; ++i)
+	unsigned int n = GetSize();
+	for (unsigned int i=0; i<n; ++i)
 		result += m_Data[i];
 	result /= n;
 	return result;
@@ -380,9 +333,9 @@ float FLine2::Area() const
 	return A*0.5f;
 }
 
-float FLine2::SegmentLength(uint i) const
+float FLine2::SegmentLength(unsigned int i) const
 {
-	uint j = (i < GetSize()-1) ? i+1 : 0;
+	unsigned int j = (i < GetSize()-1) ? i+1 : 0;
 	return (GetAt(j) - GetAt(i)).Length();
 }
 
@@ -398,11 +351,11 @@ float FLine2::SegmentLength(uint i) const
 */
 void FLine2::NearestPoint(const FPoint2 &Point, int &iIndex, float &fClosest) const
 {
-	uint iNumPoints = GetSize();
+	unsigned int iNumPoints = GetSize();
 	fClosest = 1E9;
 	float fDistance;
 
-	for (uint i = 0; i < iNumPoints; i++)
+	for (unsigned int i = 0; i < iNumPoints; i++)
 	{
 		fDistance = (Point - GetAt(i)).Length();
 		if (fDistance < fClosest)
@@ -419,11 +372,11 @@ void FLine2::NearestPoint(const FPoint2 &Point, int &iIndex, float &fClosest) co
 */
 void FLine2::NearestPoint(const FPoint2 &Point, int &iIndex) const
 {
-	uint iNumPoints = GetSize();
+	unsigned int iNumPoints = GetSize();
 	float fClosest = 1E9;
 	float fDistance;
 
-	for (uint i = 0; i < iNumPoints; i++)
+	for (unsigned int i = 0; i < iNumPoints; i++)
 	{
 		fDistance = (Point - GetAt(i)).LengthSquared();
 		if (fDistance < fClosest)
@@ -491,7 +444,7 @@ void FLine2::InsertPointAfter(int iInsertAfter, const FPoint2 &Point)
 void FLine2::ReverseOrder()
 {
 	FPoint2 p;
-	uint i, size = GetSize();
+	unsigned int i, size = GetSize();
 	for (i = 0; i < size/2; i++)
 	{
 		p = GetAt(i);
@@ -504,9 +457,9 @@ bool FLine2::IsConvex() const
 {
 	int positive = 0;
 	int negative = 0;
-	uint length = GetSize();
+	unsigned int length = GetSize();
 
-	for (uint i = 0; i < length; i++)
+	for (unsigned int i = 0; i < length; i++)
 	{
 		FPoint2 &p0 = GetAt(i);
 		FPoint2 &p1 = GetAt((i+1) % length);
@@ -598,12 +551,12 @@ bool DLine3::NearestSegment2D(const DPoint2 &Point, int &iIndex,
 */
 void DLine3::NearestPoint2D(const DPoint2 &Point, int &iIndex, double &dClosest) const
 {
-	uint iNumPoints = GetSize();
+	unsigned int iNumPoints = GetSize();
 	dClosest = 1E9;
 	double dDistance;
 	DPoint2 p2;
 
-	for (uint i = 0; i < iNumPoints; i++)
+	for (unsigned int i = 0; i < iNumPoints; i++)
 	{
 		p2.x = GetAt(i).x;
 		p2.y = GetAt(i).y;
@@ -658,7 +611,7 @@ void FLine3::ReverseOrder()
  */
 bool DRECT::ContainsLine(const DLine2 &line) const
 {
-	for (uint i = 0; i < line.GetSize(); i++)
+	for (unsigned int i = 0; i < line.GetSize(); i++)
 	{
 		if (!ContainsPoint(line[i]))
 			return false;
@@ -668,7 +621,7 @@ bool DRECT::ContainsLine(const DLine2 &line) const
 
 bool DRECT::ContainsLine(const DLine3 &line) const
 {
-	for (uint i = 0; i < line.GetSize(); i++)
+	for (unsigned int i = 0; i < line.GetSize(); i++)
 	{
 		if (!ContainsPoint(line[i]))
 			return false;
@@ -681,9 +634,9 @@ bool DRECT::ContainsLine(const DLine3 &line) const
 // DPolygon2 methods
 //
 
-uint DPolygon2::NumTotalVertices() const
+unsigned int DPolygon2::NumTotalVertices() const
 {
-	uint total = 0, r;
+	unsigned int total = 0, r;
 	for (r = 0; r < size(); r++)
 		total += at(r).GetSize();
 	return total;
@@ -695,7 +648,7 @@ bool DPolygon2::ComputeExtents(DRECT &rect) const
 		return false;
 
 	rect.SetRect(1E9,-1E9,-1E9,1E9);
-	for (uint ringnum = 0; ringnum < size(); ringnum++)
+	for (unsigned int ringnum = 0; ringnum < size(); ringnum++)
 	{
 		const DLine2 &ring = at(ringnum);
 		for (unsigned i = 0; i < ring.GetSize(); i++)
@@ -730,7 +683,7 @@ bool DPolygon2::ContainsPoint(const DPoint2 &p) const
 		bool outer_ring = at(0).ContainsPoint(p);
 		if (!outer_ring)
 			return false;
-		for (uint i = 1; i < size(); i++)
+		for (unsigned int i = 1; i < size(); i++)
 		{
 			// It seems that we would have to reverse the order of the inner
 			//  ring vertices, but in practice, it works fine without doing so.
@@ -753,7 +706,7 @@ bool DPolygon2::ContainsPoint(const DPoint2 &p) const
  */
 void DPolygon2::GetAsDLine2(DLine2 &dline) const
 {
-	uint i, total = 0, ringnum;
+	unsigned int i, total = 0, ringnum;
 
 	for (ringnum = 0; ringnum < size(); ringnum++)
 		total += (at(ringnum).GetSize() + 1);
@@ -773,10 +726,10 @@ void DPolygon2::GetAsDLine2(DLine2 &dline) const
 
 int DPolygon2::WhichRing(int &iVtxNum) const
 {
-	for (uint ring = 0; ring < size(); ring++)
+	for (unsigned int ring = 0; ring < size(); ring++)
 	{
-		uint size = at(ring).GetSize();
-		if ((uint)iVtxNum < size)
+		unsigned int size = at(ring).GetSize();
+		if ((unsigned int)iVtxNum < size)
 			return ring;
 		iVtxNum -= size;
 	}
@@ -799,9 +752,9 @@ void DPolygon2::NearestPoint(const DPoint2 &Point, int &iIndex, double &dClosest
 	int test_index;
 	double test_distance;
 
-	uint rings = size();
+	unsigned int rings = size();
 	int ring_start = 0;
-	for (uint ring = 0; ring < rings; ring++)
+	for (unsigned int ring = 0; ring < rings; ring++)
 	{
 		const DLine2 &loop = at(ring);
 		loop.NearestPoint(Point, test_index, test_distance);
@@ -834,9 +787,9 @@ bool DPolygon2::NearestSegment(const DPoint2 &Point, int &iIndex,
 	double test_distance;
 	DPoint2 test_intersection;
 
-	uint rings = size();
+	unsigned int rings = size();
 	int ring_start = 0;
-	for (uint ring = 0; ring < rings; ring++)
+	for (unsigned int ring = 0; ring < rings; ring++)
 	{
 		const DLine2 &loop = at(ring);
 		loop.NearestSegment(Point, test_index, test_distance, test_intersection);
@@ -863,10 +816,10 @@ bool DPolygon2::NearestSegment(const DPoint2 &Point, int &iIndex,
  */
 void DPolygon2::Add(const DPoint2 &p)
 {
-	for (uint ringnum = 0; ringnum < size(); ringnum++)
+	for (unsigned int ringnum = 0; ringnum < size(); ringnum++)
 	{
 		DLine2 &ring = at(ringnum);
-		for (uint i = 0; i < ring.GetSize(); i++)
+		for (unsigned int i = 0; i < ring.GetSize(); i++)
 			ring[i] += p;
 	}
 }
@@ -876,17 +829,17 @@ void DPolygon2::Add(const DPoint2 &p)
 */
 void DPolygon2::Mult(double factor)
 {
-	for (uint ringnum = 0; ringnum < size(); ringnum++)
+	for (unsigned int ringnum = 0; ringnum < size(); ringnum++)
 	{
 		DLine2 &ring = at(ringnum);
-		for (uint i = 0; i < ring.GetSize(); i++)
+		for (unsigned int i = 0; i < ring.GetSize(); i++)
 			ring[i].Mult(factor, factor);
 	}
 }
 
 void DPolygon2::ReverseOrder()
 {
-	for (uint ringnum = 0; ringnum < size(); ringnum++)
+	for (unsigned int ringnum = 0; ringnum < size(); ringnum++)
 	{
 		DLine2 &ring = at(ringnum);
 		ring.ReverseOrder();
@@ -898,10 +851,10 @@ void DPolygon2::ReverseOrder()
  */
 void  DPolygon2::InsertPointAfter(int iInsertAfter, const DPoint2 &Point)
 {
-	for (uint ring = 0; ring < size(); ring++)
+	for (unsigned int ring = 0; ring < size(); ring++)
 	{
-		uint size = at(ring).GetSize();
-		if ((uint)iInsertAfter < size)
+		unsigned int size = at(ring).GetSize();
+		if ((unsigned int)iInsertAfter < size)
 		{
 			// remove the point from this ring
 			at(ring).InsertPointAfter(iInsertAfter, Point);
@@ -916,10 +869,10 @@ void  DPolygon2::InsertPointAfter(int iInsertAfter, const DPoint2 &Point)
  */
 void DPolygon2::RemovePoint(int N)
 {
-	for (uint ring = 0; ring < size(); ring++)
+	for (unsigned int ring = 0; ring < size(); ring++)
 	{
-		uint size = at(ring).GetSize();
-		if ((uint)N < size)
+		unsigned int size = at(ring).GetSize();
+		if ((unsigned int)N < size)
 		{
 			// remove the point from this ring
 			at(ring).RemovePoint(N);
@@ -929,43 +882,11 @@ void DPolygon2::RemovePoint(int N)
 	}
 }
 
-/**
- For each ring of the polygon, remove any points which are degenerate (less than
- dEpsilon apart).
- \return The number of points that were removed.
- */
 int DPolygon2::RemoveDegeneratePoints(double dEpsilon)
 {
 	int removed = 0;
-	for (uint ring = 0; ring < size(); ring++)
-	{
-		DLine2 &dline = at(ring);
-		removed += dline.RemoveDegeneratePoints(dEpsilon, true);
-		if (dline.GetSize() < 3)
-		{
-			int bad = 1;
-		}
-	}
-	return removed;
-}
-
-/**
- For each ring of the polygon, remove any points which are co-linear, defined
- as point p(n) which is less than dEpsilon displaced from the line from P(n-1) to P(n+1)
- \return The number of points that were removed.
- */
-int DPolygon2::RemoveColinearPoints(double dEpsilon)
-{
-	int removed = 0;
-	for (uint ring = 0; ring < size(); ring++)
-	{
-		DLine2 &dline = at(ring);
-		removed += dline.RemoveColinearPoints(dEpsilon, true);
-		if (dline.GetSize() < 3)
-		{
-			int bad = 1;
-		}
-	}
+	for (unsigned int ring = 0; ring < size(); ring++)
+		removed += at(ring).RemoveDegeneratePoints(dEpsilon);
 	return removed;
 }
 
@@ -980,10 +901,10 @@ int DPolygon2::RemoveColinearPoints(double dEpsilon)
 */
 void FPolygon3::Add(const FPoint3 &p)
 {
-	for (uint ringnum = 0; ringnum < size(); ringnum++)
+	for (unsigned int ringnum = 0; ringnum < size(); ringnum++)
 	{
 		FLine3 &ring = at(ringnum);
-		for (uint i = 0; i < ring.GetSize(); i++)
+		for (unsigned int i = 0; i < ring.GetSize(); i++)
 			ring[i] += p;
 	}
 }
@@ -993,26 +914,26 @@ void FPolygon3::Add(const FPoint3 &p)
 */
 void FPolygon3::Mult(float factor)
 {
-	for (uint ringnum = 0; ringnum < size(); ringnum++)
+	for (unsigned int ringnum = 0; ringnum < size(); ringnum++)
 	{
 		FLine3 &ring = at(ringnum);
-		for (uint i = 0; i < ring.GetSize(); i++)
+		for (unsigned int i = 0; i < ring.GetSize(); i++)
 			ring[i] *= factor;
 	}
 }
 
 void FPolygon3::ReverseOrder()
 {
-	for (uint ringnum = 0; ringnum < size(); ringnum++)
+	for (unsigned int ringnum = 0; ringnum < size(); ringnum++)
 	{
 		FLine3 &ring = at(ringnum);
 		ring.ReverseOrder();
 	}
 }
 
-uint FPolygon3::NumTotalVertices() const
+unsigned int FPolygon3::NumTotalVertices() const
 {
-	uint total = 0, r;
+	unsigned int total = 0, r;
 	for (r = 0; r < size(); r++)
 		total += at(r).GetSize();
 	return total;
@@ -1020,10 +941,10 @@ uint FPolygon3::NumTotalVertices() const
 
 int FPolygon3::WhichRing(int &iVtxNum) const
 {
-	for (uint ring = 0; ring < size(); ring++)
+	for (unsigned int ring = 0; ring < size(); ring++)
 	{
-		uint size = at(ring).GetSize();
-		if ((uint)iVtxNum < size)
+		unsigned int size = at(ring).GetSize();
+		if ((unsigned int)iVtxNum < size)
 			return ring;
 		iVtxNum -= size;
 	}
@@ -1507,71 +1428,6 @@ float vt_log2f(float n)
 	return logf(n) / LN_2;
 }
 
-/**
- Given three points in a polyline, determine a side vector will will offset
- the polyline, to the left, by a unit width.
- */
-double AngleSideVector(const DPoint2 &p0, const DPoint2 &p1, const DPoint2 &p2,
-					  DPoint2 &sideways)
-{
-	// Look at vectors to previous and next points
-	const DPoint2 v0 = (p1-p0).Normalize();
-	const DPoint2 v1 = (p2-p1).Normalize();
-
-	// we flip axes to turn the path vector 90 degrees (normal to path)
-	DPoint2 bisector(-(v0.y + v1.y), v0.x + v1.x);
-	bisector.Normalize();
-
-	double wider;
-	const double dot = v0.Dot(-v1);
-	if (dot <= -0.99 || dot >= 0.99)
-	{
-		// close enough to colinear, no need to widen
-		wider = 1.0f;
-	}
-	else
-	{
-		// factor to widen this corner is proportional to the angle
-		double angle = acos(dot);
-		wider = (float) (1.0 / sin(angle / 2));
-		bisector *= wider;
-	}
-	sideways = bisector;
-	return wider;
-}
-
-/**
- Given three points in a polyline, determine a side vector will will offset
- the polyline by a unit width.
- */
-float AngleSideVector(const FPoint3 &p0, const FPoint3 &p1, const FPoint3 &p2,
-					  FPoint3 &sideways)
-{
-	// Look at vectors to previous and next points
-	const FPoint3 v0 = (p1-p0).Normalize();
-	const FPoint3 v1 = (p2-p1).Normalize();
-
-	// we flip axes to turn the path vector 90 degrees (normal to path)
-	FPoint3 bisector(v0.z + v1.z, 0, -(v0.x + v1.x));
-	bisector.Normalize();
-
-	float wider;
-	const float dot = v0.Dot(-v1);
-	if (dot <= -0.97 || dot >= 0.97)
-	{
-		// close enough to colinear, no need to widen
-		wider = 1.0f;
-	}
-	else
-	{
-		// factor to widen this corner is proportional to the angle
-		float angle = acos(dot);
-		wider = (float) (1.0 / sin(angle / 2));
-		bisector *= wider;
-	}
-	sideways = bisector;
-	return wider;
-}
 
 /*
 * ======= Crossings algorithm ============================================
@@ -2103,9 +1959,9 @@ bool RaySphereIntersection(const FPoint3 &origin, const FPoint3 &dir,
  */
 void ProjectionXZ(const FLine3 &fline3, DLine2 &dline2)
 {
-	uint size = fline3.GetSize();
+	unsigned int size = fline3.GetSize();
 	dline2.SetSize(size);
-	for (uint i = 0; i < size; i++)
+	for (unsigned int i = 0; i < size; i++)
 	{
 		const FPoint3 &fp3 = fline3[i];
 		dline2[i].Set(fp3.x, -fp3.z);
@@ -2114,17 +1970,17 @@ void ProjectionXZ(const FLine3 &fline3, DLine2 &dline2)
 
 void ProjectionXZ(const FPolygon3 &fpoly3, DPolygon2 &dpoly2)
 {
-	uint rings = fpoly3.size();
+	unsigned int rings = fpoly3.size();
 	dpoly2.resize(rings);
-	for (uint i = 0; i < rings; i++)
+	for (unsigned int i = 0; i < rings; i++)
 		ProjectionXZ(fpoly3[i], dpoly2[i]);
 }
 
 void ProjectionXZ(const DLine2 &dline2, float fY, FLine3 &fline3)
 {
-	uint size = dline2.GetSize();
+	unsigned int size = dline2.GetSize();
 	fline3.SetSize(size);
-	for (uint i = 0; i < size; i++)
+	for (unsigned int i = 0; i < size; i++)
 	{
 		const DPoint2 &dp2 = dline2[i];
 		fline3[i].Set((float) dp2.x, fY, (float) -dp2.y);
@@ -2133,9 +1989,9 @@ void ProjectionXZ(const DLine2 &dline2, float fY, FLine3 &fline3)
 
 void ProjectionXZ(const DPolygon2 &dpoly2, float fY, FPolygon3 &fpoly3)
 {
-	uint rings = dpoly2.size();
+	unsigned int rings = dpoly2.size();
 	fpoly3.resize(rings);
-	for (uint i = 0; i < rings; i++)
+	for (unsigned int i = 0; i < rings; i++)
 		ProjectionXZ(dpoly2[i], fY, fpoly3[i]);
 }
 

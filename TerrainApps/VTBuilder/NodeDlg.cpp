@@ -29,18 +29,18 @@ void NodeDlgView::OnDraw(wxDC &dc)
 		return;
 
 	wxPoint center;
-	screen(m_pNode->Pos(), center);
+	screen(m_pNode->m_p, center);
 	m_pNode->Draw(&dc, this);
 
 	wxString string;
-	for (int i = 0; i < m_pNode->NumLinks(); i++)
+	for (int i = 0; i < m_pNode->m_iLinks; i++)
 	{
 		LinkEdit *pR = m_pNode->GetLink(i);
 		pR->Draw(&dc, this);
 
 		//we need to use the original node here because the roads point to it.
-		const DPoint2 close = m_pNode->GetAdjacentLinkPoint2d(i);
-		DPoint2 vector = close - m_pNode->Pos();
+		DPoint2 close = m_pNode->GetAdjacentLinkPoint2d(i);
+		DPoint2 vector = close - m_pNode->m_p;
 		vector.Normalize();
 		IPoint2 vec;
 
@@ -50,7 +50,6 @@ void NodeDlgView::OnDraw(wxDC &dc)
 		//draw signal lights or stop signs as necessary.
 		dc.SetLogicalFunction(wxCOPY);
 		wxPen pen;
-		wxBrush brush;
 
 		switch (m_pNode->GetIntersectType(i))
 		{
@@ -83,21 +82,41 @@ void NodeDlgView::OnDraw(wxDC &dc)
 			dc.DrawLines(9, buf);
 			break;
 		case IT_LIGHT:
-			pen.SetColour(128,0,0);
-			brush.SetColour(128,0,0);
+			wxBrush brush;
+			switch (m_pNode->GetLightStatus(i))
+			{
+			case LT_INVALID:
+				pen.SetColour(0,0,0);
+				brush.SetColour(0,0,0);
+				break;
+			case LT_RED:
+				pen.SetColour(128,0,0);
+				brush.SetColour(128,0,0);
+				break;
+			case LT_YELLOW:
+				pen.SetColour(0,128,128);
+				brush.SetColour(0,128,128);
+				break;
+			case LT_GREEN:
+				pen.SetColour(0,128,0);
+				brush.SetColour(0,128,0);
+				break;
+			default:
+				//unrecognized
+				pen.SetColour(0,0,255);
+				brush.SetColour(0,0,255);
+				break;
+			}
+
 			dc.SetPen(pen);
 			dc.SetBrush(brush);
-			{
-				wxRect box;
-				int radius = 4;
-				box.y = vec.y - radius;
-				box.height = (radius << 1);
-				box.x = vec.x - radius;
-				box.width = (radius << 1);
-				dc.DrawEllipse(box.x, box.y, box.width, box.height);
-			}
-			break;
-		default:	// Keep picky compilers quiet.
+			wxRect box;
+			int radius = 4;
+			box.y = vec.y - radius;
+			box.height = (radius << 1);
+			box.x = vec.x - radius;
+			box.width = (radius << 1);
+			dc.DrawEllipse(box.x, box.y, box.width, box.height);
 			break;
 		}
 
@@ -156,7 +175,7 @@ void NodeDlg::SetNode(NodeEdit *pSingleNode, vtRoadLayer *pLayer)
 	m_pLayer = pLayer;
 	m_pView->m_pNode = m_pNode;
 	if (NULL != m_pNode)
-		m_pView->ZoomToPoint(m_pNode->Pos());
+		m_pView->ZoomToPoint(m_pNode->m_p);
 }
 
 // WDR: handler implementations for NodeDlg
@@ -217,21 +236,21 @@ void NodeDlg::ApplyVisualToNode(NodeEdit *pNode, VisualIntersectionType vitype)
 	{
 	case VIT_NONE:
 		//make all intersections uncontrolled
-		for (i = 0; i < pNode->NumLinks(); i++) {
+		for (i = 0; i < pNode->m_iLinks; i++) {
 			pNode->SetIntersectType(i, IT_NONE);
 		}
 		GetBehavior()->SetSelection(IT_NONE);
 		break;
 	case VIT_ALLSTOPS:
 		//make all intersections stop signs
-		for (i = 0; i < pNode->NumLinks(); i++) {
+		for (i = 0; i < pNode->m_iLinks; i++) {
 			pNode->SetIntersectType(i, IT_STOPSIGN);
 		}
 		GetBehavior()->SetSelection(IT_STOPSIGN);
 		break;
 	case VIT_ALLLIGHTS:
 		//make all intersections lights
-		for (i = 0; i < pNode->NumLinks(); i++) {
+		for (i = 0; i < pNode->m_iLinks; i++) {
 			pNode->SetIntersectType(i, IT_LIGHT);
 		}
 		GetBehavior()->SetSelection(IT_LIGHT);
@@ -271,12 +290,12 @@ void NodeDlg::OnInitDialog(wxInitDialogEvent& event)
 	{
 		// single road
 		wxString string;
-		for (int i = 0; i < m_pNode->NumLinks(); i++)
+		for (int i = 0; i < m_pNode->m_iLinks; i++)
 		{
 			string.Printf(_T("%i"), i);
 			GetLinkNum()->Append(string);
 		}
-		if (m_pNode->NumLinks() > 0)
+		if (m_pNode->m_iLinks > 0)
 			GetLinkNum()->SetSelection(0);
 		GetIntType()->SetSelection(m_pNode->GetVisual());
 		int itype = m_pNode->GetIntersectType(0);

@@ -9,7 +9,6 @@
 
 #include "vtlib/vtlib.h"
 #include "TextureUnitManager.h"
-#include "TemporaryGraphicsContext.h"
 
 //
 // RJ's warning: NONE OF THIS IS THREAD SAFE!!!
@@ -30,10 +29,22 @@ vtTextureUnitManager::~vtTextureUnitManager(void)
 void vtTextureUnitManager::Initialise()
 {
 	// Ensure this thread has a valid graphics context
-	// before making any OpenGL calls
-    vtTemporaryGraphicsContext TempContext;
-
-	glGetIntegerv(GL_MAX_TEXTURE_UNITS,&m_iNumTextureUnits);
+	// The following code will create
+	// 1. A OSG Traits object
+	// 2. A new OSG GraphicsContext object
+	// 3. A new zero sized window
+	// 4. A new OpenGL rendering context
+	// 5. A new OSG contextID
+	// The ref_ptrs will ensure all these things will be destroyed when this routine returns
+	// although OSG may spit out a warning about destroying a valid window!
+	osg::ref_ptr<osg::GraphicsContext::Traits> pTraits = new osg::GraphicsContext::Traits;
+	pTraits->width = 1;
+	pTraits->height = 1;
+	osg::ref_ptr<osg::GraphicsContext> pGraphicsContext = osg::GraphicsContext::createGraphicsContext(pTraits.get());
+	pGraphicsContext->realize();
+	pGraphicsContext->makeCurrent();
+	osg::ref_ptr<osg::Texture::Extensions> pTextureExtensions = osg::Texture::getExtensions(pGraphicsContext->getState()->getContextID(), true);
+	m_iNumTextureUnits = pTextureExtensions->numTextureUnits();
 	if (m_iNumTextureUnits < 0)
 	{
 		// got a bogus value, probably because there is no OpenGL context yet.

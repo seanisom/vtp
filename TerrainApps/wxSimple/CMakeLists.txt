@@ -6,11 +6,8 @@ if(MSVC)
 	set_source_files_properties(${WXSIMPLE_SOURCE_FILES} PROPERTIES COMPILE_FLAGS "/Yuwx/wxprec.h")
 	set_source_files_properties(wx_headers.cpp PROPERTIES COMPILE_FLAGS "/Ycwx/wxprec.h")
 else(MSVC)
-	add_executable(wxSimple WIN32 MACOSX_BUNDLE ${WXSIMPLE_SOURCE_FILES} ${WXSIMPLE_HEADER_FILES})
+	add_executable(wxSimple WIN32 ${WXSIMPLE_SOURCE_FILES} ${WXSIMPLE_HEADER_FILES})
 endif(MSVC)
-
-install(TARGETS wxSimple RUNTIME DESTINATION bin
-                         BUNDLE DESTINATION bin)
 
 # Internal library dependencies for this target
 target_link_libraries(wxSimple wxosg vtlib minidata vtdata xmlhelper vtui)
@@ -71,10 +68,6 @@ endif(MINI_FOUND)
 if(OPENGL_gl_LIBRARY)
 	target_link_libraries(wxSimple ${OPENGL_gl_LIBRARY})
 endif(OPENGL_gl_LIBRARY)
-
-if(OPENGL_glu_LIBRARY)
-	target_link_libraries(wxSimple ${OPENGL_glu_LIBRARY})
-endif(OPENGL_glu_LIBRARY)
 
 # Set up include directories for all targets at this level
 if(GDAL_FOUND)

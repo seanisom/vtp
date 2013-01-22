@@ -1,9 +1,8 @@
 find_package(GLUT)
+find_package(OpenGL)
 
 if(GLUT_FOUND)
 	add_executable(glutSimple app.cpp)
-
-	install(TARGETS glutSimple RUNTIME DESTINATION bin)
 
 	# Internal library dependencies for this target
 	target_link_libraries(glutSimple vtlib minidata vtdata  xmlhelper)
@@ -18,22 +17,18 @@ if(GLUT_FOUND)
 	endif (WIN32)
 
 	# External libraries for this target
-	if(MINI_FOUND)
-		target_link_libraries(glutSimple ${MINI_LIBRARIES})
-	endif(MINI_FOUND)
-
 	if(GLUT_FOUND)
 		target_link_libraries(glutSimple ${GLUT_LIBRARIES})
 	endif(GLUT_FOUND)
-
+	
 	if(OPENGL_FOUND)
 		target_link_libraries(glutSimple ${OPENGL_LIBRARIES})
 	endif(OPENGL_FOUND)
-
+	
 	if(OSG_FOUND)
 		target_link_libraries(glutSimple ${OSG_ALL_LIBRARIES})
 	endif (OSG_FOUND)
-
+	
 	if(BZIP2_FOUND)
 		target_link_libraries(glutSimple ${BZIP2_LIBRARIES})
 	endif(BZIP2_FOUND)
@@ -57,7 +52,10 @@ if(GLUT_FOUND)
 	if(PNG_FOUND)
 		target_link_libraries(glutSimple ${PNG_LIBRARIES})
 	endif(PNG_FOUND)
-
+	
+	if(MINI_FOUND)
+		target_link_libraries(glutSimple ${MINI_LIBRARIES})
+	endif(MINI_FOUND)
 
 	# Set up include directories for all targets at this level
 	include_directories(${GLUT_INCLUDE_DIR})
@@ -68,7 +66,7 @@ if(GLUT_FOUND)
 	if (OSGEARTH_FOUND)
 		target_link_libraries(glutSimple ${OSGEARTH_ALL_LIBRARIES})
 	endif(OSGEARTH_FOUND)
-
+	
 	if(GDAL_FOUND)
 		include_directories(${GDAL_INCLUDE_DIR})
 	endif(GDAL_FOUND)

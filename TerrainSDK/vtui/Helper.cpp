@@ -1,5 +1,5 @@
 //
-// vtui Helper.cpp: Some useful standalone functions for use with wxWidgets.
+// vtui Helper.cpp: Some useful standalone functions for use with wxWindows.
 //
 // Copyright (c) 2002-2009 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
@@ -31,11 +31,6 @@ bool IsGUIApp()
 	return pApp != NULL;
 }
 
-/**
-  Make a wxBitmap of a given pixel size, filled with a single color.
-  
-  The caller is responsible for deleting the bitmap later.
- */
 wxBitmap *MakeColorBitmap(int xsize, int ysize, wxColour color)
 {
 	wxImage pImage(xsize, ysize);
@@ -236,20 +231,14 @@ int AddFilenamesToStringArray(vtStringArray &array, const char *directory,
 //////////////////////////////////////
 
 /**
- Add a file format type to a directory dialog filter string.
- 
- For example, to ask the user for a BT or JPEG file:
- \code
+ * Add a file format type to a directory dialog filter string.
+ *
+ * Example, to ask the user for a BT or JPEG file:
+
 	wxString filter = _("All Formats|");
 	AddType(filter, _T("BT Files (*.bt)|*.bt"));
 	AddType(filter, _T("JPEG Files (*.jpg;*.jpeg)|*.jpg;*.jpeg"));
 	wxFileDialog loadFile(NULL, _("Open file"), _T(""), _T(""), filter, wxFD_OPEN);
- \endcode
- It is even easier if you use the standard strings from vtdata/FileFilters.h:
- \code
-	AddType(filter, FSTRING_BT);
-	AddType(filter, FSTRING_JPEG);
- \endcode
  */
 void AddType(wxString &str, const wxString &filter)
 {
@@ -326,10 +315,10 @@ void DrawRectangle(wxDC *pDC, const wxRect &rect, bool bCrossed)
 //////////////////////////////////////
 
 #if WIN32
+
 //
-// Win32 allows us to do a real StretchBlt operation directly from a bitmap
-// (which is not a function that wxWidgets exposes) although it still won't
-// do a StretchBlt with a mask, so this is no-mask only.
+// Win32 allows us to do a real StrectBlt operation, although it still won't
+// do a StretchBlt with a mask.
 //
 void wxDC2::StretchBlit(const wxBitmap &bmp,
 						wxCoord x, wxCoord y,
@@ -343,6 +332,17 @@ void wxDC2::StretchBlit(const wxBitmap &bmp,
 	HDC memdc = ::CreateCompatibleDC( cdc );
 	HBITMAP hbitmap = (HBITMAP) bmp.GetHBITMAP( );
 
+	COLORREF old_textground = ::GetTextColor(cdc);
+	COLORREF old_background = ::GetBkColor(cdc);
+	if (m_textForegroundColour.Ok())
+	{
+		::SetTextColor(cdc, m_textForegroundColour.GetPixel() );
+	}
+	if (m_textBackgroundColour.Ok())
+	{
+		::SetBkColor(cdc, m_textBackgroundColour.GetPixel() );
+	}
+
 	HGDIOBJ hOldBitmap = ::SelectObject( memdc, hbitmap );
 
 //	int bwidth = bmp.GetWidth(), bheight = bmp.GetHeight();
@@ -350,7 +350,11 @@ void wxDC2::StretchBlit(const wxBitmap &bmp,
 
 	::SelectObject( memdc, hOldBitmap );
 	::DeleteDC( memdc );
+
+	::SetTextColor(cdc, old_textground);
+	::SetBkColor(cdc, old_background);
 }
+
 #endif // WIN32
 
 ///////////////////////////////////////////////////////////////////////
@@ -603,25 +607,13 @@ static bool s_bOpen = false;
 wxProgressDialog *g_pProg = NULL;
 wxWindow *g_pProgParent = NULL;
 
-void YieldForIdle()
-{
-	// In some cases (including wxMSW 2.9.x) the progress dialog seems to
-	// starve the other windows of idle and redraw events.  We can
-	// explicitly ask wx to make those happen.
-	wxApp::GetInstance()->ProcessIdle();
-	wxYield();
-}
-
 bool progress_callback(int amount)
 {
 	bool value = false;
 	// Update() returns false if the Cancel button has been pushed
 	// but this functions return _true_ if user wants to cancel
 	if (g_pProg)
-	{
 		value = (g_pProg->Update(amount) == false);
-		YieldForIdle();
-	}
 	return value;
 }
 
@@ -632,14 +624,8 @@ void SetProgressDialogParent(wxWindow *pParent)
 
 void OpenProgressDialog(const wxString &title, bool bCancellable, wxWindow *pParent)
 {
-	VTLOG1("OpenProgressDialog: ");
 	if (s_bOpen)
-	{
-		VTLOG1("already open, returning\n");
 		return;
-	}
-	else
-		VTLOG1("opening new dialog\n");
 	if (!IsGUIApp())
 		return;
 	if (!pParent)
@@ -660,7 +646,6 @@ void OpenProgressDialog(const wxString &title, bool bCancellable, wxWindow *pPar
 
 void CloseProgressDialog()
 {
-	VTLOG1("CloseProgressDialog\n");
 	if (g_pProg)
 	{
 		g_pProg->Destroy();
@@ -682,10 +667,7 @@ bool UpdateProgressDialog(int amount, const wxString& newmsg)
 {
 	bool value = false;
 	if (g_pProg)
-	{
 		value = (g_pProg->Update(amount, newmsg) == false);
-		YieldForIdle();
-	}
 	return value;
 }
 
@@ -703,10 +685,7 @@ bool progress_callback2(int amount1, int amount2)
 	// Update() returns false if the Cancel button has been pushed
 	// but this functions return _true_ if user wants to cancel
 	if (g_pProg2)
-	{
 		value = (g_pProg2->Update(amount1, amount2) == false);
-		YieldForIdle();
-	}
 	return value;
 }
 
@@ -718,7 +697,6 @@ bool progress_callback_major(int amount)
 	if (g_pProg2)
 	{
 		value = (g_pProg2->Update(amount, -1) == false);
-		YieldForIdle();
 	}
 	return value;
 }
@@ -731,7 +709,6 @@ bool progress_callback_minor(int amount)
 	if (g_pProg2)
 	{
 		value = (g_pProg2->Update(-1, amount) == false);
-		YieldForIdle();
 	}
 	return value;
 }
@@ -791,7 +768,6 @@ bool UpdateProgressDialog2(int amount1, int amount2, const wxString& newmsg)
 	if (g_pProg2)
 	{
 		value = (g_pProg2->Update(amount1, amount2, newmsg) == false);
-		YieldForIdle();
 	}
 	return value;
 }
@@ -828,7 +804,7 @@ vtString MakeFilenameDB(const vtString &base, int col, int row,
  * Given a full path containing a filename, return a pointer to
  * the filename portion of the string.
  */
-wxString StartOfFilenameWX(const wxString &strFullPath)
+wxString StartOfFilename(const wxString &strFullPath)
 {
 	int index = 0;
 
@@ -956,6 +932,7 @@ void DisplayAndLog(const char *pFormat, ...)
 	VTLOG1(ach);
 }
 
+#if SUPPORT_WSTRING
 //
 // Also wide-character version of the same function.
 //
@@ -986,52 +963,10 @@ void DisplayAndLog(const wchar_t *pFormat, ...)
 	if (IsGUIApp())
 		wxMessageBox(msg);
 
-	VTLOG1(msg.ToUTF8());
-	VTLOG1("\n");
-}
-
-#if 0
-// A wxString-taking version of the function, to make it perfectly clear
-//  to the compiler which overloaded function to use.
-//
-// This method produces incorrect results, at least with wx2.9.4 and VC10.
-// Passing an object (like wxString) instead of a char* for the format seems to
-// confused the va_list methods.
-//
-void DisplayAndLog(const wxString &wxformat, ...)
-{
-	va_list va;
-	va_start(va, wxformat);
-
-	char ach[2048];
-	vsprintf(ach, wxformat.ToUTF8(), va);
-
-	wxString msg(ach, wxConvUTF8);
-
-	// Careful here: Don't try to pop up a message box if called within a
-	//  wx console app.  wxMessageBox only works if it is a full wxApp.
-	if (IsGUIApp())
-		wxMessageBox(msg);
-
-	strcat(ach, "\n");
 	VTLOG1(ach);
-}
-#endif
-
-//
-// A wxString version of the function, which takes a single string.
-//
-void DisplayAndLog(const wxString &msg)
-{
-	// Careful here: Don't try to pop up a message box if called within a
-	//  wx console app.  wxMessageBox only works if it is a full wxApp.
-	if (IsGUIApp())
-		wxMessageBox(msg);
-
-	vtString msg2 = (const char *) msg.ToUTF8();
-	VTLOG1(msg2);
 	VTLOG1("\n");
 }
+#endif // SUPPORT_WSTRING
 
 /**
  * Example: to launch the enviro documentation in Italian:
@@ -1047,26 +982,17 @@ void LaunchAppDocumentation(const vtString &appname,
 	VTLOG("LaunchAppDocumentation: cwd is '%s'\n", (const char *) cwd);
 	vtString cwd_up = PathLevelUp(cwd);
 
-#if VTDEBUG && WIN32
-	// During development, we are in a folder like /vtp/vc10/TerrainApps/App,
-	// so need to go over to the source branch to find the Docs folder.
-	cwd_up = PathLevelUp(cwd_up);
-	cwd_up = PathLevelUp(cwd_up);
-	cwd_up += "/TerrainApps/";
-	cwd_up += appname;
-#endif
-
 	vtStringArray paths;
 
 	// If the app is using a language other than English, look for docs
 	//  in that language first.
 	if (local_lang_code != "en")
-		paths.push_back(cwd_up + "/Docs/" + local_lang_code + "/");
+		paths.push_back(cwd_up + "/Docs/" + appname + "/" + local_lang_code + "/");
 	if (local_lang_code != "en")
 		paths.push_back(cwd + "/Docs/" + local_lang_code + "/");
 
 	// Always fall back on English if the other language isn't found
-	paths.push_back(cwd_up + "/Docs/en/");
+	paths.push_back(cwd_up + "/Docs/" + appname + "/en/");
 	paths.push_back(cwd + "/Docs/en/");
 
 	VTLOG1("Looking for index.html on paths:\n");

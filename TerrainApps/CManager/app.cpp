@@ -16,49 +16,26 @@
 // Header for the vtlib librarys
 #include "vtlib/vtlib.h"
 #include "vtlib/core/NavEngines.h"
+#include "vtlib/core/vtSOG.h"
 #include "vtui/Helper.h"	// for ConvertArgcArgv
-#include "vtui/LogCatcher.h"
+#include "wxosg/GraphicsWindowWX.h"
+#include "vtdata/vtLog.h"
 
 #include "app.h"
 #include "frame.h"
 #include "canvas.h"
 
-/* wxGTK and X11 multihtreading issues
-   ===================================
-   Although they have probably always been present, I have
-   recently (08/2011) come across a number of X11 related multithreading
-   issues when running on more recent versions of GTK+ (wxGTK)
-   and X11 (XOrg) on multiprocessor systems. These all seem to
-   relate to the use of modeless top level windows such as
-   wxProgressDialog and multithreading OpenGL rendering, either
-   individually or together. These issues can all be resolved by
-   calling the X11 function XinitThreads before any other X
-   related calls have been made. The following code is conditional
-   on the use of wxGTK, but be aware these issues can occur
-   whenever the X windowing system is used. In my view the making
-   of such a low level windowing system call should be the responsibility
-   of wxWidgets (and GTK+ if that is used) but that is not happening with
-   current releases (08/2011). */
-#if defined(__WXGTK__) && !defined(NO_XINITTHREADS)
-IMPLEMENT_APP_NO_MAIN(vtApp)
-
-int main(int argc, char *argv[])
-{
-    // I have decided to only call XInitThreads on multi processor systems.
-    // However I believe that the same multithreading issues can arise on single
-    // processor systems due to pre-emptive multi-tasking, albeit much more
-    // rarely. The classic symptom of a X multithreading problem is the assert
-    // xcb_io.c:140: dequeue_pending_request: Assertion `req == dpy->xcb->pending_requests' failed
-    // or xcb_io.c .... Unknown request in queue while dequeuing
-    // If you see anyhting like this on a single processor system then try commenting out this test.
-    if (sysconf (_SC_NPROCESSORS_ONLN) > 1)
-        XInitThreads();
-    return wxEntry(argc, argv);
-
-}
-#else
 IMPLEMENT_APP(vtApp)
-#endif
+
+class LogCatcher : public wxLog
+{
+	void DoLogString(const wxChar *szString, time_t t)
+	{
+		VTLOG(" wxLog: ");
+		VTLOG(szString);
+		VTLOG("\n");
+	}
+};
 
 
 //
@@ -68,7 +45,7 @@ bool vtApp::OnInit(void)
 {
     m_pTrackball = NULL;
 
-	// Redirect the wxWidgets log messages to our own logging stream
+	// Redirect the wxWindows log messages to our own logging stream
 	wxLog *logger = new LogCatcher;
 	wxLog::SetActiveTarget(logger);
 
@@ -82,15 +59,14 @@ bool vtApp::OnInit(void)
 	// Create the main frame window
 	//
 	VTLOG("Creating frame\n");
-	vtFrame *frame = new vtFrame(NULL, _T("Content Manager"),
-		wxPoint(50, 50), wxSize(800, 600));
+	vtFrame *frame = new vtFrame(NULL, _T("Content Manager"), wxPoint(50, 50), wxSize(800, 600));
 
 	int MyArgc;
 	char** MyArgv;
 	ConvertArgcArgv(wxApp::argc, wxApp::argv, &MyArgc, &MyArgv);
 	pScene->Init(MyArgc, MyArgv);
 
-	frame->m_canvas->InitGraphicsWindowWX();
+	pScene->SetGraphicsContext(new GraphicsWindowWX(frame->m_canvas));
 
 	pScene->SetBgColor(RGBf(0.5f, 0.5f, 0.5f));		// grey
 
@@ -122,10 +98,38 @@ bool vtApp::OnInit(void)
 
 	frame->UseLight(pMovLight);
 
+	// SOG testing, currently disabled
+#if 0
+#if 0
+	// make a yellow sphere
+	vtMaterialArray *pMats = new vtMaterialArray;
+	pMats->AddRGBMaterial(RGBf(1.0f, 1.0f, 0.0f), RGBf(0.0f, 0.0f, 1.0f));
+	vtGeode *pGeode = CreateSphereGeom(pMats, 0, VT_Normals, 0.5, 16);
+	pGeode->setName("Yellow Sphere");
+	pMats->Release();
+
+	OutputSOG osog;
+
+	FILE *fp = fopen("output.sog", "wb");
+	osog.WriteHeader(fp);
+	osog.WriteSingleGeometry(fp, pGeode);
+	fclose(fp);
+	m_pRoot->addChild(pGeode);
+#else
+	InputSOG isog;
+
+	FILE *fp = fopen("output.sog", "rb");
+	vtGroup *pGroup = new vtGroup;
+	bool success = isog.ReadContents(fp, pGroup);
+	fclose(fp);
+	m_pRoot->addChild(pGroup);
+#endif
+#endif
+
 	// make a trackball controller for the camera
 	VTLOG(" creating trackball\n");
 	m_pTrackball = new vtTrackball(3.0f);
-	m_pTrackball->AddTarget(pScene->GetCamera());
+	m_pTrackball->SetTarget(pScene->GetCamera());
 	m_pTrackball->setName("Trackball");
 	m_pTrackball->SetRotateButton(VT_LEFT, 0);
 	m_pTrackball->SetZoomButton(VT_LEFT|VT_RIGHT, 0);
@@ -135,8 +139,8 @@ bool vtApp::OnInit(void)
 
 	// Memleak Testing
 //	GetMainFrame()->AddModelFromFile("E:/3D/Sample FLT files/spitfire.flt");
-//	NodePtr pNode = vtLoadModel("E:/3D/Sample FLT files/spitfire.flt");
-//	if (pNode.valid())
+//	osg::Node *pNode = vtLoadModel("E:/3D/Sample FLT files/spitfire.flt");
+//	if (pNode)
 //		m_pRoot->addChild(pNode);
 //	GetMainFrame()->AddNewItem();
 
