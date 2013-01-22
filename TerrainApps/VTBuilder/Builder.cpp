@@ -1,7 +1,7 @@
 //
 // Builder.cpp: The main Builder class of the VTBuilder
 //
-// Copyright (c) 2001-2012 Virtual Terrain Project
+// Copyright (c) 2001-2011 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -16,7 +16,6 @@
 
 #include "vtdata/vtLog.h"
 #include "vtdata/DataPath.h"
-#include "vtdata/MaterialDescriptor.h"
 #include <float.h>	// for FLT_MIN
 
 #include "Builder.h"
@@ -38,7 +37,7 @@
 
 // Dialogs
 #include "OptionsDlg.h"
-#include "SampleElevationDlg.h"
+#include "ResampleDlg.h"
 #include "SampleImageDlg.h"
 #include "vtui/ProjectionDlg.h"
 
@@ -72,7 +71,6 @@ Builder::Builder()
 	m_tileopts.lod0size = 512;
 	m_tileopts.bCreateDerivedImages = false;
 	m_tileopts.bMaskUnknownAreas = false;
-	m_tileopts.bImageAlpha = false;
 	m_tileopts.bUseTextureCompression = true;
 	m_tileopts.eCompressionType = TC_OPENGL;
 
@@ -118,14 +116,14 @@ Builder::~Builder()
 {
 	VTLOG1("Builder destructor\n");
 	DeleteContents();
-	FreeGlobalMaterials();
-	FreeContentFiles();
 }
 
 void Builder::DeleteContents()
 {
-	m_Layers.DeleteLayers();
+	m_Layers.Empty();
 	m_pActiveLayer = NULL;
+	FreeGlobalMaterials();
+	FreeContentFiles();
 }
 
 
@@ -295,6 +293,8 @@ bool Builder::LoadProject(const vtString &fname, vtScaledView *pView)
 //
 vtLayer *Builder::LoadLayer(const wxString &fname_in)
 {
+	LayerType ltype = LT_UNKNOWN;
+
 	// check file extension
 	wxString fname = fname_in;
 	wxString ext = fname.AfterLast('.');
@@ -307,6 +307,17 @@ vtLayer *Builder::LoadLayer(const wxString &fname_in)
 			pLayer = pRL;
 		else
 			delete pRL;
+	}
+	if (ext.CmpNoCase(_T("osm")) == 0)
+	{
+		OpenProgressDialog(fname, false);
+		vtString fname_utf = (const char*)fname.mb_str(wxConvUTF8);
+		vtRoadLayer *pRL = new vtRoadLayer;
+		if (pRL->ImportFromOSM(fname_utf, progress_callback))
+			pLayer = pRL;
+		else
+			delete pRL;
+		CloseProgressDialog();
 	}
 	if (ext.CmpNoCase(_T("bt")) == 0 ||
 		ext.CmpNoCase(_T("tin")) == 0 ||
@@ -330,30 +341,6 @@ vtLayer *Builder::LoadLayer(const wxString &fname_in)
 	}
 	if (ext.CmpNoCase(_T("vf")) == 0)
 	{
-		// Make sure we have some species first.
-		if (GetSpeciesList()->NumSpecies() == 0)
-		{
-			vtString species_path = FindFileOnPaths(vtGetDataPath(), "PlantData/species.xml");
-			wxString msg;
-			msg += _("You must specify a species file (plant list) to use when working with vegetation files.");
-			if (species_path == "")
-			{
-				wxMessageBox(msg);
-				return NULL;
-			}
-			msg += _T("\n");
-			msg += _("Do you want to load the default species file from:");
-			msg += _T("\n");
-			msg += wxString(species_path);
-			int ret = wxMessageBox(msg, _("Plants"), wxYES_NO);
-			if (ret == wxYES)
-			{
-				if (!LoadSpeciesFile(species_path))
-					return NULL;
-			}
-			else // No.
-				return NULL;
-		}
 		vtVegLayer *pVL = new vtVegLayer;
 		if (pVL->Load(fname))
 			pLayer = pVL;
@@ -391,14 +378,8 @@ vtLayer *Builder::LoadLayer(const wxString &fname_in)
 	{
 		// If it's a 8-bit or 24-bit TIF, then it's likely to be an image.
 		// If it's a 16-bit TIF, then it's likely to be elevation.
-		int depth;
-		GDALDataType eType = GDT_Unknown;
-		bool success = GetBitDepthUsingGDAL(fname_in.mb_str(wxConvUTF8), depth, eType);
-		if (eType == GDT_Float32 || eType == GDT_Int16)
-		{
-			// We only support elevation from that kind of TIFF
-		}
-		else if (depth == 8 || depth == 24 || depth == 32)
+		int depth = GetBitDepthUsingGDAL(fname_in.mb_str(wxConvUTF8));
+		if (depth == 8 || depth == 24 || depth == 32)
 		{
 			vtImageLayer *pIL = new vtImageLayer;
 			if (pIL->Load(fname))
@@ -406,6 +387,8 @@ vtLayer *Builder::LoadLayer(const wxString &fname_in)
 			else
 				delete pIL;
 		}
+		else if (depth == 16)
+			ltype = LT_ELEVATION;
 	}
 	if (pLayer)
 	{
@@ -423,7 +406,7 @@ vtLayer *Builder::LoadLayer(const wxString &fname_in)
 
 void Builder::AddLayer(vtLayer *lp)
 {
-	m_Layers.push_back(lp);
+	m_Layers.Append(lp);
 }
 
 bool Builder::AddLayerWithCheck(vtLayer *pLayer, bool bRefresh)
@@ -433,7 +416,7 @@ bool Builder::AddLayerWithCheck(vtLayer *pLayer, bool bRefresh)
 	vtProjection proj;
 	pLayer->GetProjection(proj);
 
-	bool bFirst = (m_Layers.size() == 0);
+	bool bFirst = (m_Layers.GetSize() == 0);
 	if (bFirst && m_bAdoptFirstCRS)
 	{
 		// if this is our first layer, adopt its projection
@@ -459,7 +442,7 @@ bool Builder::AddLayerWithCheck(vtLayer *pLayer, bool bRefresh)
 					str1, pLayer->GetLayerFilename().c_str(), str2);
 				OGRFree(str1);
 				OGRFree(str2);
-				ret = wxMessageBox(msg, _("Convert Coordinate System?"), wxYES_NO);
+				ret = wxMessageBox(msg, _("Convert Coordinate System?"), wxYES_NO | wxCANCEL);
 				if (ret == wxNO)
 					keep = true;
 			}
@@ -505,8 +488,8 @@ void Builder::RemoveLayer(vtLayer *lp)
 	// check the type of the layer we're deleting
 	LayerType lt = lp->GetType();
 
-	// remove
-	m_Layers.Remove(lp);
+	// remove and delete the layer
+	m_Layers.RemoveAt(m_Layers.Find(lp));
 
 	// if it was the active layer, select another layer of the same type
 	if (GetActiveLayer() == lp)
@@ -514,7 +497,6 @@ void Builder::RemoveLayer(vtLayer *lp)
 		vtLayer *lp_new = FindLayerOfType(lt);
 		SetActiveLayer(lp_new, true);
 	}
-	// then delete
 	DeleteLayer(lp);
 }
 
@@ -534,9 +516,10 @@ void Builder::SetActiveLayer(vtLayer *lp, bool refresh)
 int Builder::LayersOfType(LayerType lt)
 {
 	int count = 0;
-	for (uint l = 0; l < m_Layers.size(); l++)
+	int layers = m_Layers.GetSize();
+	for (int l = 0; l < layers; l++)
 	{
-		if (m_Layers[l]->GetType() == lt)
+		if (m_Layers.GetAt(l)->GetType() == lt)
 			count++;
 	}
 	return count;
@@ -545,7 +528,8 @@ int Builder::LayersOfType(LayerType lt)
 int Builder::NumModifiedLayers()
 {
 	int count = 0;
-	for (uint l = 0; l < m_Layers.size(); l++)
+	int layers = m_Layers.GetSize();
+	for (int l = 0; l < layers; l++)
 	{
 		vtLayer *lp = m_Layers[l];
 		if (lp->GetModified() && lp->CanBeSaved())
@@ -556,9 +540,10 @@ int Builder::NumModifiedLayers()
 
 vtLayer *Builder::FindLayerOfType(LayerType lt)
 {
-	for (uint l = 0; l < m_Layers.size(); l++)
+	int layers = m_Layers.GetSize();
+	for (int l = 0; l < layers; l++)
 	{
-		vtLayer *lp = m_Layers[l];
+		vtLayer *lp = m_Layers.GetAt(l);
 		if (lp->GetType() == lt)
 			return lp;
 	}
@@ -567,7 +552,8 @@ vtLayer *Builder::FindLayerOfType(LayerType lt)
 
 int Builder::LayerNum(vtLayer *lp)
 {
-	for (uint i = 0; i < m_Layers.size(); i++)
+	int layers = m_Layers.GetSize();
+	for (int i = 0; i < layers; i++)
 		if (lp == m_Layers[i])
 			return i;
 	return -1;
@@ -674,14 +660,16 @@ void Builder::AddToMRU(vtStringArray &arr, const vtString &fname)
 DRECT Builder::GetExtents()
 {
 	DRECT rect(1E9,-1E9,-1E9,1E9);
-	DRECT rect2;
 
 	bool has_bounds = false;
 
 	// Acculumate the extents of all the layers
-	for (uint i = 0; i < m_Layers.size(); i++)
+	DRECT rect2;
+	int iLayers = m_Layers.GetSize();
+
+	for (int i = 0; i < iLayers; i++)
 	{
-		if (m_Layers[i]->GetExtent(rect2))
+		if (m_Layers.GetAt(i)->GetExtent(rect2))
 		{
 			rect.GrowToContainRect(rect2);
 			has_bounds = true;
@@ -690,9 +678,11 @@ DRECT Builder::GetExtents()
 	if (has_bounds)
 		return rect;
 	else if (m_proj.IsDymaxion())
+	{
 		return DRECT(0, 1.5*sqrt(3.0), 5.5, 0);
+	}
 	else
-		return DRECT(-180,90,180,-90);	// degree extents of whole planet
+		return DRECT(-180,90,180,-90);	// geo extents of whole planet
 }
 
 //
@@ -784,14 +774,15 @@ bool Builder::SampleCurrentTerrains(vtElevLayer *pTarget)
 
 	DRECT area;
 	pTarget->GetExtent(area);
-	const DPoint2 &step = pTarget->GetGrid()->GetSpacing();
+	DPoint2 step = pTarget->GetGrid()->GetSpacing();
 
-	const int layers = m_Layers.size();
-	float fData = 0, fBestData;
-	const IPoint2 Size = pTarget->GetGrid()->GetDimensions();
+	int layers = m_Layers.GetSize();
+	float fData=0, fBestData;
+	int iColumns, iRows;
+	pTarget->GetGrid()->GetDimensions(iColumns, iRows);
 
 	// Create progress dialog for the slow part
-	OpenProgressDialog(_("Sampling Elevation Layers"), true);
+	OpenProgressDialog(_("Merging and Resampling Elevation Layers"), true);
 
 	// Determine which source elevation layers overlap our desired area
 	std::vector<vtElevLayer*> elevs;
@@ -812,19 +803,19 @@ bool Builder::SampleCurrentTerrains(vtElevLayer *pTarget)
 	// iterate through the heixels of the new terrain
 	DPoint2 p;
 	wxString str;
-	for (int i = 0; i < Size.x; i++)
+	for (int i = 0; i < iColumns; i++)
 	{
-		if ((i % 10) == 0)
+		if ((i % 5) == 0)
 		{
-			str.Printf(_T("%d / %d"), i, Size.x);
-			if (UpdateProgressDialog(i*100/Size.x, str))
+			str.Printf(_T("%d / %d"), i, iColumns);
+			if (UpdateProgressDialog(i*100/iColumns, str))
 			{
 				CloseProgressDialog();
 				return false;
 			}
 		}
 		p.x = area.left + (i * step.x);
-		for (int j = 0; j < Size.y; j++)
+		for (int j = 0; j < iRows; j++)
 		{
 			p.y = area.bottom + (j * step.y);
 
@@ -846,12 +837,12 @@ float Builder::GetHeightFromTerrain(const DPoint2 &p)
 {
 	float height = INVALID_ELEVATION;
 
-	int layers = m_Layers.size();
+	int layers = m_Layers.GetSize();
 	for (int i = 0; i < layers; i++)
 	{
-		vtLayer *lay = m_Layers[i];
-		if (lay->GetType() != LT_ELEVATION || !lay->GetVisible()) continue;
-		vtElevLayer *pEL = (vtElevLayer *) lay;
+		vtLayer *l = m_Layers.GetAt(i);
+		if (l->GetType() != LT_ELEVATION || !l->GetVisible()) continue;
+		vtElevLayer *pEL = (vtElevLayer *)l;
 		float val = pEL->GetElevation(p);
 		if (val != INVALID_ELEVATION)
 			height = val;
@@ -861,9 +852,9 @@ float Builder::GetHeightFromTerrain(const DPoint2 &p)
 
 uint Builder::ElevLayerArray(std::vector<vtElevLayer*> &elevs)
 {
-	for (uint l = 0; l < NumLayers(); l++)
+	for (int l = 0; l < NumLayers(); l++)
 	{
-		vtLayer *lp = m_Layers[l];
+		vtLayer *lp = m_Layers.GetAt(l);
 		if (lp->GetType() == LT_ELEVATION && lp->GetVisible())
 			elevs.push_back((vtElevLayer *)lp);
 	}
@@ -886,9 +877,6 @@ bool Builder::FillElevGaps(vtElevLayer *el, DRECT *area, int iMethod)
 
 	if (iMethod == -1)
 		iMethod = g_Options.GetValueInt(TAG_GAP_FILL_METHOD);
-
-	VTLOG("FillElevGaps, method %d\n", iMethod);
-
 	if (iMethod == 1)
 		// fast
 		bGood = el->GetGrid()->FillGaps(area, progress_callback);
@@ -908,7 +896,7 @@ bool Builder::FillElevGaps(vtElevLayer *el, DRECT *area, int iMethod)
 void Builder::FlagStickyLayers(const std::vector<vtElevLayer*> &elevs)
 {
 	// Clear sticky flag for all layers
-	for (uint i = 0; i < m_Layers.size(); i++)
+	for (uint i = 0; i < m_Layers.GetSize(); i++)
 		m_Layers[i]->SetSticky(false);
 
 	// Set sticky flag for the desired layers
@@ -936,7 +924,7 @@ vtElevLayer *Builder::ComputeDifference(vtElevLayer *pElev)
 	// Make an array of pointers to all the visible existing elevation layers
 	//  other than this one.
 	std::vector<vtElevLayer*> elevs;
-	for (uint l = 0; l < NumLayers(); l++)
+	for (int l = 0; l < NumLayers(); l++)
 	{
 		vtLayer *lp = GetLayer(l);
 		if (lp->GetType() == LT_ELEVATION && lp->GetVisible() && lp != pElev)
@@ -985,195 +973,6 @@ vtElevLayer *Builder::ComputeDifference(vtElevLayer *pElev)
 	return pNewLayer;
 }
 
-/**
- For a give elevation layer (grid), look at all the other road layers and
- carve the terrain up/down to match them.
- */
-void Builder::CarveWithCulture(vtElevLayer *pElev, float margin)
-{
-	vtElevationGrid	*grid = pElev->GetGrid();
-
-	if (!pElev || !grid)
-		return;
-
-	// Must have at least some culture we can carve in
-	vtRoadLayer *pR = (vtRoadLayer *) FindLayerOfType(LT_ROAD);
-	vtStructureLayer *pS = (vtStructureLayer *) FindLayerOfType(LT_STRUCTURE);
-	if (!pR && !pS)
-		return;
-
-	// how many units to flatten on either side of the roadway, past the
-	//  physical edge of the link surface
-	float shoulder = margin / 2;
-	float fade = margin;
-
-	OpenProgressDialog(_("Scanning Grid against Roads"));
-
-	if (pR)
-	{
-		// Prepare the road layer
-		LinkEdit *pLink;
-		for (pLink = pR->GetFirstLink(); pLink; pLink = pLink->GetNext())
-		{
-			pLink->ComputeExtent();	// Shouldn't need this; it should already have extents
-			const float half = pLink->m_fWidth / 2 + shoulder + fade;
-			pLink->m_extent.Grow(half, half);
-		}
-	}
-	std::vector<float> building_heights;
-	std::vector<DRECT> building_extents;
-	if (pS)
-	{
-		// Prepare the structure layer: precompute a centroid of each building
-		// and the elevation of the existing surface at that point.
-		building_heights.resize(pS->size());
-		building_extents.resize(pS->size());
-		float elev;
-
-		for (uint i = 0; i < pS->size(); i++)
-		{
-			vtStructure *str = pS->at(i);
-			vtBuilding *bld = str->GetBuilding();
-
-			building_heights[i] = INVALID_ELEVATION;
-
-			if (bld && bld->GetLevel(0))
-			{
-				bld->GetExtents(building_extents[i]);
-				building_extents[i].Grow(margin, margin);
-
-				const DPolygon2 &dpoly = bld->GetLevel(0)->GetFootprint();
-				const DPoint2 center = dpoly[0].Centroid();
-				if (grid->FindAltitudeOnEarth(center, elev, true))
-					building_heights[i] = elev;
-			}
-		}
-	}
-
-	int altered_heixels = 0;
-	int linkpoint;
-	float fractional;
-	double a, b, total;
-	DPoint3 loc;
-	int i, j;
-	int xsize, ysize;
-	grid->GetDimensions(xsize, ysize);
-	for (i = 0; i < xsize; i++)
-	{
-		if ((i % 5) == 0)
-			UpdateProgressDialog(i*100/xsize);
-		for (j = 0; j < ysize; j++)
-		{
-			grid->GetEarthLocation(i, j, loc);
-			DPoint2 p2(loc.x, loc.y);
-
-			float sum_elev = 0.0f;
-			float sum_weight = 0.0f;
-			const float existing = grid->GetFValue(i, j);
-
-			if (pR)
-			{
-				for (LinkEdit *pLink = pR->GetFirstLink(); pLink; pLink = pLink->GetNext())
-				{
-					if (!pLink->WithinExtent(p2))
-						continue;
-
-					// Find position in link coordinates.
-					// These factors (a,b) are similar to what Pete Willemsen calls
-					//  Curvilinear Coordinates: distance and offset.
-					DPoint2 closest;
-					total = pLink->GetLinearCoordinates(p2, a, b, closest,
-						linkpoint, fractional, false);
-					const float half = pLink->m_fWidth / 2 + shoulder + fade;
-
-					// Check if the point is actually on the link
-					if (a < 0 || a > total || b < -half || b > half)
-						continue;
-
-					// Don't use the height of the ground at the middle of the link.
-					// That assumes the link is draped perfectly.  In reality,
-					//  it's draped based only on the height at each vertex of
-					//  the link.  Just use those.
-					// Also, if the road isn't entirely on elevation, skip it.
-					float alt1, alt2;
-					if (!grid->FindAltitudeOnEarth(pLink->GetAt(linkpoint), alt1))
-						continue;
-					if (!grid->FindAltitudeOnEarth(pLink->GetAt(linkpoint+1), alt2))
-						continue;
-
-					const float road_height = alt1 + (alt2 - alt1) * fractional;
-
-					// If the point falls in the 'fade' region, interpolate
-					//  the offset from 1 to 0 across the region.
-					if (fabs(b) < half - fade)
-					{
-						sum_elev += road_height;
-						sum_weight += 1.0f;
-					}
-					else
-					{
-						const float amount = (half - fabs(b)) / fade;
-						if (amount > 0.01)	// Avoid precision issues
-						{
-							const float diff = road_height - existing;
-							sum_elev += (existing + diff * amount) * amount;
-							sum_weight += amount;
-						}
-					}
-				}
-			}
-
-			// Also compare to buildings
-			if (pS)
-			{
-				for (uint i = 0; i < pS->size(); i++)
-				{
-					vtStructure *str = pS->at(i);
-
-					// a building
-					vtBuilding *bld = str->GetBuilding();
-					if (!bld)
-						continue;
-					if (!building_extents[i].ContainsPoint(p2))
-						continue;
-					if (building_heights[i] == INVALID_ELEVATION)
-						continue;
-
-					const float dist = bld->GetDistanceToInterior(p2);
-					if (dist > margin)
-						continue;
-					if (dist == 0)
-					{
-						sum_elev += building_heights[i];
-						sum_weight += 1.0f;
-					}
-					else
-					{
-						const float amount = 1.0f - (dist / margin);
-						if (amount > 0.01)	// Avoid precision issues
-						{
-							const float diff = building_heights[i] - existing;
-							sum_elev += (existing + diff * amount) * amount;
-							sum_weight += amount;
-						}
-					}
-				}
-			}
-			if (sum_weight != 0.0f)
-			{
-				grid->SetFValue(i, j, sum_elev / sum_weight);
-				altered_heixels++;
-			}
-		}
-	}
-	if (altered_heixels)
-	{
-		grid->ComputeHeightExtents();
-		pElev->SetModified(true);
-		pElev->ReRender();
-	}
-	CloseProgressDialog();
-}
 
 //
 // sample all image data into this one
@@ -1184,19 +983,20 @@ bool Builder::SampleCurrentImages(vtImageLayer *pTargetLayer)
 
 	DRECT area;
 	pTarget->GetExtent(area);
-	const DPoint2 &step = pTarget->GetSpacing();
+	DPoint2 step = pTarget->GetSpacing();
 
-	int i, j, l, layers = m_Layers.size();
-	const IPoint2 Size = pTarget->GetDimensions();
+	int i, j, l, layers = m_Layers.GetSize();
+	int iColumns, iRows;
+	pTarget->GetDimensions(iColumns, iRows);
 
 	// Create progress dialog for the slow part
-	OpenProgressDialog(_("Sampling Image Layers"), true);
+	OpenProgressDialog(_("Merging and Resampling Image Layers"), true);
 
 	vtImage **images = new vtImage *[LayersOfType(LT_IMAGE)];
 	int g, num_image = 0;
 	for (l = 0; l < layers; l++)
 	{
-		vtLayer *lp = m_Layers[l];
+		vtLayer *lp = m_Layers.GetAt(l);
 		if (lp->GetType() == LT_IMAGE)
 			images[num_image++] = ((vtImageLayer *)lp)->GetImage();
 	}
@@ -1211,11 +1011,11 @@ bool Builder::SampleCurrentImages(vtImageLayer *pTargetLayer)
 
 	// iterate through the pixels of the new image
 	DPoint2 p;
-	RGBAi rgba, sampled;
+	RGBi rgb, sampled;
 	int count;
-	for (j = 0; j < Size.y; j++)
+	for (j = 0; j < iRows; j++)
 	{
-		if (UpdateProgressDialog(j*100/Size.y))
+		if (UpdateProgressDialog(j*100/iRows))
 		{
 			// Cancel
 			CloseProgressDialog();
@@ -1225,7 +1025,7 @@ bool Builder::SampleCurrentImages(vtImageLayer *pTargetLayer)
 		// Sample at the pixel centers, which are 1/2 pixel in from extents
 		p.y = area.bottom + (step.y/2) + (j * step.y);
 
-		for (i = 0; i < Size.x; i++)
+		for (i = 0; i < iColumns; i++)
 		{
 			p.x = area.left + (step.x/2) + (i * step.x);
 
@@ -1236,15 +1036,15 @@ bool Builder::SampleCurrentImages(vtImageLayer *pTargetLayer)
 				// take image that's on top (last in list)
 				if (images[g]->GetMultiSample(p, offsets, sampled, dRes))
 				{
-					rgba = sampled;
+					rgb = sampled;
 					count++;
 				}
 			}
 			if (count)
-				pTarget->SetRGBA(i, Size.y-1-j, rgba);
+				pTarget->SetRGB(i, iRows-1-j, rgb.r, rgb.g, rgb.b);
 			else
-				// write NODATA (black, with no alpha, for now)
-				pTarget->SetRGBA(i, Size.y-1-j, 0, 0, 0, 0);
+				// write NODATA (black, for now)
+				pTarget->SetRGB(i, iRows-1-j, 0, 0, 0);
 		}
 	}
 	CloseProgressDialog();
@@ -1256,13 +1056,13 @@ bool Builder::SampleCurrentImages(vtImageLayer *pTargetLayer)
 bool Builder::GetRGBUnderCursor(const DPoint2 &p, RGBi &rgb)
 {
 	bool success = false;
-	RGBAi value;
-	for (uint i = 0; i < m_Layers.size(); i++)
+	int layers = m_Layers.GetSize();
+	RGBi value;
+	for (int i = 0; i < layers; i++)
 	{
-		vtLayer *lay = m_Layers[i];
-		if (lay->GetType() != LT_IMAGE || !lay->GetVisible())
-			continue;
-		vtImageLayer *pIL = (vtImageLayer *) lay;
+		vtLayer *l = m_Layers.GetAt(i);
+		if (l->GetType() != LT_IMAGE || !l->GetVisible()) continue;
+		vtImageLayer *pIL = (vtImageLayer *)l;
 		if (pIL->GetImage()->GetColorSolid(p, value))
 		{
 			rgb = value;
@@ -1287,7 +1087,7 @@ void Builder::SetProjection(const vtProjection &p)
 
 bool Builder::LoadSpeciesFile(const char *fname)
 {
-	if (!GetSpeciesList()->ReadXML(fname))
+	if (!GetPlantList()->ReadXML(fname))
 	{
 		DisplayAndLog("Couldn't read plant list from file '%s'.", fname);
 		return false;
@@ -1298,7 +1098,7 @@ bool Builder::LoadSpeciesFile(const char *fname)
 
 bool Builder::LoadBiotypesFile(const char *fname)
 {
-	if (!m_BioRegion.Read(fname, m_SpeciesList))
+	if (!m_BioRegion.Read(fname, m_PlantList))
 	{
 		DisplayAndLog("Couldn't read bioregion list from file '%s'.", fname);
 		return false;
@@ -1315,14 +1115,14 @@ void Builder::ScanElevationLayers(int &count, int &floating, int &tins, DPoint2 
 {
 	count = floating = tins = 0;
 	spacing.Set(0,0);
-	for (uint i = 0; i < m_Layers.size(); i++)
+	for (uint i = 0; i < m_Layers.GetSize(); i++)
 	{
-		vtLayer *lay = m_Layers[i];
-		if (lay->GetType() != LT_ELEVATION)
+		vtLayer *l = m_Layers.GetAt(i);
+		if (l->GetType() != LT_ELEVATION)
 			continue;
 
 		count++;
-		vtElevLayer *el = (vtElevLayer *) lay;
+		vtElevLayer *el = (vtElevLayer *)l;
 		if (el->IsGrid())
 		{
 			vtElevationGrid *grid = el->GetGrid();
@@ -1340,9 +1140,9 @@ void Builder::ScanElevationLayers(int &count, int &floating, int &tins, DPoint2 
 	}
 }
 
-void Builder::AreaSampleElevation(BuilderView *pView)
+void Builder::MergeResampleElevation(BuilderView *pView)
 {
-	VTLOG1("AreaSampleElevation\n");
+	VTLOG1("MergeResampleElevation\n");
 
 	// If any of the input terrain are floats, then recommend to the user
 	// that the output should be float as well.
@@ -1375,13 +1175,16 @@ void Builder::AreaSampleElevation(BuilderView *pView)
 		spacing.Set(1,1);
 	}
 
-	// Open the Sample dialog
-	SampleElevationDlg dlg(m_pParentWindow, -1, _("Sample Elevation"));
+	// Open the Resample dialog
+	ResampleDlg dlg(m_pParentWindow, -1, _("Sample Elevation"));
 	dlg.m_fEstX = spacing.x;
 	dlg.m_fEstY = spacing.y;
 	dlg.m_area = m_area;
 	dlg.m_bFloats = floatmode;
+	dlg.m_tileopts = m_tileopts;
+	dlg.m_tileopts.iNoDataFilled = 0;
 	dlg.SetView(pView);
+	dlg.FormatTilingString();
 
 	int ret = dlg.ShowModal();
 	if (pView)
@@ -1390,14 +1193,13 @@ void Builder::AreaSampleElevation(BuilderView *pView)
 		return;
 
 	// Make new terrain
-	vtElevLayer *pOutput = new vtElevLayer(dlg.m_area, dlg.m_Size,
-			dlg.m_bFloats, dlg.m_fVUnits, m_proj);
+	vtElevLayer *pOutput = new vtElevLayer(dlg.m_area, dlg.m_iSizeX,
+			dlg.m_iSizeY, dlg.m_bFloats, dlg.m_fVUnits, m_proj);
 
 	if (!pOutput->GetGrid()->HasData())
 	{
 		wxString str;
-		str.Printf(_("Failed to initialize %d x %d elevation grid"),
-			dlg.m_Size.x, dlg.m_Size.y);
+		str.Printf(_("Failed to initialize %d x %d elevation grid"), dlg.m_iSizeX, dlg.m_iSizeY);
 		wxMessageBox(str);
 		return;
 	}
@@ -1438,22 +1240,38 @@ void Builder::AreaSampleElevation(BuilderView *pView)
 		else
 			DisplayAndLog("Did not successfully write to '%s'", (const char *) fname_utf8);
 	}
+	else if (dlg.m_bToTiles)
+	{
+		OpenProgressDialog2(_("Writing tiles"), true);
+		bool success = pOutput->WriteGridOfElevTilePyramids(dlg.m_tileopts, pView);
+		if (pView)
+			pView->HideGridMarks();
+		delete pOutput;
+		CloseProgressDialog2();
+		if (success)
+			DisplayAndLog("Successfully wrote to '%s'", (const char *) dlg.m_tileopts.fname);
+		else
+			DisplayAndLog("Did not successfully write to '%s'", (const char *) dlg.m_tileopts.fname);
+
+		if (dlg.m_tileopts.iNoDataFilled != 0)
+			DisplayAndLog("Filled %d unknown heixels in output tiles.", dlg.m_tileopts.iNoDataFilled);
+	}
 }
 
 
 //////////////////////////////////////////////////////////
 // Image ops
 
-void Builder::AreaSampleImages(BuilderView *pView)
+void Builder::MergeResampleImages(BuilderView *pView)
 {
 	// sample spacing in meters/heixel or degrees/heixel
 	DPoint2 spacing(0, 0);
-	for (uint i = 0; i < m_Layers.size(); i++)
+	for (uint i = 0; i < m_Layers.GetSize(); i++)
 	{
-		vtLayer *lay = m_Layers[i];
-		if (lay->GetType() == LT_IMAGE)
+		vtLayer *l = m_Layers.GetAt(i);
+		if (l->GetType() == LT_IMAGE)
 		{
-			vtImageLayer *im = (vtImageLayer *) lay;
+			vtImageLayer *im = (vtImageLayer *)l;
 			spacing = im->GetSpacing();
 		}
 	}
@@ -1463,12 +1281,14 @@ void Builder::AreaSampleImages(BuilderView *pView)
 		return;
 	}
 
-	// Open the Sample dialog
+	// Open the Resample dialog
 	SampleImageDlg dlg(m_pParentWindow, -1, _("Sample Imagery"));
 	dlg.m_fEstX = spacing.x;
 	dlg.m_fEstY = spacing.y;
 	dlg.m_area = m_area;
 	dlg.SetView(pView);
+	dlg.m_tileopts = m_tileopts;
+	dlg.FormatTilingString();
 
 	int ret = dlg.ShowModal();
 	if (pView)
@@ -1477,7 +1297,8 @@ void Builder::AreaSampleImages(BuilderView *pView)
 		return;
 
 	// Make new image
-	vtImageLayer *pOutputLayer = new vtImageLayer(dlg.m_area, dlg.m_Size, m_proj);
+	vtImageLayer *pOutputLayer = new vtImageLayer(dlg.m_area, dlg.m_iSizeX,
+			dlg.m_iSizeY, m_proj);
 	vtImage *pOutput = pOutputLayer->GetImage();
 
 	if (!pOutput->GetBitmap())
@@ -1509,6 +1330,19 @@ void Builder::AreaSampleImages(BuilderView *pView)
 		else
 			DisplayAndLog(("Did not successfully write to '%s'."), (const char *) fname);
 	}
+	else if (dlg.m_bToTiles)
+	{
+		OpenProgressDialog(_("Writing tiles"), true);
+		bool success = pOutput->WriteGridOfTilePyramids(dlg.m_tileopts, pView);
+		if (pView)
+			pView->HideGridMarks();
+		delete pOutput;
+		CloseProgressDialog();
+		if (success)
+			DisplayAndLog("Successfully wrote to '%s'", (const char *) dlg.m_tileopts.fname);
+		else
+			DisplayAndLog("Did not successfully write to '%s'", (const char *) dlg.m_tileopts.fname);
+	}
 }
 
 
@@ -1531,7 +1365,7 @@ void Builder::GenerateVegetation(const char *vf_file, DRECT area,
 	if (opt.m_iSingleSpecies != -1)
 	{
 		// simply use a single species
-		vtPlantSpecies *ps = m_SpeciesList.GetSpecies(opt.m_iSingleSpecies);
+		vtPlantSpecies *ps = m_PlantList.GetSpecies(opt.m_iSingleSpecies);
 		SingleBiotype.AddPlant(ps, opt.m_fFixedDensity);
 		opt.m_iSingleBiotype = m_BioRegion.AddType(&SingleBiotype);
 	}
@@ -1587,13 +1421,13 @@ void Builder::GenerateVegetationPhase2(const char *vf_file, DRECT area,
 	pia.SetProjection(proj);
 
 	m_BioRegion.ResetAmounts();
-	pia.SetSpeciesList(&m_SpeciesList);
+	pia.SetPlantList(&m_PlantList);
 
 	// Iterate over the whole area, creating plant instances
 	for (i = 0; i < x_trees; i ++)
 	{
 		wxString str;
-		str.Printf(_("column %d/%d, plants: %d"), i, x_trees, pia.NumEntities());
+		str.Printf(_("column %d/%d, plants: %d"), i, x_trees, pia.GetNumEntities());
 		if (UpdateProgressDialog(i * 100 / x_trees, str))
 		{
 			// user cancel
@@ -1720,7 +1554,7 @@ void Builder::GenerateVegetationPhase2(const char *vf_file, DRECT area,
 		else
 			msg += _(": None.\n");
 	}
-	str.Printf(_("  Total: %d\n"), pia.NumEntities());
+	str.Printf(_("  Total: %d\n"), pia.GetNumEntities());
 	msg += str;
 
 	DisplayAndLog(msg);

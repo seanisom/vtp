@@ -35,7 +35,7 @@ public:
 						const osg::CopyOp& copyop=osg::CopyOp::SHALLOW_COPY) :
 		osg::Drawable(PlantShaderDrawable,copyop) {}
 
-	META_Object(osg,PlantShaderDrawable);
+	META_Object(osg,PlantShaderDrawable)
 
 	typedef std::vector<osg::Vec4> VecVec4;
 
@@ -246,7 +246,8 @@ public:
 
 	int CreatePlantNodes(bool progress_dialog(int) = NULL);
 	bool CreatePlantNode(uint i);
-	int NumOffTerrain() const { return m_iOffTerrain; }
+	int NumOffTerrain() { return m_iOffTerrain; }
+
 
 	vtTransform *GetPlantNode(uint i) const;
 	vtPlantInstance3d *GetInstance3d(uint i) const;
@@ -255,10 +256,7 @@ public:
 	void SetHeightField(vtHeightField3d *hf) { m_pHeightField = hf; }
 
 	/// Indicate the Plant List to use
-	vtSpeciesList3d *GetSpeciesList() { return (vtSpeciesList3d *) m_pSpeciesList; }
-
-	void SetEnabled(bool en);
-	bool GetEnabled() const;
+	vtSpeciesList3d *GetPlantList() { return (vtSpeciesList3d *) m_pPlantList; }
 
 	/// Deselect all plants including turning off their visual highlights
 	void VisualDeselectAll();

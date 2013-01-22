@@ -1,7 +1,7 @@
 //
 // RoadMap.cpp
 //
-// Copyright (c) 2001-2012 Virtual Terrain Project
+// Copyright (c) 2001-2009 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -15,9 +15,6 @@
 #define intSize 4
 #define floatSize 4
 #define doubleSize 8
-
-// Convenience for writing one thing to file.
-#define FWrite(data,size) fwrite(data,size,1,fp)
 
 
 //diff a - b.  result between PI and -PI.
@@ -39,6 +36,7 @@ float diffAngle(float a, float b)
 TNode::TNode()
 {
 	m_pNext = NULL;
+	m_iLinks = 0;
 	m_id = -1;
 }
 
@@ -48,53 +46,69 @@ TNode::~TNode()
 
 bool TNode::operator==(TNode &ref)
 {
-	if (NumLinks() != ref.NumLinks())
+	if (m_iLinks != ref.m_iLinks)
 		return false;
-	if (m_id != ref.m_id)
-		return false;
+	for (int i = 0; i < m_iLinks; i++)
+	{
+		if (m_connect[i].eIntersection != ref.m_connect[i].eIntersection)
+			return false;
+		if (m_connect[i].eLight != ref.m_connect[i].eLight)
+			return false;
+	}
 	return true;
 }
 
 void TNode::Copy(TNode *node)
 {
 	m_p = node->m_p;
+	m_iLinks = node->m_iLinks;
 	m_id = node->m_id;
 	m_connect = node->m_connect;
 	m_pNext = NULL;	//don't copy this
 }
 
-TLink *TNode::GetLink(uint n) const
+TLink *TNode::GetLink(int n)
 {
-	if (n >= m_connect.size())	// safety check
+	if (n >= 0 && n < m_iLinks)	// safety check
+		return m_connect[n].pLink;
+	else
 		return NULL;
-	return m_connect[n];
 }
 
 int TNode::FindLink(int linkID)
 {
-	for (size_t i = 0; i < m_connect.size(); i++)
+	for (int i = 0; i < m_iLinks; i++)
 	{
-		if (m_connect[i]->m_id == linkID)
+		if (m_connect[i].pLink->m_id == linkID)
 			return i;
 	}
 	return -1;
 }
 
-int TNode::AddLink(TLink *pL)
+int TNode::AddLink(TLink *pL, bool bStart)
 {
+	m_iLinks++;
+
 	// fill in the entry for the new link
-	m_connect.push_back(pL);
+	LinkConnect lc;
+	lc.bStart = bStart;
+	lc.pLink = pL;
+	lc.eIntersection = IT_NONE;
+	lc.eLight = LT_INVALID;
+	m_connect.push_back(lc);
+
 	return m_connect.size() - 1;
 }
 
-void TNode::DetachLink(TLink *pL)
+void TNode::DetachLink(TLink *pL, bool bStart)
 {
-	for (size_t i = 0; i < m_connect.size(); i++)
+	for (int i = 0; i < m_iLinks; i++)
 	{
-		if (m_connect[i] == pL)
+		if (m_connect[i].pLink == pL && m_connect[i].bStart == bStart)
 		{
 			// found it
 			m_connect.erase(m_connect.begin() + i);
+			m_iLinks = m_connect.size();
 			return;
 		}
 	}
@@ -104,10 +118,7 @@ void TNode::DetachLink(TLink *pL)
 void TNode::DetermineLinkAngles()
 {
 	DPoint2 pn0, pn1, diff;
-
-	m_fLinkAngle.resize(m_connect.size());
-
-	for (size_t i = 0; i < m_connect.size(); i++)
+	for (int i = 0; i < m_iLinks; i++)
 	{
 		pn0 = m_p;
 		pn1 = GetAdjacentLinkPoint2d(i);
@@ -116,13 +127,13 @@ void TNode::DetermineLinkAngles()
 		float angle = atan2f((float)diff.y, (float)diff.x);
 		if (angle < 0.0f)
 			angle += PI2f;
-		m_fLinkAngle[i] = angle;
+		m_connect[i].fLinkAngle = angle;
 	}
 }
 
-float TNode::GetLinkAngle(uint iLinkNum)
+float TNode::GetLinkAngle(int iLinkNum)
 {
-	return m_fLinkAngle[iLinkNum];
+	return m_connect[iLinkNum].fLinkAngle;
 }
 
 void TNode::SortLinksByAngle()
@@ -136,19 +147,14 @@ void TNode::SortLinksByAngle()
 	while (!sorted)
 	{
 		sorted = true;
-		for (size_t i = 0; i < m_connect.size()-1; i++)
+		for (int i = 0; i < m_iLinks-1; i++)
 		{
-			if (m_fLinkAngle[i] > m_fLinkAngle[i+1])
+			if (m_connect[i].fLinkAngle > m_connect[i+1].fLinkAngle)
 			{
 				// swap entries in connection array
-				TLink *tmp1 = m_connect[i];
+				LinkConnect tmp1 = m_connect[i];
 				m_connect[i] = m_connect[i+1];
 				m_connect[i+1] = tmp1;
-
-				// And angle array
-				float tmp2 = m_fLinkAngle[i];
-				m_fLinkAngle[i] = m_fLinkAngle[i+1];
-				m_fLinkAngle[i+1] = tmp2;
 
 				sorted = false;
 			}
@@ -158,44 +164,61 @@ void TNode::SortLinksByAngle()
 
 DPoint2 TNode::GetAdjacentLinkPoint2d(int iLinkNum)
 {
-	TLink *link = m_connect[iLinkNum];
-	if (link->GetNode(0) == this)
-		return link->GetAt(1);			// link starts here
+	LinkConnect &lc = m_connect[iLinkNum];
+	if (lc.bStart)
+		return lc.pLink->GetAt(1);			// link starts here
 	else
-		return link->GetAt(link->GetSize() - 2);	// link ends here
+		return lc.pLink->GetAt(lc.pLink->GetSize() - 2);	// link ends here
 }
 
-int TNode::GetLinkNum(TLink *link)
+int TNode::GetLinkNum(TLink *link, bool bStart)
 {
-	for (size_t i = 0; i < m_connect.size(); i++)
+	for (int i = 0; i < m_iLinks; i++)
 	{
-		if (m_connect[i] == link)
+		if (m_connect[i].pLink == link && m_connect[i].bStart == bStart)
 			return i;
 	}
 	return -1;
 }
 
 //traffic control
-bool TNode::SetIntersectType(uint linkNum, IntersectionType type)
+bool TNode::SetIntersectType(int linkNum, IntersectionType type)
 {
-	if (linkNum >= m_connect.size())
+	if (linkNum < 0 || linkNum >= m_iLinks)
 		return false;
 
-	m_connect[linkNum]->SetIntersectionType(this, type);
+	m_connect[linkNum].eIntersection = type;
 	return true;
 }
 
-IntersectionType TNode::GetIntersectType(uint linkNum)
+IntersectionType TNode::GetIntersectType(int linkNum)
 {
-	if (linkNum >= m_connect.size())
+	if (linkNum < 0 || linkNum >= m_iLinks)
 		return IT_NONE;
 
-	return m_connect[linkNum]->GetIntersectionType(this);
+	return m_connect[linkNum].eIntersection;
+}
+
+LightStatus TNode::GetLightStatus(int linkNum)
+{
+	if (linkNum >= m_iLinks || linkNum < 0)
+		return LT_INVALID;
+
+	return m_connect[linkNum].eLight;
+}
+
+bool TNode::SetLightStatus(int linkNum, LightStatus light)
+{
+	if (linkNum >= m_iLinks || linkNum < 0) {
+		return false;
+	}
+	m_connect[linkNum].eLight = light;
+	return true;
 }
 
 bool TNode::HasLights()
 {
-	for (size_t i = 0; i < m_connect.size(); i++)
+	for (int i = 0; i < m_iLinks; i++)
 	{
 		if (GetIntersectType(i) == IT_LIGHT)
 			return true;
@@ -205,7 +228,7 @@ bool TNode::HasLights()
 
 bool TNode::IsControlled()
 {
-	for (size_t i = 0; i < m_connect.size(); i++)
+	for (int i = 0; i < m_iLinks; i++)
 	{
 		if (GetIntersectType(i) != IT_NONE)
 			return true;
@@ -218,11 +241,13 @@ void TNode::AdjustForLights()
 	if (!HasLights())
 		return;
 
-	for (size_t i = 0; i< m_connect.size(); i++) {
+	int i;
+	for (i = 0; i< m_iLinks; i++) {
+		SetLightStatus(i, LT_GREEN);
 		SetIntersectType(i, IT_LIGHT);
 	}
 //if the intersection has signal lights, determine light relationships.
-	switch (m_connect.size()) {
+	switch (m_iLinks) {
 	case 0:
 	case 1:
 	case 2:
@@ -238,14 +263,14 @@ void TNode::AdjustForLights()
 
 		//go through all link pairs and see what is the difference of their angles.
 		//we're shooting for difference of PI.
-		for (size_t i = 0; i < m_connect.size() - 1; i++)
+		for (i = 0; i < m_iLinks - 1; i++)
 		{
 			//since angles are sorted, angle i < angle j (not sure if that helps.)
-			for (size_t j = i+1; j < m_connect.size(); j++)
+			for (int j = i+1; j < m_iLinks; j++)
 			{
 				if (i != j)
 				{
-					newAngle  = m_fLinkAngle[j] - (m_fLinkAngle[i] + PIf);
+					newAngle  = m_connect[j].fLinkAngle - (m_connect[i].fLinkAngle + PIf);
 					//get absolute value
 					if (newAngle < 0) {
 						newAngle = -newAngle;
@@ -259,9 +284,9 @@ void TNode::AdjustForLights()
 						newAngle = -newAngle;
 					}
 					printf("%i:%f, %i:%f, %f, %f",
-						(int) i, m_fLinkAngle[i],
-						(int) j, m_fLinkAngle[j],
-						newAngle, bestAngle);
+						i, m_connect[i].fLinkAngle,
+						j, m_connect[j].fLinkAngle
+						, newAngle, bestAngle);
 					if (newAngle < bestAngle) {
 						bestChoiceA = i;
 						bestChoiceB = j;
@@ -270,6 +295,9 @@ void TNode::AdjustForLights()
 				}
 			}
 		}
+
+		SetLightStatus(bestChoiceA, LT_RED);
+		SetLightStatus(bestChoiceB, LT_RED);
 		break;
 	}
 }
@@ -321,23 +349,6 @@ bool TLink::operator==(TLink &ref)
 		m_iFlags == ref.m_iFlags);
 }
 
-void TLink::CopyAttributesFrom(TLink *rhs)
-{
-	m_fWidth =			rhs->m_fWidth;
-	m_iLanes =			rhs->m_iLanes;
-	m_Surface =			rhs->m_Surface;
-	m_iHwy =			rhs->m_iHwy;
-	m_iFlags =			rhs->m_iFlags;
-	m_id =				rhs->m_id;
-	m_fSidewalkWidth =	rhs->m_fSidewalkWidth;
-	m_fCurbHeight =		rhs->m_fCurbHeight;
-	m_fMarginWidth =	rhs->m_fMarginWidth;
-	m_fLaneWidth =		rhs->m_fLaneWidth;
-	m_fParkingWidth =	rhs->m_fParkingWidth;
-	m_fHeight[0] =		rhs->m_fHeight[0];
-	m_fHeight[1] =		rhs->m_fHeight[1];
-}
-
 void TLink::SetFlag(int flag, bool value)
 {
 	if (value)
@@ -349,22 +360,6 @@ void TLink::SetFlag(int flag, bool value)
 int TLink::GetFlag(int flag)
 {
 	return (m_iFlags & flag) != 0;
-}
-
-int TLink::GetSidewalk()
-{
-	int value = 0;
-	if (m_iFlags & RF_SIDEWALK_LEFT) value |= 1;
-	if (m_iFlags & RF_SIDEWALK_RIGHT) value |= 2;
-	return value;
-}
-
-int TLink::GetParking()
-{
-	int value = 0;
-	if (m_iFlags & RF_PARKING_LEFT) value |= 1;
-	if (m_iFlags & RF_PARKING_RIGHT) value |= 2;
-	return value;
 }
 
 /**
@@ -469,22 +464,12 @@ float TLink::Length()
 float TLink::EstimateWidth(bool bIncludeSidewalk)
 {
 	float width = m_iLanes * m_fLaneWidth;
-
-	if (GetFlag(RF_PARKING_LEFT))
-		width += m_fParkingWidth;
-	if (GetFlag(RF_PARKING_RIGHT))
-		width += m_fParkingWidth;
-
+	if (GetFlag(RF_PARKING))
+		width += (m_fParkingWidth * 2);
 	if (GetFlag(RF_MARGIN))
 		width += (m_fMarginWidth * 2);
-
-	if (bIncludeSidewalk)
-	{
-		if (GetFlag(RF_SIDEWALK_LEFT))
-			width += m_fSidewalkWidth;
-		if (GetFlag(RF_SIDEWALK_RIGHT))
-			width += m_fSidewalkWidth;
-	}
+	if (bIncludeSidewalk && GetFlag(RF_SIDEWALK))
+		width += (m_fSidewalkWidth * 2);
 	return width;
 }
 
@@ -513,7 +498,7 @@ void vtRoadMap::DeleteElements()
 	TLink *nextR;
 	while (m_pFirstLink)
 	{
-		nextR = m_pFirstLink->GetNext();
+		nextR = m_pFirstLink->m_pNext;
 		delete m_pFirstLink;
 		m_pFirstLink = nextR;
 	}
@@ -521,7 +506,7 @@ void vtRoadMap::DeleteElements()
 	TNode *nextN;
 	while (m_pFirstNode)
 	{
-		nextN = m_pFirstNode->GetNext();
+		nextN = m_pFirstNode->m_pNext;
 		delete m_pFirstNode;
 		m_pFirstNode = nextN;
 	}
@@ -529,7 +514,7 @@ void vtRoadMap::DeleteElements()
 
 TNode *vtRoadMap::FindNodeByID(int id)
 {
-	for (TNode *pN = m_pFirstNode; pN; pN = pN->GetNext())
+	for (TNode *pN = m_pFirstNode; pN; pN = pN->m_pNext)
 	{
 		if (pN->m_id == id)
 			return pN;
@@ -548,11 +533,11 @@ TNode *vtRoadMap::FindNodeAtPoint(const DPoint2 &point, double epsilon)
 
 	// a target rectangle, to quickly cull points too far away
 	DRECT target(point.x-epsilon, point.y+epsilon, point.x+epsilon, point.y-epsilon);
-	for (TNode *curNode = GetFirstNode(); curNode; curNode = curNode->GetNext())
+	for (TNode *curNode = GetFirstNode(); curNode; curNode = curNode->m_pNext)
 	{
-		if (!target.ContainsPoint(curNode->Pos()))
+		if (!target.ContainsPoint(curNode->m_p))
 			continue;
-		result = (curNode->Pos() - point).Length();
+		result = (curNode->m_p - point).Length();
 		if (result < dist)
 		{
 			closest = curNode;
@@ -565,7 +550,7 @@ TNode *vtRoadMap::FindNodeAtPoint(const DPoint2 &point, double epsilon)
 int	vtRoadMap::NumLinks() const
 {
 	int count = 0;
-	for (TLink *pL = m_pFirstLink; pL; pL = pL->GetNext())
+	for (TLink *pL = m_pFirstLink; pL; pL = pL->m_pNext)
 		count++;
 	return count;
 }
@@ -573,7 +558,7 @@ int	vtRoadMap::NumLinks() const
 int	vtRoadMap::NumNodes() const
 {
 	int count = 0;
-	for (TNode *pN = m_pFirstNode; pN; pN = pN->GetNext())
+	for (TNode *pN = m_pFirstNode; pN; pN = pN->m_pNext)
 		count++;
 	return count;
 }
@@ -599,7 +584,7 @@ void vtRoadMap::ComputeExtents()
 
 	// iterate through all elements accumulating extents
 	m_extents.SetRect(1E9, -1E9, -1E9, 1E9);
-	for (TLink *pL = m_pFirstLink; pL; pL = pL->GetNext())
+	for (TLink *pL = m_pFirstLink; pL; pL = pL->m_pNext)
 	{
 		// links are a subclass of line, so we can treat them as lines
 		DLine2 *dl = pL;
@@ -622,12 +607,12 @@ int vtRoadMap::RemoveUnusedNodes()
 	while (pN)
 	{
 		total++;
-		next = pN->GetNext();
-		if (pN->NumLinks() == 0)
+		next = pN->m_pNext;
+		if (pN->m_iLinks == 0)
 		{
 			// delete it
 			if (prev)
-				prev->SetNext(next);
+				prev->m_pNext = next;
 			else
 				m_pFirstNode = next;
 			delete pN;
@@ -641,9 +626,9 @@ int vtRoadMap::RemoveUnusedNodes()
 	return unused;
 }
 
-/**
- * Remove a node, which also deletes it.
- */
+//
+// Remove a node - use with caution
+//
 void vtRoadMap::RemoveNode(TNode *pNode)
 {
 	TNode *prev = NULL, *next;
@@ -651,15 +636,16 @@ void vtRoadMap::RemoveNode(TNode *pNode)
 
 	while (pN)
 	{
-		next = pN->GetNext();
+		next = pN->m_pNext;
 		if (pNode == pN)
 		{
 			// delete it
 			if (prev)
-				prev->SetNext(next);
+				prev->m_pNext = next;
 			else
 				m_pFirstNode = next;
 			delete pN;
+			// I assume that a node cannot be on the list more than once!!!
 			break;
 		}
 		else
@@ -668,9 +654,9 @@ void vtRoadMap::RemoveNode(TNode *pNode)
 	}
 }
 
-/**
- * Remove a link, which also deletes it.
- */
+//
+// Remove a link - use with caution
+//
 void vtRoadMap::RemoveLink(TLink *pLink)
 {
 	TLink *prev = NULL, *next;
@@ -678,15 +664,16 @@ void vtRoadMap::RemoveLink(TLink *pLink)
 
 	while (pL)
 	{
-		next = pL->GetNext();
+		next = pL->m_pNext;
 		if (pLink == pL)
 		{
 			// delete it
 			if (prev)
-				prev->SetNext(next);
+				prev->m_pNext = next;
 			else
 				m_pFirstLink = next;
 			delete pL;
+			// I assume that a node cannot be on the list more than once!!!
 			break;
 		}
 		else
@@ -695,11 +682,15 @@ void vtRoadMap::RemoveLink(TLink *pLink)
 	}
 }
 
-/**
- * Read an RMF (Road Map File)
- * Returns true if operation sucessful.
- */
-bool vtRoadMap::ReadRMF(const char *filename)
+#define FRead(a,b) fread(a,b,1,fp)
+#define FWrite(a,b) fwrite(a,b,1,fp)
+
+//
+// Read an RMF (Road Map File)
+// Returns true if operation sucessful.
+//
+bool vtRoadMap::ReadRMF(const char *filename,
+						bool bHwy, bool bPaved, bool bDirt)
 {
 	// Avoid trouble with '.' and ',' in Europe
 	LocaleWrap normal_numbers(LC_NUMERIC, "C");
@@ -708,11 +699,11 @@ bool vtRoadMap::ReadRMF(const char *filename)
 	FILE *fp = vtFileOpen(filename, "rb");
 	if (!fp)
 	{
-		VTLOG("Couldn't open RMF file: '%s'\n", filename);
+		// "Error opening file: %s",filename
 		return false;
 	}
 
-	int numNodes, numLinks, i, j, dummy, quiet;
+	int numNodes, numLinks, i, j, nodeNum, dummy, quiet;
 	TNode *tmpNode;
 	TLink *tmpLink;
 
@@ -724,18 +715,17 @@ bool vtRoadMap::ReadRMF(const char *filename)
 	if (strncmp(buffer, RMFVERSION_STRING, 7))
 	{
 		// Not an RMF file!
-		VTLOG1("That file does not appear to be a valid RMF file.\n");
+		// "Sorry, that file does not appear to be a valid RMF file."
 		fclose(fp);
 		return false;
 	}
 	double version = atof(buffer+7);
-	VTLOG("Reading RMF file, version: %.1f.\n", version);
 
 	if (version < RMFVERSION_SUPPORTED)
 	{
 		// not recent version
-		VTLOG("Sorry, we can only read version %.1f or newer.\n",
-			version, RMFVERSION_SUPPORTED);
+		// Format("Sorry, that file appears to be a version %1.1f RMF file",
+		// This program can only read version %1.1f or newer.", version, RMFVERSION_SUPPORTED);
 		fclose(fp);
 		return false;
 	}
@@ -812,21 +802,24 @@ bool vtRoadMap::ReadRMF(const char *filename)
 	int ivalue;
 	for (i = 1; i <= numNodes; i++)
 	{
-		tmpNode = AddNewNode();
+		tmpNode = NewNode();
 		quiet = fread(&(tmpNode->m_id), intSize, 1, fp);
 		if (version < 1.8f)
 		{
-			int x, y;
-			quiet = fread(&x, intSize, 1, fp);
-			quiet = fread(&y, intSize, 1, fp);
-			tmpNode->SetPos(DPoint2(x, y));
+			quiet = fread(&ivalue, intSize, 1, fp);
+			tmpNode->m_p.x = ivalue;
+			quiet = fread(&ivalue, intSize, 1, fp);
+			tmpNode->m_p.y = ivalue;
 		}
 		else
 		{
-			quiet = fread(&tmpNode->Pos().x, doubleSize, 1, fp);
-			quiet = fread(&tmpNode->Pos().y, doubleSize, 1, fp);
+			quiet = fread(&tmpNode->m_p.x, doubleSize, 1, fp);
+			quiet = fread(&tmpNode->m_p.y, doubleSize, 1, fp);
 		}
-		// add to quick lookup table
+		//add node to list
+		AddNode(tmpNode);
+
+		// and to quick lookup table
 		pNodeLookup[i] = tmpNode;
 	}
 
@@ -840,10 +833,10 @@ bool vtRoadMap::ReadRMF(const char *filename)
 	// Read the links
 	float ftmp;
 	int itmp;
-	int node_numbers[2];
+	int reject1 = 0, reject2 = 0, reject3 = 0;
 	for (i = 1; i <= numLinks; i++)
 	{
-		tmpLink = AddNewLink();
+		tmpLink = NewLink();
 		quiet = fread(&(tmpLink->m_id), intSize, 1, fp);	//id
 		if (version < 1.89)
 		{
@@ -904,13 +897,57 @@ bool vtRoadMap::ReadRMF(const char *filename)
 			}
 		}
 
-		// The start/end nodes
-		quiet = fread(node_numbers, intSize, 2, fp);
-		if (node_numbers[0] < 1 || node_numbers[0] > numNodes ||
-			node_numbers[1] < 1 || node_numbers[1] > numNodes)
+		//set the end points
+		quiet = fread(&nodeNum, intSize, 1, fp);
+		if (nodeNum < 1 || nodeNum > numNodes)
 			return false;
-		tmpLink->ConnectNodes(pNodeLookup[node_numbers[0]],
-							  pNodeLookup[node_numbers[1]]);
+		tmpLink->SetNode(0, pNodeLookup[nodeNum]);
+		quiet = fread(&nodeNum, intSize, 1, fp);
+		if (nodeNum < 1 || nodeNum > numNodes)
+			return false;
+		tmpLink->SetNode(1, pNodeLookup[nodeNum]);
+
+		// check for inclusion
+		bool include = true;
+		if (!bHwy && tmpLink->m_iHwy > 0)
+		{
+			include = false;
+			reject1++;
+		}
+		if (include && !bPaved && tmpLink->m_Surface == SURFT_PAVED)
+		{
+			include = false;
+			reject2++;
+		}
+		if (include && !bDirt && (tmpLink->m_Surface == SURFT_TRAIL ||
+			tmpLink->m_Surface == SURFT_2TRACK ||
+			tmpLink->m_Surface == SURFT_DIRT ||
+			tmpLink->m_Surface == SURFT_GRAVEL))
+		{
+			include = false;
+			reject3++;
+		}
+
+		if (!include)
+		{
+			delete tmpLink;
+			continue;
+		}
+
+		// Inform the Nodes to which it belongs
+		tmpLink->GetNode(0)->AddLink(tmpLink, true);	// true: starts at this node
+		tmpLink->GetNode(1)->AddLink(tmpLink, false);	// false: ends at this node
+
+		// Add to list
+		AddLink(tmpLink);
+	}
+	if (reject1 || reject2 || reject3)
+	{
+		VTLOG("  Ignored links:");
+		if (reject1) VTLOG(" %d for being highways, ", reject1);
+		if (reject2) VTLOG(" %d for being paved, ", reject2);
+		if (reject3) VTLOG(" %d for being dirt, ", reject3);
+		VTLOG("done.\n");
 	}
 
 	// Read traffic control information
@@ -942,7 +979,7 @@ bool vtRoadMap::ReadRMF(const char *filename)
 		{
 			//match link number
 			IntersectionType type;
-			int lStatus;
+			LightStatus lStatus;
 			//read in data
 			quiet = fread(&id, intSize, 1, fp);  //link ID
 			quiet = fread(&type, intSize, 1, fp);
@@ -952,6 +989,7 @@ bool vtRoadMap::ReadRMF(const char *filename)
 			if (id >= 0)
 			{
 				tmpNode->SetIntersectType(id, type);
+				tmpNode->SetLightStatus(id, lStatus);
 			}
 		}
 	}
@@ -991,16 +1029,16 @@ bool vtRoadMap::WriteRMF(const char *filename)
 		return false;
 	}
 
-	// go through and set id numbers (1-based) for the nodes and links
 	i= 1;
+	// go through and set id numbers for the nodes and links
 	while (curNode) {
 		curNode->m_id = i++;
-		curNode = curNode->GetNext();
+		curNode = curNode->m_pNext;
 	}
 	i=1;
 	while (curLink) {
 		curLink->m_id = i++;
-		curLink = curLink->GetNext();
+		curLink = curLink->m_pNext;
 	}
 
 	curNode = GetFirstNode();
@@ -1030,9 +1068,9 @@ bool vtRoadMap::WriteRMF(const char *filename)
 	while (curNode)
 	{
 		FWrite(&(curNode->m_id), intSize);		// id
-		FWrite(&curNode->Pos().x, doubleSize);	// coordinate
-		FWrite(&curNode->Pos().y, doubleSize);
-		curNode = curNode->GetNext();
+		FWrite(&curNode->m_p.x, doubleSize);	// coordinate
+		FWrite(&curNode->m_p.y, doubleSize);
+		curNode = curNode->m_pNext;
 	}
 	FWrite("Roads:",7);
 	//write links
@@ -1062,7 +1100,7 @@ bool vtRoadMap::WriteRMF(const char *filename)
 		FWrite(&(curLink->GetNode(0)->m_id), intSize);	//what link is at the end point?
 		FWrite(&(curLink->GetNode(1)->m_id), intSize);
 
-		curLink = curLink->GetNext();
+		curLink = curLink->m_pNext;
 	}
 
 	int dummy = 0;
@@ -1076,18 +1114,17 @@ bool vtRoadMap::WriteRMF(const char *filename)
 		if (curNode->m_id < 1 || curNode->m_id > numNodes)
 			return false;
 
-		int num_links = curNode->NumLinks();
 		FWrite(&(curNode->m_id), intSize);	//node ID
 		FWrite(&(dummy), intSize); //node traffic behavior
-		FWrite(&(num_links), intSize); //node traffic behavior
-		for (i = 0; i < num_links; i++) {
+		FWrite(&(curNode->m_iLinks), intSize); //node traffic behavior
+		for (i = 0; i < curNode->m_iLinks; i++) {
 			IntersectionType type = curNode->GetIntersectType(i);
-			int lStatus = 0;
+			LightStatus lStatus = curNode->GetLightStatus(i);
 			FWrite(&(curNode->GetLink(i)->m_id), intSize);  //link ID
 			FWrite(&type, intSize);  //get the intersection type associated with that link
 			FWrite(&lStatus,intSize);
 		}
-		curNode = curNode->GetNext();
+		curNode = curNode->m_pNext;
 	}
 
 	//EOF

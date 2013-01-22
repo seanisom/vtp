@@ -15,10 +15,12 @@
 #include "GraphicsWindowWX.h"
 #include "vtdata/vtLog.h"
 
-GraphicsWindowWX::GraphicsWindowWX(wxGLCanvas *pCanvas, osg::DisplaySettings *pSettings)
+GraphicsWindowWX::GraphicsWindowWX(wxGLCanvas* pCanvas)
 {
 	m_pCanvas = pCanvas;
+#ifndef __WXMAC__
 	m_pGLContext = NULL;
+#endif
 	m_bValid = true;
 	m_bIsRealized = false;
 
@@ -26,7 +28,7 @@ GraphicsWindowWX::GraphicsWindowWX(wxGLCanvas *pCanvas, osg::DisplaySettings *pS
 	wxSize  size = m_pCanvas->GetSize();
 
 	// Set up traits to match the canvas
-	_traits = new GraphicsContext::Traits(pSettings);
+	_traits = new GraphicsContext::Traits;
 	_traits->x = pos.x;
 	_traits->y = pos.y;
 	_traits->width = size.x;
@@ -49,7 +51,9 @@ GraphicsWindowWX::GraphicsWindowWX(wxGLCanvas *pCanvas, osg::DisplaySettings *pS
 GraphicsWindowWX::~GraphicsWindowWX()
 {
 	VTLOG1("1. ~GraphicsWindowWX()\n");
+#ifndef __WXMAC__
 	delete m_pGLContext;
+#endif
 	m_pGLContext = NULL;
 }
 
@@ -69,11 +73,14 @@ bool GraphicsWindowWX::makeCurrentImplementation()
 	if (!m_pCanvas)
 		return false;
 
+#ifdef __WXMAC__
+	m_pCanvas->SetCurrent();
+#else
 	if (m_pCanvas->IsShownOnScreen())
 		m_pCanvas->SetCurrent(*m_pGLContext);
 	else
 		VTLOG1(" Trying to make a context current for a window that isn't visible.\n");
-
+#endif
 	return true;
 }
 
@@ -91,7 +98,9 @@ void GraphicsWindowWX::swapBuffersImplementation()
 	if (!m_pCanvas)
 		return false;
 
+#ifndef __WXMAC__
 	m_pGLContext->ReleaseContext(*m_pCanvas);
+#endif
 	return true;
 }
 
@@ -103,10 +112,11 @@ void GraphicsWindowWX::closeImplementation()
 
 bool GraphicsWindowWX::realizeImplementation()
 {
+#ifndef __WXMAC__
 	m_pGLContext = new LocalGLContext(m_pCanvas);
 	VTLOG("6. realizeImplementation(canvas %p, context %p)\n",
 		m_pCanvas, m_pGLContext);
-
+#endif
 	m_bIsRealized = true;
 	return true;
 }

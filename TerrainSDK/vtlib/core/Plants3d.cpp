@@ -22,7 +22,7 @@
 #include "vtdata/HeightField.h"
 #include "Plants3d.h"
 #include "Light.h"
-#include "GeomUtil.h"	// for CreateBoundSphereGeode
+#include "GeomUtil.h"	// for CreateBoundSphereGeom
 
 #define SHADOW_HEIGHT		0.1f	// distance above groundpoint in meters
 
@@ -121,7 +121,7 @@ void vtPlantAppearance3d::LoadAndCreate()
 		m_pMats = new vtMaterialArray;
 
 		// create textured appearance
-		m_iMatIdx = m_pMats->AddTextureMaterial(fname,
+		m_iMatIdx = m_pMats->AddTextureMaterial2(fname,
 			false, true, true, false,	// cull, lighting, transp, additive
 			TREE_AMBIENT, TREE_DIFFUSE,
 			1.0f,		// alpha (material is opaque, alpha is in the texture)
@@ -443,9 +443,10 @@ vtSpeciesList3d &vtSpeciesList3d::operator=(const vtSpeciesList &v)
 
 vtPlantSpecies3d *vtSpeciesList3d::GetSpecies(uint i) const
 {
-	if (i >= m_Species.GetSize())
+	if (i >= 0 && i < m_Species.GetSize())
+		return (vtPlantSpecies3d *) m_Species[i];
+	else
 		return NULL;
-	return (vtPlantSpecies3d *) m_Species[i];
 }
 
 
@@ -546,7 +547,7 @@ void vtPlantInstance3d::ShowBounds(bool bShow)
 				FSphere sphere;
 				GetBoundSphere(contents, sphere);
 
-				m_pHighlight = CreateBoundSphereGeode(sphere);
+				m_pHighlight = CreateBoundSphereGeom(sphere);
 				m_pContainer->addChild(m_pHighlight);
 			}
 		}
@@ -724,7 +725,7 @@ void PlantCell::bin()
 vtPlantInstanceArray3d::vtPlantInstanceArray3d()
 {
 	m_pHeightField = NULL;
-	m_pSpeciesList = NULL;
+	m_pPlantList = NULL;
 }
 
 vtPlantInstanceArray3d::~vtPlantInstanceArray3d()
@@ -739,14 +740,14 @@ vtPlantInstanceArray3d::~vtPlantInstanceArray3d()
 
 vtPlantInstance3d *vtPlantInstanceArray3d::GetInstance3d(uint i) const
 {
-	if (i >= m_Instances3d.GetSize())
+	if (i < 0 || i >= m_Instances3d.GetSize())
 		return NULL;
-	return m_Instances3d[i];
+	return m_Instances3d.GetAt(i);
 }
 
 int vtPlantInstanceArray3d::CreatePlantNodes(bool progress_dialog(int))
 {
-	uint i, size = NumEntities();
+	uint i, size = GetNumEntities();
 	int created = 0;
 	m_iOffTerrain = 0;
 
@@ -807,7 +808,7 @@ osg::Geometry *MakeOrthogonalQuads(float w, float h)
 void vtPlantInstanceArray3d::AddShaderGeometryForPlant(PlantCell *cell,
 	vtPlantInstanceShader &pi)
 {
-	vtPlantSpecies3d *ps = GetSpeciesList()->GetSpecies(pi.m_species_id);
+	vtPlantSpecies3d *ps = GetPlantList()->GetSpecies(pi.m_species_id);
 	if (!ps)
 		return;
 
@@ -905,7 +906,7 @@ int vtPlantInstanceArray3d::CreatePlantShaderNodes(bool progress_dialog(int))
 	VTLOG1(" Creating OpenGL shader based vegetation...\n");
 
 	FPoint3 p3;
-	uint num_plants = NumEntities();
+	uint num_plants = GetNumEntities();
 
 	// Create cell subdivision
 	osg::ref_ptr<PlantCell> cell = new PlantCell;
@@ -932,7 +933,7 @@ int vtPlantInstanceArray3d::CreatePlantShaderNodes(bool progress_dialog(int))
 	m_group->setName("VegGroup");
 	m_group->addChild(cell->m_group);
 
-	return NumEntities();
+	return GetNumEntities();
 }
 
 bool vtPlantInstanceArray3d::CreatePlantNode(uint i)
@@ -940,7 +941,7 @@ bool vtPlantInstanceArray3d::CreatePlantNode(uint i)
 	// If it was already constructed, destruct so we can build again
 	ReleasePlantGeometry(i);
 
-	if (!m_pSpeciesList)
+	if (!m_pPlantList)
 		return false;
 
 	DPoint2 pos = GetPoint(i);
@@ -961,7 +962,7 @@ bool vtPlantInstanceArray3d::CreatePlantNode(uint i)
 		m_Instances3d.SetAt(i, inst3d);
 	}
 
-	vtPlantSpecies3d *ps = GetSpeciesList()->GetSpecies(species_id);
+	vtPlantSpecies3d *ps = GetPlantList()->GetSpecies(species_id);
 	if (!ps)
 		return false;
 
@@ -994,37 +995,6 @@ bool vtPlantInstanceArray3d::CreatePlantNode(uint i)
 	return true;
 }
 
-void vtPlantInstanceArray3d::SetEnabled(bool en)
-{
-	// Currently, the shader plants are all under a single group, so they are
-	// easy to control in one place.
-	if (m_group.valid())
-		m_group->SetEnabled(en);
-
-	// whereas the conventional plants are distributed in an LOD Grid, so we
-	// need to control each one independently
-	for (uint i = 0; i < m_Instances3d.GetSize(); i++)
-	{
-		vtPlantInstance3d *inst3d = GetInstance3d(i);
-		if (inst3d && inst3d->m_pContainer)
-			inst3d->m_pContainer->SetEnabled(en);
-	}
-}
-
-bool vtPlantInstanceArray3d::GetEnabled() const
-{
-	if (m_group.valid())
-		return m_group->GetEnabled();
-
-	if (m_Instances3d.GetSize() > 0)
-	{
-		vtPlantInstance3d *inst3d = GetInstance3d(0);
-		if (inst3d && inst3d->m_pContainer)
-			return inst3d->m_pContainer->GetEnabled();
-	}
-	return false;
-}
-
 void vtPlantInstanceArray3d::ReleasePlantGeometry(uint i)
 {
 	vtPlantInstance3d *inst3d = GetInstance3d(i);
@@ -1045,7 +1015,7 @@ vtTransform *vtPlantInstanceArray3d::GetPlantNode(uint i) const
 
 void vtPlantInstanceArray3d::VisualDeselectAll()
 {
-	uint size = NumEntities();
+	uint size = GetNumEntities();
 
 	for (uint i = 0; i < size; i++)
 	{
@@ -1070,7 +1040,7 @@ void vtPlantInstanceArray3d::VisualSelect(uint i)
 
 void vtPlantInstanceArray3d::OffsetSelectedPlants(const DPoint2 &offset)
 {
-	uint size = NumEntities();
+	uint size = GetNumEntities();
 	for (uint i = 0; i < size; i++)
 	{
 		if (!IsSelected(i))
@@ -1102,7 +1072,7 @@ void vtPlantInstanceArray3d::DeletePlant(uint i)
 {
 	vtPlantInstance3d *inst3d = GetInstance3d(i);
 
-	// Get rid of the feature from the FeatureSet
+	// get rid of the instance
 	SetToDelete(i);
 	ApplyDeletion();
 

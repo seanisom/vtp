@@ -1,7 +1,7 @@
 //
-// Name: LocationDlg.cpp
+// Name:		LocationDlg.cpp
 //
-// Copyright (c) 2001-2013 Virtual Terrain Project
+// Copyright (c) 2001-2012 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -18,13 +18,10 @@
 
 #include "vtlib/vtlib.h"
 #include "vtlib/vtosg/ScreenCaptureHandler.h"
-
-#include "vtdata/FileFilters.h"
-#include "vtdata/FilePath.h"
-#include "vtdata/vtLog.h"
 #include "vtui/Helper.h"
-
-#include "EnviroCanvas.h"		// for EnableContinuousRendering
+#include "vtdata/vtLog.h"
+#include "vtdata/FilePath.h"
+#include "canvas.h"
 #include "LocationDlg.h"
 
 void BlockingMessageBox(const wxString &msg)
@@ -149,7 +146,7 @@ void LocationDlg::RefreshList()
 		return;
 
 	wxString str;
-	int num = m_pSaver->NumLocations();
+	int num = m_pSaver->GetNumLocations();
 	for (int i = 0; i < num; i++)
 	{
 		vtLocation *loc = m_pSaver->GetLocation(i);
@@ -211,7 +208,7 @@ void LocationDlg::RefreshAnimsText()
 		wxString str(entry.m_Name, wxConvUTF8);
 		wxString str2;
 		str2.Printf(_T(" (%.1f/%.1f, %d)"), eng->GetTime(),
-			(float) anim->GetLastTime(), anim->NumPoints());
+			(float) anim->GetLastTime(), anim->GetNumPoints());
 		str += str2;
 		GetAnimTree()->SetItemText(id, str);
 	}
@@ -241,7 +238,7 @@ void LocationDlg::UpdateEnabling()
 	GetStop()->Enable(m_iAnim != -1);
 	GetLoop()->Enable(m_iAnim != -1);
 	GetContinuous()->Enable(m_iAnim != -1);
-	GetSmooth()->Enable(m_iAnim != -1 && GetAnim(m_iAnim)->NumPoints() > 2);
+	GetSmooth()->Enable(m_iAnim != -1 && GetAnim(m_iAnim)->GetNumPoints() > 2);
 	GetPosOnly()->Enable(m_iAnim != -1);
 
 	GetRecordInterval()->Enable(m_iAnim != -1);
@@ -255,7 +252,7 @@ void LocationDlg::AppendAnimPath(vtAnimPath *anim, const char *name)
 {
 	vtAnimPathEngine *engine = new vtAnimPathEngine(anim);
 	engine->setName("AnimPathEngine");
-	engine->AddTarget(m_pSaver->GetTransform());
+	engine->SetTarget(m_pSaver->GetTransform());
 	engine->SetEnabled(false);
 
 	vtAnimEntry entry;
@@ -270,7 +267,8 @@ vtAnimPath *LocationDlg::CreateAnimPath()
 	vtAnimPath *anim = new vtAnimPath;
 
 	// Ensure that anim knows the projection
-	anim->SetProjection(m_pSaver->GetAtProjection(), m_pSaver->GetConversion());
+	const vtProjection &proj = m_pSaver->GetAtProjection();
+	anim->SetProjection(proj);
 
 	return anim;
 }
@@ -494,7 +492,7 @@ void LocationDlg::OnRecord1( wxCommandEvent &event )
 	ControlPoint cp(pos, rot);
 
 	float fTime;
-	if (path->NumPoints() == 0)
+	if (path->GetNumPoints() == 0)
 		fTime = 0;
 	else
 	{
@@ -520,7 +518,7 @@ void LocationDlg::OnRecord1( wxCommandEvent &event )
 	path->ProcessPoints();
 
 	wxString str;
-	str.Printf(_("%d: time %lf"), path->NumPoints()-1, fTime);
+	str.Printf(_("%d: time %lf"), path->GetNumPoints()-1, fTime);
 
 	// Find the current animation
 	wxTreeItemId CurrentAnimation = GetAnimTree()->GetItemParent(m_current);
@@ -643,12 +641,7 @@ void LocationDlg::OnPlayToDisk( wxCommandEvent &event )
 void LocationDlg::OnLoadAnim( wxCommandEvent &event )
 {
 	wxString filter = _("Polyline Data Sources");
-	filter += _T("|");
-	AddType(filter, FSTRING_VTAP);
-	AddType(filter, FSTRING_SHP);
-	AddType(filter, FSTRING_DXF);
-	AddType(filter, FSTRING_IGC);
-
+	filter += _T(" (*.vtap,*.shp,*.dxf,*.igc)|*.vtap;*.shp;*.dxf;*.igc");
 	wxFileDialog loadFile(NULL, _("Load Animation Path"), _T(""), _T(""),
 		filter, wxFD_OPEN);
 	bool bResult = (loadFile.ShowModal() == wxID_OK);
@@ -697,7 +690,7 @@ void LocationDlg::OnSaveAnim( wxCommandEvent &event )
 	vtAnimPath *path = GetAnim(m_iAnim);
 
 	wxFileDialog saveFile(NULL, _("Save AnimPath"), _T(""), _T(""),
-		FSTRING_VTAP, wxFD_SAVE);
+		_("AnimPath Files (*.vtap)|*.vtap"), wxFD_SAVE);
 	bool bResult = (saveFile.ShowModal() == wxID_OK);
 	if (!bResult)
 		return;
@@ -709,7 +702,7 @@ void LocationDlg::OnSaveAnim( wxCommandEvent &event )
 void LocationDlg::OnRemove( wxCommandEvent &event )
 {
 	int num = m_pLocList->GetSelection();
-	if (num >= 0 && num < m_pSaver->NumLocations())
+	if (num >= 0 && num < m_pSaver->GetNumLocations())
 	   m_pSaver->Remove(num);
 	RefreshList();
 	RefreshButtons();
@@ -718,7 +711,7 @@ void LocationDlg::OnRemove( wxCommandEvent &event )
 void LocationDlg::OnListDblClick( wxCommandEvent &event )
 {
 	int num = m_pLocList->GetSelection();
-	if (num >= 0 && num < m_pSaver->NumLocations())
+	if (num >= 0 && num < m_pSaver->GetNumLocations())
 	{
 		bool success = m_pSaver->RecallFrom(num);
 		if (!success)
@@ -729,7 +722,7 @@ void LocationDlg::OnListDblClick( wxCommandEvent &event )
 void LocationDlg::OnLoad( wxCommandEvent &event )
 {
 	wxFileDialog loadFile(NULL, _("Load Locations"), _T(""), _T(""),
-		FSTRING_LOC, wxFD_OPEN);
+		_("Location Files (*.loc)|*.loc"), wxFD_OPEN);
 	bool bResult = (loadFile.ShowModal() == wxID_OK);
 	if (!bResult)
 		return;
@@ -757,7 +750,7 @@ void LocationDlg::OnSave( wxCommandEvent &event )
 	}
 
 	wxFileDialog saveFile(NULL, _("Save Locations"), default_dir, default_file,
-		FSTRING_LOC, wxFD_SAVE);
+		_("Location Files (*.loc)|*.loc"), wxFD_SAVE);
 	bool bResult = (saveFile.ShowModal() == wxID_OK);
 	if (!bResult)
 		return;
@@ -770,7 +763,7 @@ void LocationDlg::OnSave( wxCommandEvent &event )
 
 void LocationDlg::OnStoreAs( wxCommandEvent &event )
 {
-	int num = m_pSaver->NumLocations();
+	int num = m_pSaver->GetNumLocations();
 
 	wxString str;
 	str.Printf(_("Location %d"), num+1);
@@ -798,7 +791,7 @@ void LocationDlg::OnStoreAs( wxCommandEvent &event )
 void LocationDlg::OnStore( wxCommandEvent &event )
 {
 	int num = m_pLocList->GetSelection();
-	if (num >= 0 && num < m_pSaver->NumLocations())
+	if (num >= 0 && num < m_pSaver->GetNumLocations())
 	{
 		bool success = m_pSaver->StoreTo(num);
 		if (!success)
@@ -809,7 +802,7 @@ void LocationDlg::OnStore( wxCommandEvent &event )
 void LocationDlg::OnRecall( wxCommandEvent &event )
 {
 	int num = m_pLocList->GetSelection();
-	if (num >= 0 && num < m_pSaver->NumLocations())
+	if (num >= 0 && num < m_pSaver->GetNumLocations())
 	{
 		bool success = m_pSaver->RecallFrom(num);
 		if (!success)

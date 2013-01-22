@@ -1,7 +1,7 @@
 //
 // RoadLayer.cpp
 //
-// Copyright (c) 2001-2012 Virtual Terrain Project
+// Copyright (c) 2001-2011 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -60,7 +60,7 @@ bool vtRoadLayer::OnSave(bool progress_callback(int))
 
 bool vtRoadLayer::OnLoad()
 {
-	bool success = ReadRMF(GetLayerFilename().mb_str(wxConvUTF8));
+	bool success = ReadRMF(GetLayerFilename().mb_str(wxConvUTF8), true, true, true);
 	if (!success)
 		return false;
 
@@ -87,7 +87,7 @@ bool vtRoadLayer::OnLoad()
 
 void vtRoadLayer::GetProjection(vtProjection &proj)
 {
-	proj = vtRoadMap::GetAtProjection();
+	proj = vtRoadMap::GetProjection();
 }
 
 bool vtRoadLayer::AppendDataFrom(vtLayer *pL)
@@ -102,8 +102,8 @@ bool vtRoadLayer::AppendDataFrom(vtLayer *pL)
 	TNode *n = pFrom->GetFirstNode();
 	while (n)
 	{
-		TNode *next = n->GetNext();
-		n->SetNext(m_pFirstNode);
+		TNode *next = n->m_pNext;
+		n->m_pNext = m_pFirstNode;
 		m_pFirstNode = n;
 		n = next;
 	}
@@ -111,8 +111,8 @@ bool vtRoadLayer::AppendDataFrom(vtLayer *pL)
 	TLink *r = pFrom->GetFirstLink();
 	while (r)
 	{
-		TLink *next = r->GetNext();
-		r->SetNext(m_pFirstLink);
+		TLink *next = r->m_pNext;
+		r->m_pNext = m_pFirstLink;
 		m_pFirstLink = r;
 		r = next;
 	}
@@ -187,7 +187,8 @@ bool vtRoadLayer::TransformCoords(vtProjection &proj_new)
 			trans->Transform(1, &(l->GetAt(i).x), &(l->GetAt(i).y));
 	}
 	for (n = GetFirstNode(); n; n=n->GetNext())
-		trans->Transform(1, &(n->Pos().x), &(n->Pos().y));
+		trans->Transform(1, &(n->m_p.x), &(n->m_p.y));
+
 	delete trans;
 
 	// recompute link extents
@@ -199,7 +200,6 @@ bool vtRoadLayer::TransformCoords(vtProjection &proj_new)
 
 	// set the vtRoadMap projection
 	m_proj = proj_new;
-	SetModified(true);
 
 	m_bValidExtents = false;
 	return true;
@@ -236,24 +236,24 @@ void vtRoadLayer::Offset(const DPoint2 &p)
 		link->m_bSidesComputed = false;
 		if (bSelLinks && !bSelNodes)
 		{
-			link->GetNode(0)->Pos() += p;
-			link->GetNode(1)->Pos() += p;
+			link->GetNode(0)->m_p += p;
+			link->GetNode(1)->m_p += p;
 		}
 	}
 	for (NodeEdit *node = GetFirstNode(); node; node=node->GetNext())
 	{
 		if (bSelected && !node->IsSelected())
 			continue;
-		node->Pos() += p;
+		node->m_p += p;
 		if (!bSelLinks && bSelNodes)
 		{
-			for (int i = 0; i < node->NumLinks(); i++)
+			for (int i = 0; i < node->m_iLinks; i++)
 			{
 				TLink *l1 = node->GetLink(i);
 				if (l1->GetNode(0) == node)
-					l1->SetAt(0, node->Pos());
+					l1->SetAt(0, node->m_p);
 				else
-					l1->SetAt(l1->GetSize()-1, node->Pos());
+					l1->SetAt(l1->GetSize()-1, node->m_p);
 			}
 		}
 	}
@@ -280,10 +280,19 @@ void vtRoadLayer::OnLeftDown(BuilderView *pView, UIContext &ui)
 {
 	if (ui.mode == LB_LinkEdit && ui.m_pEditingRoad)
 	{
-		int closest_i = -1;
-		double dist;
-		ui.m_pEditingRoad->NearestPoint(ui.m_DownLocation, closest_i, dist);
-		const int pixels = pView->sdx(dist);
+		double closest = 1E8;
+		int closest_i=-1;
+		for (uint i = 0; i < ui.m_pEditingRoad->GetSize(); i++)
+		{
+			DPoint2 diff = ui.m_DownLocation - ui.m_pEditingRoad->GetAt(i);
+			double dist = diff.Length();
+			if (dist < closest)
+			{
+				closest = dist;
+				closest_i = i;
+			}
+		}
+		int pixels = pView->sdx(closest);
 		if (pixels < 8)
 		{
 			// begin dragging point
@@ -305,18 +314,18 @@ void vtRoadLayer::OnLeftDown(BuilderView *pView, UIContext &ui)
 	if (ui.mode == LB_LinkEdit)
 	{
 		// see if there is a link or node at m_DownPoint
-		const float epsilon = pView->odx(5);
+		float error = pView->odx(5);
 
-		LinkEdit *pLink = FindLink(ui.m_DownLocation, epsilon);
+		LinkEdit *pLink = FindLink(ui.m_DownLocation, error);
 		if (pLink != ui.m_pEditingRoad)
 		{
-			if (ui.m_pEditingRoad)	// Un-highlight previously hightlighted
+			if (ui.m_pEditingRoad)
 			{
 				pView->RefreshRoad(ui.m_pEditingRoad);
 				ui.m_pEditingRoad->m_bDrawPoints = false;
 			}
 			ui.m_pEditingRoad = pLink;
-			if (ui.m_pEditingRoad)	// Highlight the currently hightlighted
+			if (ui.m_pEditingRoad)
 			{
 				pView->RefreshRoad(ui.m_pEditingRoad);
 				ui.m_pEditingRoad->m_bDrawPoints = true;
@@ -353,8 +362,8 @@ void vtRoadLayer::OnLeftUp(BuilderView *pView, UIContext &ui)
 			node = le->GetNode(1);
 		if (node)
 		{
-			node->SetPos(p);
-			for (int i = 0; i < node->NumLinks(); i++)
+			node->m_p = p;
+			for (int i = 0; i < node->m_iLinks; i++)
 			{
 				LinkEdit *link = node->GetLink(i);
 				if (link->GetNode(0) == node)
@@ -415,35 +424,13 @@ void vtRoadLayer::OnLeftDoubleClick(BuilderView *pView, UIContext &ui)
 	}
 }
 
-void vtRoadLayer::OnMouseMove(BuilderView *pView, UIContext &ui)
-{
-	if (ui.mode == LB_LinkEdit)
-	{
-		if (ui.m_pEditingRoad)
-		{
-			// see if there is a node nearby
-			int previous = ui.m_pEditingRoad->m_iHighlightPoint;
-			int closest_i = -1;
-			double dist;
-			ui.m_pEditingRoad->NearestPoint(ui.m_CurLocation, closest_i, dist);
-			const int pixels = pView->sdx(dist);
-			if (pixels < 8)
-				ui.m_pEditingRoad->m_iHighlightPoint = closest_i;
-			else
-				ui.m_pEditingRoad->m_iHighlightPoint = -1;
-			if (previous != ui.m_pEditingRoad->m_iHighlightPoint)
-				pView->RefreshRoad(ui.m_pEditingRoad);
-		}
-	}
-}
-
 bool vtRoadLayer::EditNodeProperties(BuilderView *pView, const DPoint2 &point, float epsilon,
 									 DRECT &bound)
 {
 	NodeEdit *node = (NodeEdit *) FindNodeAtPoint(point, epsilon);
 	if (node)
 	{
-		DPoint2 p = node->Pos();
+		DPoint2 p = node->m_p;
 		bound.SetRect(p.x-epsilon, p.y+epsilon, p.x+epsilon, p.y-epsilon);
 		return node->EditProperties(pView, this);
 	}
@@ -462,7 +449,7 @@ bool vtRoadLayer::EditLinkProperties(const DPoint2 &point, float error,
 
 	for (LinkEdit* curLink = GetFirstLink(); curLink; curLink = curLink->GetNext())
 	{
-		if (curLink->OverlapsExtent(target))
+		if (curLink->WithinExtent(target))
 		{
 			b = curLink->DistanceToPoint(point);
 			if (b < dist)
@@ -643,5 +630,99 @@ void vtRoadLayer::DoClean()
 
 	CloseProgressDialog();
 	ComputeExtents();
+}
+
+#include "ElevLayer.h"
+#include "vtdata/ElevationGrid.h"
+
+void vtRoadLayer::CarveRoadway(vtElevLayer *pElev, float margin)
+{
+	vtElevationGrid	*grid = pElev->GetGrid();
+
+	if (!pElev || !grid)
+		return;
+
+	// how many units to flatten on either side of the roadway, past the
+	//  physical edge of the link surface
+	float shoulder = margin;
+	float fade = margin;
+
+	OpenProgressDialog(_("Scanning Grid against Roads"));
+
+	float half;
+	LinkEdit *pLink;
+	for (pLink = GetFirstLink(); pLink; pLink = pLink->GetNext())
+	{
+		pLink->ComputeExtent();
+		half = pLink->m_fWidth / 2 + shoulder + fade;
+		pLink->m_extent.Grow(half, half);
+	}
+
+	int altered_heixels = 0;
+	float height;
+	int linkpoint;
+	float fractional;
+	double a, b, total;
+	DPoint3 loc;
+	int i, j;
+	int xsize, ysize;
+	grid->GetDimensions(xsize, ysize);
+	for (i = 0; i < xsize; i++)
+	{
+		UpdateProgressDialog(i*100/xsize);
+		for (j = 0; j < ysize; j++)
+		{
+			grid->GetEarthLocation(i, j, loc);
+			DPoint2 p2(loc.x, loc.y);
+
+			for (pLink = GetFirstLink(); pLink; pLink = pLink->GetNext())
+			{
+				if (!pLink->WithinExtent(p2))
+					continue;
+
+				// Find position in link coordinates.
+				// These factors (a,b) are similar to what Pete Willemsen calls
+				//  Curvilinear Coordinates: distance and offset.
+				DPoint2 closest;
+				total = pLink->GetLinearCoordinates(p2, a, b, closest,
+					linkpoint, fractional, false);
+				half = pLink->m_fWidth / 2 + shoulder + fade;
+
+				// Check if the point is actually on the link
+				if (a < 0 || a > total || b < -half || b > half)
+					continue;
+
+				// Don't use the height of the ground at the middle of the link.
+				// That assumes the link is draped perfectly.  In reality,
+				//  it's draped based only on the height at each vertex of
+				//  the link.  Just use those.
+				float alt1, alt2;
+				grid->FindAltitudeOnEarth(pLink->GetAt(linkpoint), alt1);
+				grid->FindAltitudeOnEarth(pLink->GetAt(linkpoint+1), alt2);
+				height = alt1 + (alt2 - alt1) * fractional;
+
+				// If the point falls in the 'fade' region, interpolate
+				//  the offset from 1 to 0 across the region.
+				if (half - fabs(b) > fade)
+					grid->SetFValue(i, j, height);
+				else
+				{
+					float amount = (half - fabs(b)) / fade;
+					float current = grid->GetFValue(i, j);
+					float diff = height - current;
+					grid->SetFValue(i, j, current + amount * diff);
+				}
+				altered_heixels++;
+				break;
+			}
+		}
+	}
+	if (altered_heixels)
+	{
+		grid->ComputeHeightExtents();
+		pElev->SetModified(true);
+		pElev->ReRender();
+	}
+	CloseProgressDialog();
 }
 

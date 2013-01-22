@@ -1,7 +1,7 @@
 //
 // RoadMapEdit.cpp
 //
-// Copyright (c) 2001-2012 Virtual Terrain Project
+// Copyright (c) 2001-2008 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -105,9 +105,9 @@ void NodeEdit::Translate(const DPoint2 &offset)
 	m_p += offset;
 
 	// update the endpoints of all the links that meet here
-	for (int i = 0; i < NumLinks(); i++)
+	for (int i = 0; i < m_iLinks; i++)
 	{
-		TLink *pL = m_connect[i];
+		TLink *pL = m_connect[i].pLink;
 		if (pL->GetNode(0) == this)
 			pL->SetAt(0, m_p);
 		if (pL->GetNode(1) == this)
@@ -121,15 +121,15 @@ void NodeEdit::DetermineVisualFromLinks()
 
 	int nlights = 0, nstops = 0;
 
-	for (int i = 0; i < NumLinks(); i++)
+	for (int i = 0; i < m_iLinks; i++)
 	{
 		it = GetIntersectType(i);
 		if (it == IT_LIGHT) nlights++;
 		if (it == IT_STOPSIGN) nstops++;
 	}
-	if (nlights == NumLinks())
+	if (nlights == m_iLinks)
 		m_iVisual = VIT_ALLLIGHTS;
-	else if (nstops == NumLinks())
+	else if (nstops == m_iLinks)
 		m_iVisual = VIT_ALLSTOPS;
 	else if (nlights > 0)
 		m_iVisual = VIT_LIGHTS;
@@ -148,7 +148,6 @@ LinkEdit::LinkEdit() : TLink(), Selectable()
 	m_iPriority = 3;
 	m_fLength = 0.0f;
 	m_bDrawPoints = false;
-	m_iHighlightPoint = -1;
 	m_bSidesComputed = false;
 }
 
@@ -236,7 +235,7 @@ void LinkEdit::ComputeDisplayedLinkWidth(const DPoint2 &ToMeters)
 	}
 }
 
-bool LinkEdit::OverlapsExtent(const DRECT &target)
+bool LinkEdit::WithinExtent(const DRECT &target)
 {
 	return (target.left < m_extent.right && target.right > m_extent.left &&
 		target.top > m_extent.bottom && target.bottom < m_extent.top);
@@ -306,7 +305,7 @@ bool LinkEdit::Draw(wxDC *pDC, vtScaledView *pView, bool bShowDirection,
 	else
 		pDC->SetPen(LinkPen[m_Surface]);
 
-	const int size = GetSize();
+	int c, size = GetSize();
 	if (bShowWidth)
 		pView->DrawDoubleLine(pDC, *this, m_WidthOffset);
 	else
@@ -369,27 +368,13 @@ bool LinkEdit::Draw(wxDC *pDC, vtScaledView *pView, bool bShowDirection,
 	}
 	if (m_bDrawPoints)
 	{
-		// Put a crosshair at every point on the line.
-		if (bShowWidth)
-			pView->ProjectPolyline(pDC, *this, false);	// Use the centerline
-
-		const int xhair_size = 4;
 		pDC->SetPen(LinkPen[RP_CROSSES]);
-		for (int c = 0; c < size && c < SCREENBUF_SIZE; c++)
+		for (c = 0; c < size && c < SCREENBUF_SIZE; c++)
 		{
-			pDC->DrawLine(g_screenbuf[c].x - xhair_size, g_screenbuf[c].y,
-				g_screenbuf[c].x + xhair_size, g_screenbuf[c].y);
-			pDC->DrawLine(g_screenbuf[c].x, g_screenbuf[c].y - xhair_size,
-				g_screenbuf[c].x, g_screenbuf[c].y + xhair_size);
-		}
-
-		// We may highlight a single point
-		if (m_iHighlightPoint != -1)
-		{
-			const int radius = 5;
-			pDC->SetPen(LinkPen[RP_CROSSES]);
-			pDC->SetBrush(wxBrush(wxColour(0,0,0), wxTRANSPARENT));
-			pDC->DrawCircle(g_screenbuf[m_iHighlightPoint], radius);
+			pDC->DrawLine(g_screenbuf[c].x-3, g_screenbuf[c].y,
+				g_screenbuf[c].x+3, g_screenbuf[c].y);
+			pDC->DrawLine(g_screenbuf[c].x, g_screenbuf[c].y-3,
+				g_screenbuf[c].x, g_screenbuf[c].y+3);
 		}
 	}
 	return true;
@@ -402,14 +387,12 @@ bool LinkEdit::EditProperties(vtRoadLayer *pLayer)
 	return (dlg.ShowModal() == wxID_OK);
 }
 
-// override because we need to update width when flags change
+	// override because we need to update width when flags change
 void LinkEdit::SetFlag(int flag, bool value)
 {
-	const int flags = RF_SIDEWALK_LEFT | RF_SIDEWALK_RIGHT |
-					  RF_PARKING_LEFT | RF_PARKING_RIGHT | RF_MARGIN;
-	const int before = m_iFlags & flags;
+	int before = m_iFlags & (RF_SIDEWALK | RF_PARKING | RF_MARGIN);
 	TLink::SetFlag(flag, value);
-	const int after = m_iFlags & flags;
+	int after = m_iFlags & (RF_SIDEWALK | RF_PARKING | RF_MARGIN);
 	if (before != after)
 		m_bSidesComputed = false;
 }
@@ -420,6 +403,7 @@ void LinkEdit::Dirtied()
 	ComputeExtent();
 	m_bSidesComputed = false;
 }
+
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -541,16 +525,16 @@ DRECT *RoadMapEdit::DeleteSelected(int &nDeleted)
 			n++;
 
 			if (prevLink)
-				prevLink->SetNext(curLink);
+				prevLink->m_pNext = curLink;
 			else
 				m_pFirstLink = curLink;
 
 			tmpNode = tmpLink->GetNode(0);
 			if (tmpNode)
-				tmpNode->DetachLink(tmpLink);
+				tmpNode->DetachLink(tmpLink, true);
 			tmpNode = tmpLink->GetNode(1);
 			if (tmpNode)
-				tmpNode->DetachLink(tmpLink);
+				tmpNode->DetachLink(tmpLink, false);
 			delete tmpLink;
 		}
 		else
@@ -561,7 +545,7 @@ DRECT *RoadMapEdit::DeleteSelected(int &nDeleted)
 	return array;
 }
 
-bool RoadMapEdit::SelectLink(const DPoint2 &point, float error, DRECT &bound)
+bool RoadMapEdit::SelectLink(DPoint2 point, float error, DRECT &bound)
 {
 	LinkEdit *link = FindLink(point, error);
 	if (link)
@@ -573,7 +557,7 @@ bool RoadMapEdit::SelectLink(const DPoint2 &point, float error, DRECT &bound)
 	return false;
 }
 
-int RoadMapEdit::SelectLinks(const DRECT &bound, bool bval)
+int RoadMapEdit::SelectLinks(DRECT bound, bool bval)
 {
 	int found = 0;
 	for (LinkEdit* curLink = GetFirstLink(); curLink; curLink = curLink->GetNext())
@@ -608,17 +592,17 @@ bool RoadMapEdit::SelectAndExtendLink(DPoint2 point, float error, DRECT &bound)
 			int j;
 			float bestAngle = PI2f;
 			int bestLinkIndex = -1;
-			if (node->NumLinks() > 1) {
+			if (node->m_iLinks > 1) {
 				node->SortLinksByAngle();
 				//find index for current link
-				for (j=0; j < node->NumLinks(); j++) {
+				for (j=0; j < node->m_iLinks; j++) {
 					if (link == node->GetLink(j)) {
 						index = j;
 					}
 				}
 
 				//compare index with all the other links at the node.
-				for (j = 0; j < node->NumLinks(); j++) {
+				for (j = 0; j < node->m_iLinks; j++) {
 					if (j != index) {
 						float newAngle  = node->GetLinkAngle(j) - (node->GetLinkAngle(index) + PIf);
 						//adjust to value between 180 and -180 degrees
@@ -644,7 +628,7 @@ bool RoadMapEdit::SelectAndExtendLink(DPoint2 point, float error, DRECT &bound)
 				}
 				//wxLogMessage("best angle:%f, link: %i\n", bestAngle, bestLinkIndex);
 				//ignore result if angle is too big
-				if (bestAngle > PIf/6 && node->NumLinks() > 2) {
+				if (bestAngle > PIf/6 && node->m_iLinks > 2) {
 					bestLinkIndex = -1;
 				} else if (link->m_iHwy > 0 && link->m_iHwy != node->GetLink(bestLinkIndex)->m_iHwy) {
 					//highway must match with same highway number
@@ -727,8 +711,8 @@ bool RoadMapEdit::SelectNode(const DPoint2 &point, float epsilon, DRECT &bound)
 	if (node)
 	{
 		node->ToggleSelect();
-		bound.left = bound.right = node->Pos().x;
-		bound.top = bound.bottom = node->Pos().y;
+		bound.left = bound.right = node->m_p.x;
+		bound.top = bound.bottom = node->m_p.y;
 		return true;
 	}
 	else
@@ -741,7 +725,7 @@ int RoadMapEdit::SelectNodes(DRECT bound, bool bval)
 	int found = 0;
 	for (NodeEdit* curNode = GetFirstNode(); curNode; curNode = curNode->GetNext())
 	{
-		if (bound.ContainsPoint(curNode->Pos()))
+		if (bound.ContainsPoint(curNode->m_p))
 		{
 			curNode->Select(bval);
 			found++;
@@ -787,8 +771,7 @@ DRECT *RoadMapEdit::DeSelectAll(int &numRegions)
 	for (NodeEdit* curNode = GetFirstNode(); curNode; curNode = curNode->GetNext())
 	{
 		if (curNode->IsSelected()) {
-			array[n++] = DRECT(curNode->Pos().x, curNode->Pos().y,
-							   curNode->Pos().x, curNode->Pos().y);
+			array[n++] = DRECT(curNode->m_p.x, curNode->m_p.y, curNode->m_p.x, curNode->m_p.y);
 			curNode->Select(false);
 		}
 	}
@@ -803,18 +786,17 @@ DRECT *RoadMapEdit::DeSelectAll(int &numRegions)
 }
 
 
-LinkEdit *RoadMapEdit::FindLink(const DPoint2 &point, float error)
+LinkEdit *RoadMapEdit::FindLink(DPoint2 point, float error)
 {
 	LinkEdit *bestSoFar = NULL;
 	double dist = error;
 	double b;
 
-	// A buffer rectangle, to make it easier to click a link.
+	//a backwards rectangle, to provide greater flexibility for finding the link.
 	DRECT target(point.x-error, point.y+error, point.x+error, point.y-error);
-
-	for (LinkEdit *curLink = GetFirstLink(); curLink; curLink = curLink->GetNext())
+	for (LinkEdit* curLink = GetFirstLink(); curLink; curLink = curLink->GetNext())
 	{
-		if (curLink->OverlapsExtent(target))
+		if (curLink->WithinExtent(target))
 		{
 			b = curLink->DistanceToPoint(point);
 			if (b < dist)
@@ -830,16 +812,16 @@ LinkEdit *RoadMapEdit::FindLink(const DPoint2 &point, float error)
 void RoadMapEdit::DeleteSingleLink(LinkEdit *pDeleteLink)
 {
 	LinkEdit *prev = NULL;
-	for (LinkEdit *curLink = GetFirstLink(); curLink; curLink = curLink->GetNext())
+	for (LinkEdit* curLink = GetFirstLink(); curLink; curLink = curLink->GetNext())
 	{
 		if (curLink == pDeleteLink)
 		{
 			if (prev)
-				prev->SetNext(curLink->GetNext());
+				prev->m_pNext = curLink->GetNext();
 			else
 				m_pFirstLink = curLink->GetNext();
-			curLink->GetNode(0)->DetachLink(curLink);
-			curLink->GetNode(1)->DetachLink(curLink);
+			curLink->GetNode(0)->DetachLink(curLink, true);
+			curLink->GetNode(1)->DetachLink(curLink, false);
 			delete curLink;
 			return;
 		}
@@ -851,24 +833,23 @@ void RoadMapEdit::ReplaceNode(NodeEdit *pN, NodeEdit *pN2)
 {
 	bool lights = false;
 
-	for (int i = 0; i < pN->NumLinks(); i++)
+	for (int i = 0; i < pN->m_iLinks; i++)
 	{
-		TLink *link = pN->GetLink(i);
+		LinkConnect &lc = pN->GetLinkConnect(i);
 
-		IntersectionType itype = link->GetIntersectionType(pN);
-		if (itype == IT_LIGHT)
+		if (lc.eIntersection == IT_LIGHT)
 			lights = true;
 
-		if (link->GetNode(0) == pN)
-			link->SetNode(0, pN2);
-		if (link->GetNode(1) == pN)
-			link->SetNode(1, pN2);
+		if (lc.bStart)
+			lc.pLink->SetNode(0, pN2);
+		else
+			lc.pLink->SetNode(1, pN2);
 
-		int iNewLinkNum = pN2->AddLink(link);
-		pN2->SetIntersectType(iNewLinkNum, itype);
+		int iNewLinkNum = pN2->AddLink(lc.pLink, lc.bStart);
+		pN2->SetIntersectType(iNewLinkNum, lc.eIntersection);
 	}
 	while (TLink *pL = pN->GetLink(0))
-		pN->DetachLink(pL);
+		pN->DetachLink(pL, pN->GetLinkConnect(0).bStart);
 
 	if (lights)
 		pN2->AdjustForLights();
@@ -876,8 +857,8 @@ void RoadMapEdit::ReplaceNode(NodeEdit *pN, NodeEdit *pN2)
 
 class LinkEdit *NodeEdit::GetLink(int n)
 {
-	if (n >= 0 && n < NumLinks())	// safety check
-		return (LinkEdit *) m_connect[n];
+	if (n >= 0 && n < m_iLinks)	// safety check
+		return (LinkEdit *) m_connect[n].pLink;
 	else
 		return NULL;
 }
@@ -885,64 +866,29 @@ class LinkEdit *NodeEdit::GetLink(int n)
 LinkEdit *RoadMapEdit::AddRoadSegment(OGRLineString *pLineString)
 {
 	// Road: implicit nodes at start and end
-	LinkEdit *link = AddNewLink();
+	LinkEdit *r = NewLink();
 	int num_points = pLineString->getNumPoints();
 	for (int j = 0; j < num_points; j++)
 	{
-		link->Append(DPoint2(pLineString->getX(j),	pLineString->getY(j)));
+		r->Append(DPoint2(pLineString->getX(j),	pLineString->getY(j)));
 	}
-	TNode *n1 = AddNewNode();
-	n1->SetPos(pLineString->getX(0), pLineString->getY(0));
+	TNode *n1 = NewNode();
+	n1->m_p.Set(pLineString->getX(0), pLineString->getY(0));
 
-	TNode *n2 = AddNewNode();
-	n2->SetPos(pLineString->getX(num_points-1), pLineString->getY(num_points-1));
+	TNode *n2 = NewNode();
+	n2->m_p.Set(pLineString->getX(num_points-1), pLineString->getY(num_points-1));
 
-	link->ConnectNodes(n1, n2);
+	AddNode(n1);
+	AddNode(n2);
+	r->SetNode(0, n1);
+	r->SetNode(1, n2);
+	n1->AddLink(r, true);
+	n2->AddLink(r, false);
 
 	//set bounding box for the link
-	link->ComputeExtent();
+	r->ComputeExtent();
 
-	return link;
+	AddLink(r);
+	return r;
 }
-
-/**
- * Split a link into two separate links.
- *
- * \param link The link to split.
- * \param index The place to split it (from 0 to number of points in this link)
- * \param node The node to use at the place we're splitting.
- * \param link1, line2 Will be set to the two links that are produced.
- */
-void RoadMapEdit::SplitLinkAtIndex(LinkEdit *link, int index, NodeEdit *node,
-	LinkEdit **plink1, LinkEdit **plink2)
-{
-	// Split by making two new links.
-	TNode *old_node0 = link->GetNode(0);
-	TNode *old_node1 = link->GetNode(1);
-
-	LinkEdit *link1 = AddNewLink();
-	link1->CopyAttributesFrom(link);
-	for (int j = 0; j <= index; j++)
-		link1->Append(link->GetAt(j));
-	link1->ConnectNodes(old_node0, node);
-	link1->ComputeExtent();
-
-	LinkEdit *link2 = AddNewLink();
-	link2->CopyAttributesFrom(link);
-	for (int j = index; j < (int) link->GetSize(); j++)
-		link2->Append(link->GetAt(j));
-	link2->ConnectNodes(node, old_node1);
-	link2->ComputeExtent();
-
-	// Inform caller
-	if (plink1 != NULL)
-		*plink1 = link1;
-	if (plink2 != NULL)
-		*plink2 = link2;
-
-	// Remove and delete the now-split link
-	DetachLink(link);
-	RemoveLink(link);
-}
-
 

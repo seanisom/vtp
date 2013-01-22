@@ -27,24 +27,24 @@ vtTin::~vtTin()
 void vtTin::AddVert(const DPoint2 &p, float z)
 {
 	m_vert.Append(p);
-	m_z.push_back(z);
+	m_z.Append(z);
 }
 
 // Add vertex with vertex normal
 void vtTin::AddVert(const DPoint2 &p, float z, FPoint3 &normal)
 {
 	m_vert.Append(p);
-	m_z.push_back(z);
+	m_z.Append(z);
 	m_vert_normal.Append(normal);
 }
 
 void vtTin::AddTri(int i1, int i2, int i3, int surface_type)
 {
-	m_tri.push_back(i1);
-	m_tri.push_back(i2);
-	m_tri.push_back(i3);
+	m_tri.Append(i1);
+	m_tri.Append(i2);
+	m_tri.Append(i3);
 	if (surface_type != -1)
-		m_surfidx.push_back(surface_type);
+		m_surfidx.Append(surface_type);
 }
 
 void vtTin::RemVert(int v)
@@ -53,18 +53,18 @@ void vtTin::RemVert(int v)
 	if (v < 0 || v >= (int) m_vert.GetSize())
 		return;
 	m_vert.RemoveAt(v);
-	m_z.erase(m_z.begin() + v);
+	m_z.RemoveAt(v);
 	m_vert_normal.RemoveAt(v);
 
 	// Re-index the triangles
-	for (uint i = 0; i < m_tri.size()/3; i++)
+	for (uint i = 0; i < m_tri.GetSize()/3; i++)
 	{
 		// Remove any triangles which referenced this vertex
 		if (m_tri[i*3 + 0] == v ||
 			m_tri[i*3 + 1] == v ||
 			m_tri[i*3 + 2] == v)
 		{
-			m_tri.erase(m_tri.begin() + i*3, m_tri.begin() + (i*3) + 3);
+			m_tri.RemoveAt(i*3, 3);
 			i--;
 			continue;
 		}
@@ -78,22 +78,22 @@ void vtTin::RemVert(int v)
 void vtTin::RemTri(int t)
 {
 	// safety check
-	if (t < 0 || t >= (int) m_tri.size())
+	if (t < 0 || t >= (int) m_tri.GetSize())
 		return;
-	m_tri.erase(m_tri.begin() + t*3, m_tri.begin() + t*3 + 3);
+	m_tri.RemoveAt(t*3, 3);
 }
 
-uint vtTin::AddSurfaceType(const vtString &surface_texture, float fTiling)
+uint vtTin::AddSurfaceType(const vtString &surface_texture, bool bTiled)
 {
 	m_surftypes.push_back(surface_texture);
-	m_surftype_tiling.push_back(fTiling);
+	m_surftype_tiled.Append(bTiled);
 	return m_surftypes.size()-1;
 }
 
 void vtTin::SetSurfaceType(int iTri, int surface_type)
 {
-	if (m_surfidx.size() != m_tri.size()/3)
-		m_surfidx.resize(m_tri.size()/3);
+	if (m_surfidx.GetSize() != m_tri.GetSize()/3)
+		m_surfidx.SetSize(m_tri.GetSize()/3);
 
 	m_surfidx[iTri] = surface_type;
 }
@@ -174,7 +174,7 @@ bool vtTin::_ReadTinBody(FILE *fp)
 
 	// pre-allocate for efficiency
 	m_vert.SetMaxSize(m_file_verts);
-	m_tri.reserve(m_file_tris * 3);
+	m_tri.SetMaxSize(m_file_tris * 3);
 
 	// read verts
 	DPoint2 p;
@@ -372,11 +372,11 @@ bool vtTin::ReadADF(const char *fname, bool progress_callback(int))
 	//  those four points and the triangles connected to them.
 	// It seems we can assume the four 'extra' vertices are the first four.
 	m_vert.RemoveAt(0, 4);
-	m_z.erase(m_z.begin(), m_z.begin() + 4);
+	m_z.RemoveAt(0, 4);
 	m_vert_normal.RemoveAt(0, 4);
 
 	// Re-index the triangles
-	uint total = m_tri.size()/3;
+	uint total = m_tri.GetSize()/3;
 	for (uint i = 0; i < total; i++)
 	{
 		if ((i%200) == 0 && progress_callback != NULL)
@@ -387,14 +387,14 @@ bool vtTin::ReadADF(const char *fname, bool progress_callback(int))
 			m_tri[i*3 + 1] < 4 ||
 			m_tri[i*3 + 2] < 4)
 		{
-			m_tri.erase(m_tri.begin() + i*3, m_tri.begin() + i*3 + 3);
+			m_tri.RemoveAt(i*3, 3);
 			i--;
 			total--;
 			continue;
 		}
 	}
 	// For all other triangles, adjust the indices to reflect the removal
-	for (uint i = 0; i < m_tri.size(); i++)
+	for (uint i = 0; i < m_tri.GetSize(); i++)
 		m_tri[i] = m_tri[i] - 4;
 
 	// Test each triangle for clockwisdom, fix if needed
@@ -568,9 +568,11 @@ bool vtTin::ReadPLY(const char *fname, bool progress_callback(int))
 	VTLOG("ReadPLY '%s'\n", fname);
 
 	char buf[256];
+	vtString tin_name;
 	int material_id;
 	int num_points;
 	int num_faces;
+	int inu = 0, a, b, c;
 
 	// first line is file identifier
 	if (fgets(buf, 256, fp) == NULL)
@@ -579,8 +581,11 @@ bool vtTin::ReadPLY(const char *fname, bool progress_callback(int))
 	if (strncmp(buf, "ply", 3) != 0)
 		return false;
 
-	while (fgets(buf, 256, fp) != NULL)
+	while (1)
 	{
+		if (fgets(buf, 256, fp) == NULL)
+			break;
+
 		// trim trailing EOL characters
 		vtString vstr = buf;
 		vstr.Remove('\r');
@@ -610,7 +615,7 @@ bool vtTin::ReadPLY(const char *fname, bool progress_callback(int))
 		{
 			sscanf(buf, "element face %d\n", &num_faces);
 		}
-		else if (!strncmp(str, "end_header", 10))
+		else if (!strncmp(str, "end_header", 10))	// TIN name
 		{
 			DPoint2 p;
 			float z;
@@ -641,10 +646,9 @@ bool vtTin::ReadPLY(const char *fname, bool progress_callback(int))
 				}
 			}
 
-			// Then read the triangles
+			// Leggo anche i triangoli
 			VTLOG("ReadPLY num_faces %d\n", num_faces);
 
-			int inu, a, b, c;
 			for (int i = 0; i < num_faces; i++)
 			{
 				if (fgets(buf, 256, fp) == NULL)
@@ -1091,7 +1095,7 @@ bool vtTin::WriteDXF(const char *fname, bool progress_callback(int)) const
 void vtTin::FreeData()
 {
 	m_vert.FreeData();
-	m_tri.clear();
+	m_tri.FreeData();
 
 	// The bins must be cleared when the triangles are freed
 	if (m_trianglebins)
@@ -1198,7 +1202,7 @@ void vtTin::Offset(const DPoint2 &p)
 
 void vtTin::Scale(float fFactor)
 {
-	const uint size = m_z.size();
+	const uint size = m_z.GetSize();
 	for (uint j = 0; j < size; j++)
 		m_z[j] *= fFactor;
 	ComputeExtents();
@@ -1206,7 +1210,7 @@ void vtTin::Scale(float fFactor)
 
 void vtTin::VertOffset(float fAmount)
 {
-	const uint size = m_z.size();
+	const uint size = m_z.GetSize();
 	for (uint j = 0; j < size; j++)
 		m_z[j] += fAmount;
 	ComputeExtents();
@@ -1222,9 +1226,9 @@ bool vtTin::TestTriangle(int tri, const DPoint2 &p, float &fAltitude) const
 	const int v0 = m_tri[tri*3];
 	const int v1 = m_tri[tri*3+1];
 	const int v2 = m_tri[tri*3+2];
-	const DPoint2 &p1 = m_vert[v0];
-	const DPoint2 &p2 = m_vert[v1];
-	const DPoint2 &p3 = m_vert[v2];
+	const DPoint2 &p1 = m_vert.GetAt(v0);
+	const DPoint2 &p2 = m_vert.GetAt(v1);
+	const DPoint2 &p3 = m_vert.GetAt(v2);
 
 	// First try to identify which triangle
 	if (PointInTriangle(p, p1, p2, p3))
@@ -1264,6 +1268,7 @@ void vtTin::SetupTriangleBins(int bins, bool progress_callback(int))
 		delete m_trianglebins;
 	m_trianglebins = new BinArray(bins, bins);
 
+	DPoint2 p1, p2, p3;
 	uint tris = NumTris();
 	for (uint i = 0; i < tris; i++)
 	{
@@ -1271,9 +1276,9 @@ void vtTin::SetupTriangleBins(int bins, bool progress_callback(int))
 			progress_callback(i * 100 / tris);
 
 		// get 2D points
-		const DPoint2 &p1 = m_vert[m_tri[i*3]];
-		const DPoint2 &p2 = m_vert[m_tri[i*3+1]];
-		const DPoint2 &p3 = m_vert[m_tri[i*3+2]];
+		p1 = m_vert.GetAt(m_tri[i*3]);
+		p2 = m_vert.GetAt(m_tri[i*3+1]);
+		p3 = m_vert.GetAt(m_tri[i*3+2]);
 
 		// find the correct range of bins, and add the index of this index to it
 		DPoint2 fminrange, fmaxrange;
@@ -1298,7 +1303,7 @@ void vtTin::SetupTriangleBins(int bins, bool progress_callback(int))
 			{
 				Bin *bin = m_trianglebins->GetBin(j, k);
 				if (bin)
-					bin->push_back(i);
+					bin->Append(i);
 			}
 		}
 	}
@@ -1314,13 +1319,6 @@ int vtTin::MemoryNeededToLoad() const
 
 bool vtTin::FindAltitudeOnEarth(const DPoint2 &p, float &fAltitude, bool bTrue) const
 {
-	int unused_triangle;
-	return FindTriangleOnEarth(p, fAltitude, unused_triangle, bTrue);
-}
-
-bool vtTin::FindTriangleOnEarth(const DPoint2 &p, float &fAltitude, int &iTriangle,
-	bool bTrue) const
-{
 	uint tris = NumTris();
 
 	// If we have some triangle bins, they can be used for a much faster test
@@ -1332,13 +1330,10 @@ bool vtTin::FindTriangleOnEarth(const DPoint2 &p, float &fAltitude, int &iTriang
 		if (!bin)
 			return false;
 
-		for (uint i = 0; i < bin->size(); i++)
+		for (uint i = 0; i < bin->GetSize(); i++)
 		{
-			if (TestTriangle(bin->at(i), p, fAltitude))
-			{
-				iTriangle = bin->at(i);
+			if (TestTriangle(bin->GetAt(i), p, fAltitude))
 				return true;
-			}
 		}
 		// If it was not in any of these bins, then it did not hit anything
 		return false;
@@ -1347,10 +1342,7 @@ bool vtTin::FindTriangleOnEarth(const DPoint2 &p, float &fAltitude, int &iTriang
 	for (uint i = 0; i < tris; i++)
 	{
 		if (TestTriangle(i, p, fAltitude))
-		{
-			iTriangle = i;
 			return true;
-		}
 	}
 	return false;
 }
@@ -1362,31 +1354,7 @@ bool vtTin::FindAltitudeAtPoint(const FPoint3 &p3, float &fAltitude,
 	DPoint3 earth;
 	m_Conversion.ConvertToEarth(p3, earth);
 
-	// If we need to provide a normal, do a separate test that gets the triangle
-	if (vNormal != NULL)
-	{
-		int iTriangle;
-		const bool hit = FindTriangleOnEarth(DPoint2(earth.x, earth.y),
-			fAltitude, iTriangle, bTrue);
-		if (hit)
-		{
-			const int v0 = m_tri[iTriangle*3];
-			const int v1 = m_tri[iTriangle*3+1];
-			const int v2 = m_tri[iTriangle*3+2];
-			const DPoint2 &p1 = m_vert[v0];
-			const DPoint2 &p2 = m_vert[v1];
-			const DPoint2 &p3 = m_vert[v2];
-			FPoint3 wp0, wp1, wp2;
-			m_Conversion.ConvertFromEarth(DPoint3(p1.x, p1.y, m_z[v0]), wp0);
-			m_Conversion.ConvertFromEarth(DPoint3(p2.x, p2.y, m_z[v1]), wp1);
-			m_Conversion.ConvertFromEarth(DPoint3(p3.x, p3.y, m_z[v2]), wp2);
-			*vNormal = (wp1 - wp0).Cross(wp2 - wp0);
-			vNormal->Normalize();
-		}
-		return hit;
-	}
-	else
-		return FindAltitudeOnEarth(DPoint2(earth.x, earth.y), fAltitude, bTrue);
+	return FindAltitudeOnEarth(DPoint2(earth.x, earth.y), fAltitude, bTrue);
 }
 
 bool vtTin::ConvertProjection(const vtProjection &proj_new)
@@ -1417,6 +1385,7 @@ bool vtTin::ConvertProjection(const vtProjection &proj_new)
  */
 void vtTin::CleanupClockwisdom()
 {
+	DPoint2 p1, p2, p3;		// 2D points
 	int v0, v1, v2;
 	uint tris = NumTris();
 	for (uint i = 0; i < tris; i++)
@@ -1425,9 +1394,9 @@ void vtTin::CleanupClockwisdom()
 		v1 = m_tri[i*3+1];
 		v2 = m_tri[i*3+2];
 		// get 2D points
-		const DPoint2 &p1 = m_vert[v0];
-		const DPoint2 &p2 = m_vert[v1];
-		const DPoint2 &p3 = m_vert[v2];
+		p1 = m_vert.GetAt(v0);
+		p2 = m_vert.GetAt(v1);
+		p3 = m_vert.GetAt(v2);
 
 		// The so-called 2D cross product
 		double cross2d = (p2-p1).Cross(p3-p1);
@@ -1484,18 +1453,18 @@ int vtTin::RemoveUnusedVertices()
  This is a simple join.  No attempt is made to share vertices or any other integration.
  It is further assumed that the two TINs have compatible coordinate systems.
  */
-void vtTin::AppendFrom(const vtTin *pTin)
+void vtTin::AppendFrom(vtTin *pTin)
 {
-	const size_t verts = pTin->NumVerts();
-	const size_t tris = pTin->NumTris();
+	size_t verts = pTin->NumVerts();
+	size_t tris = pTin->NumTris();
 
 	// Preallocate (for efficiency)
 	m_vert.SetMaxSize(m_vert.GetSize() + verts + 1);
-	m_z.reserve(m_vert.GetSize() + verts + 1);
-	m_tri.reserve(m_tri.size() + (tris*3) + 1);
+	m_z.SetMaxSize(m_vert.GetSize() + verts + 1);
+	m_tri.SetMaxSize(m_tri.GetSize() + (tris*3) + 1);
 
 	// Remember the starting point for vertex indices
-	const int base = NumVerts();
+	int base = NumVerts();
 
 	// Simple, naive copy of vertices and triangles
 	DPoint2 p;
@@ -1507,7 +1476,7 @@ void vtTin::AppendFrom(const vtTin *pTin)
 	}
 	for (size_t i = 0; i < tris; i++)
 	{
-		const int *tri = pTin->GetAtTri(i);
+		int *tri = pTin->GetAtTri(i);
 		AddTri(base+tri[0], base+tri[1], base+tri[2]);
 	}
 	ComputeExtents();
@@ -1518,17 +1487,17 @@ void vtTin::AppendFrom(const vtTin *pTin)
  */
 double vtTin::GetTriMaxEdgeLength(int iTri) const
 {
-	const int tris = NumTris();
+	int tris = NumTris();
 	if (iTri < 0 || iTri >= tris)
 		return 0.0;
 
 	// get points
-	const int v0 = m_tri[iTri*3];
-	const int v1 = m_tri[iTri*3+1];
-	const int v2 = m_tri[iTri*3+2];
-	const DPoint2 &p1 = m_vert[v0];
-	const DPoint2 &p2 = m_vert[v1];
-	const DPoint2 &p3 = m_vert[v2];
+	int v0 = m_tri[iTri*3];
+	int v1 = m_tri[iTri*3+1];
+	int v2 = m_tri[iTri*3+2];
+	DPoint2 p1 = m_vert.GetAt(v0);
+	DPoint2 p2 = m_vert.GetAt(v1);
+	DPoint2 p3 = m_vert.GetAt(v2);
 
 	// check lengths
 	double len1 = (p2 - p1).Length();
@@ -1575,14 +1544,14 @@ void vtTin::MergeSharedVerts(bool progress_callback(int))
 
 		// find the correct bin, and add the index of this vertex to it
 		bin = (int) (BINS * (m_vert[i].x - rect.left) / width);
-		m_vertbin[bin].push_back(i);
+		m_vertbin[bin].Append(i);
 	}
-	uint trisize = m_tri.size();
+	uint trisize = m_tri.GetSize();
 	for (i = 0; i < trisize; i++)
 	{
 		// find the correct bin, and add the index of this index to it
 		bin = (int) (BINS * (m_vert[m_tri[i]].x - rect.left) / width);
-		m_tribin[bin].push_back(i);
+		m_tribin[bin].Append(i);
 	}
 
 	// compare within each bin, and between each adjacent bin,
@@ -1609,8 +1578,8 @@ void vtTin::MergeSharedVerts(bool progress_callback(int))
 
 	// make a copy to copy from
 	DLine2 *vertcopy = new DLine2(m_vert);
-	float *zcopy = new float[m_z.size()];
-	for (i = 0; i < m_z.size(); i++)
+	float *zcopy = new float[m_z.GetSize()];
+	for (i = 0; i < m_z.GetSize(); i++)
 		zcopy[i] = m_z[i];
 
 	int inew = 0;	// index into brand new array (actually re-using old)
@@ -1620,10 +1589,10 @@ void vtTin::MergeSharedVerts(bool progress_callback(int))
 		if (progress_callback != NULL)
 			progress_callback(bin * 100 / BINS);
 
-		uint binverts = m_vertbin[bin].size();
+		uint binverts = m_vertbin[bin].GetSize();
 		for (i = 0; i < binverts; i++)
 		{
-			int v_old = m_vertbin[bin].at(i);
+			int v_old = m_vertbin[bin].GetAt(i);
 			if (m_bReplace[v_old] != -1)
 				continue;
 
@@ -1633,10 +1602,10 @@ void vtTin::MergeSharedVerts(bool progress_callback(int))
 			m_vert[v_new] = vertcopy->GetAt(v_old);
 			m_z[v_new] = zcopy[v_old];
 
-			uint bintris = m_tribin[bin].size();
+			uint bintris = m_tribin[bin].GetSize();
 			for (j = 0; j < bintris; j++)
 			{
-				int trindx = m_tribin[bin].at(j);
+				int trindx = m_tribin[bin].GetAt(j);
 				if (m_tri[trindx] == v_old)
 					m_tri[trindx] = v_new;
 			}
@@ -1647,7 +1616,7 @@ void vtTin::MergeSharedVerts(bool progress_callback(int))
 	// our original array containers now hold the compacted result
 	int newsize = inew;
 	m_vert.SetSize(newsize);
-	m_z.resize(newsize);
+	m_z.SetSize(newsize);
 
 	// free up all the stuff we allocated
 	delete [] m_bReplace;
@@ -1661,19 +1630,19 @@ void vtTin::_UpdateIndicesInInBin(int bin)
 {
 	int i, j;
 
-	int binverts = m_vertbin[bin].size();
+	int binverts = m_vertbin[bin].GetSize();
 	for (i = 0; i < binverts; i++)
 	{
-		int v_before = m_vertbin[bin].at(i);
+		int v_before = m_vertbin[bin].GetAt(i);
 		int v_after = m_bReplace[v_before];
 
 		if (v_after == -1)
 			continue;
 
-		int bintris = m_tribin[bin].size();
+		int bintris = m_tribin[bin].GetSize();
 		for (j = 0; j < bintris; j++)
 		{
-			int trindx = m_tribin[bin].at(j);
+			int trindx = m_tribin[bin].GetAt(j);
 			if (m_tri[trindx] == v_before)
 				m_tri[trindx] = v_after;
 		}
@@ -1686,11 +1655,11 @@ void vtTin::_CompareBins(int bin1, int bin2)
 	int ix1, ix2;
 	int start;
 
-	int size1 = m_vertbin[bin1].size();
-	int size2 = m_vertbin[bin2].size();
+	int size1 = m_vertbin[bin1].GetSize();
+	int size2 = m_vertbin[bin2].GetSize();
 	for (i = 0; i < size1; i++)
 	{
-		ix1 = m_vertbin[bin1].at(i);
+		ix1 = m_vertbin[bin1].GetAt(i);
 
 		// within a bin, we can do N*N/2 instead of N*N compares
 		// i.e. size1*size1/2, instead of size1*size2
@@ -1701,7 +1670,7 @@ void vtTin::_CompareBins(int bin1, int bin2)
 
 		for (j = start; j < size2; j++)
 		{
-			ix2 = m_vertbin[bin2].at(j);
+			ix2 = m_vertbin[bin2].GetAt(j);
 
 			// don't compare against itself
 			if (ix1 == ix2)
@@ -1739,22 +1708,24 @@ int vtTin::RemoveTrianglesBySegment(const DPoint2 &ep1, const DPoint2 &ep2)
 {
 	int count = 0;
 
+	DPoint2 p1, p2, p3;		// 2D points
+	int v0, v1, v2;
 	uint tris = NumTris();
 	for (uint i = 0; i < tris; i++)
 	{
 		// get 2D points
-		const int v0 = m_tri[i*3];
-		const int v1 = m_tri[i*3+1];
-		const int v2 = m_tri[i*3+2];
-		const DPoint2 &p1 = m_vert[v0];
-		const DPoint2 &p2 = m_vert[v1];
-		const DPoint2 &p3 = m_vert[v2];
+		v0 = m_tri[i*3];
+		v1 = m_tri[i*3+1];
+		v2 = m_tri[i*3+2];
+		p1 = m_vert.GetAt(v0);
+		p2 = m_vert.GetAt(v1);
+		p3 = m_vert.GetAt(v2);
 
 		if (LineSegmentsIntersect(ep1, ep2, p1, p2) ||
 			LineSegmentsIntersect(ep1, ep2, p2, p3) ||
 			LineSegmentsIntersect(ep1, ep2, p3, p1))
 		{
-			m_tri.erase(m_tri.begin() + i*3, m_tri.begin() + i*3 + 3);
+			m_tri.RemoveAt(i*3, 3);
 			i--;
 			tris--;
 			count++;

@@ -17,7 +17,6 @@
 #include "vtdata/ElevationGrid.h"
 #include "vtdata/Features.h"
 #include "vtdata/Triangulate.h"
-#include "vtdata/vtLog.h"
 
 ////////////////////////////////////////////////////////////////////
 
@@ -32,10 +31,6 @@ vtTin2d::~vtTin2d()
 	FreeEdgeLengths();
 }
 
-/**
- Create a TIN from a grid, by simply triangulating all the valid heixels
- in the grid.
- */
 vtTin2d::vtTin2d(vtElevationGrid *grid)
 {
 	m_fEdgeLen = NULL;
@@ -45,53 +40,20 @@ vtTin2d::vtTin2d(vtElevationGrid *grid)
 	grid->GetDimensions(cols, rows);
 	m_proj = grid->GetProjection();
 
-	// This isn't an optimal algorithm, but it's not a common operation, so
-	// cpu/mem efficiency isn't vital.
-	//
-	// First step: naively make vertices from every grid coordinate.
 	DPoint2 p;
 	for (int x = 0; x < cols; x++)
-	{
 		for (int y = 0; y < rows; y++)
 		{
 			grid->GetEarthPoint(x, y, p);
 			AddVert(p, grid->GetFValue(x, y));
 		}
-	}
 	for (int x = 0; x < cols-1; x++)
-	{
 		for (int y = 0; y < rows-1; y++)
 		{
 			int base = x * rows + y;
-
-			// Only add triangles where the heixels have valid data.
-			const bool b1 = (grid->GetFValue(x, y) != INVALID_ELEVATION);
-			const bool b2 = (grid->GetFValue(x + 1, y) != INVALID_ELEVATION);
-			const bool b3 = (grid->GetFValue(x, y + 1) != INVALID_ELEVATION);
-			const bool b4 = (grid->GetFValue(x + 1, y + 1) != INVALID_ELEVATION);
-			const int valid = (int) b1 + b2 + b3 + b4;
-			if (valid < 3)
-				continue;
-			else if (valid == 4)
-			{
-				// Add both triangles
-				AddTri(base, base + rows, base+1);
-				AddTri(base+1, base + rows, base + rows+1);
-			}
-			else if (!b1)
-				AddTri(base + rows, base + rows + 1, base+1);
-			else if (!b2)
-				AddTri(base + rows + 1, base + 1, base);
-			else if (!b3)
-				AddTri(base, base + rows, base + rows + 1);
-			else if (!b4)
-				AddTri(base + rows, base + 1, base);
+			AddTri(base, base + rows, base+1);
+			AddTri(base+1, base + rows, base + rows+1);
 		}
-	}
-
-	// Remove any unused vertices
-	RemoveUnusedVertices();
-
 	ComputeExtents();
 }
 
@@ -115,7 +77,7 @@ vtTin2d::vtTin2d(vtFeatureSetPoint3D *set)
 	DPoint3 p3;
 
 	// point list
-	in.numberofpoints = set->NumEntities();
+	in.numberofpoints = set->GetNumEntities();
 	in.pointlist = (REAL *) malloc(in.numberofpoints * 2 * sizeof(REAL));
 	in.numberofpointattributes = 1;
 	in.pointattributelist = (REAL *) malloc(in.numberofpoints * sizeof(REAL));
@@ -192,40 +154,20 @@ vtTin2d::vtTin2d(vtFeatureSetPoint3D *set)
 	m_proj = set->GetAtProjection();
 }
 
-/**
- Construct a TIN from polygons.  The polygons features are triangulated and
- assigned a height, either from the feature fields, or a fixed height.
-
- \param set			The polygons featureset to use.
- \param iFieldNum	The number of the field to use; for example, if the fields
-	are "Area", "Distance", "Height", and "Height" contains the value you want,
-	then pass 2.  To use an fixed height instead for all triangles, pass -1.
- \param fHeight		The absolute height to use, if iFieldNum is -1.
- */
-vtTin2d::vtTin2d(vtFeatureSetPolygon *set, int iFieldNum, float fHeight)
+vtTin2d::vtTin2d(vtFeatureSetPolygon *set, int iFieldNum)
 {
-	VTLOG1("Construct TIN from Polygons\n");
-
 	m_fEdgeLen = NULL;
 	m_bConstrain = false;
 
-	int num = set->NumEntities();
+	int num = set->GetNumEntities();
 	for (int i = 0; i < num; ++i)
 	{
 		DPolygon2 &dpoly = set->GetPolygon(i);
 
-		// Get z value
-		float z;
-		if (iFieldNum == -1)
-			z = fHeight;
-		else
-			z = set->GetFloatValue(i, iFieldNum);
+		// Get z value from field 0
+		float z = set->GetFloatValue(i, iFieldNum);
 
 		DLine2 result;
-#if VTDEBUG
-	VTLOG(" Polygon %d/%d: %d rings, first ring %d points\n",
-		i, num, dpoly.size(), dpoly[0].GetSize());
-#endif
 		CallTriangle(dpoly, result);
 //		CallPoly2Tri(dpoly, result);	// TEST
 		int res = result.GetSize();
@@ -242,8 +184,6 @@ vtTin2d::vtTin2d(vtFeatureSetPolygon *set, int iFieldNum, float fHeight)
 	ComputeExtents();
 	// Adopt CRS from the featureset
 	m_proj = set->GetAtProjection();
-
-	VTLOG1("Construct TIN from Polygons: done\n");
 }
 
 void vtTin2d::MakeOutline()
@@ -275,8 +215,8 @@ int vtTin2d::GetMemoryUsed() const
 
 	bytes += sizeof(vtTin2d);
 	bytes += sizeof(DPoint2) * m_vert.GetSize();
-	bytes += sizeof(int) * m_tri.size();
-	bytes += sizeof(float) * m_z.size();
+	bytes += sizeof(int) * m_tri.GetSize();
+	bytes += sizeof(float) * m_z.GetSize();
 
 	if (m_fEdgeLen)
 		bytes += sizeof(double) * NumTris();
@@ -381,7 +321,7 @@ void vtTin2d::CullLongEdgeTris()
 			kept++;
 		}
 	}
-	m_tri.resize(kept*3);
+	m_tri.SetSize(kept*3);
 }
 
 void vtTin2d::FreeEdgeLengths()

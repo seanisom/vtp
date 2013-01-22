@@ -1,7 +1,7 @@
 //
 // ImageLayer.cpp
 //
-// Copyright (c) 2002-2012 Virtual Terrain Project
+// Copyright (c) 2002-2008 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -24,11 +24,11 @@ vtImageLayer::vtImageLayer() : vtLayer(LT_IMAGE)
 	m_pImage = new vtImage;
 }
 
-vtImageLayer::vtImageLayer(const DRECT &area, const IPoint2 &size,
+vtImageLayer::vtImageLayer(const DRECT &area, int xsize, int ysize,
 						   const vtProjection &proj) : vtLayer(LT_IMAGE)
 {
 	m_wsFilename = _("Untitled");
-	m_pImage = new vtImage(area, size, proj);
+	m_pImage = new vtImage(area, xsize, ysize, proj);
 }
 
 vtImageLayer::~vtImageLayer()
@@ -62,11 +62,12 @@ bool vtImageLayer::TransformCoords(vtProjection &proj_new)
 	test.SetDatum(proj_new.GetDatum());
 	if (test == proj_new)
 	{
-		// Easy case: we only change the extents
 		success = m_pImage->ReprojectExtents(proj_new);
+		SetModified(true);
 	}
 	else
 	{
+		// wxMessageBox(_("Transformation of Image Layers is not supported."), _("Warning"));
 		// Actually re-project the image pixels
 		vtImage *img_new = new vtImage;
 
@@ -80,6 +81,7 @@ bool vtImageLayer::TransformCoords(vtProjection &proj_new)
 		{
 			delete m_pImage;
 			m_pImage = img_new;
+			//  TODO ReImage();
 		}
 		else
 		{
@@ -89,7 +91,6 @@ bool vtImageLayer::TransformCoords(vtProjection &proj_new)
 		}
 		CloseProgressDialog();
 	}
-	SetModified(true);
 
 	return success;
 }
@@ -125,7 +126,10 @@ void vtImageLayer::Offset(const DPoint2 &delta)
 	// Shifting an image is as easy as shifting its extents
 	DRECT rect;
 	m_pImage->GetExtent(rect);
-	rect.Offset(delta);
+	rect.left += delta.x;
+	rect.right += delta.x;
+	rect.top += delta.y;
+	rect.bottom += delta.y;
 	m_pImage->SetExtent(rect);
 }
 
@@ -253,7 +257,7 @@ bool vtImageLayer::ImportFromDB(const char *szFileName, bool progress_callback(i
 	area.SetRect(dbuf.nwx, dbuf.nwy, dbuf.sex, dbuf.sey);
 
 	m_wsFilename = _("Untitled");
-	m_pImage = new vtImage(area, IPoint2(dbuf.xsize, dbuf.ysize), proj);
+	m_pImage = new vtImage(area, dbuf.xsize, dbuf.ysize, proj);
 
 	RGBf rgb;
 	RGBAf rgba;
@@ -269,12 +273,12 @@ bool vtImageLayer::ImportFromDB(const char *szFileName, bool progress_callback(i
 			if (bAlpha)
 			{
 				dbuf.getrgba(i, j, 0, &rgba.r);
-				m_pImage->SetRGBA(i, j, RGBAf(rgba.r, rgba.g, rgba.b, 1.0f));
+				m_pImage->SetRGB(i, j, RGBf(rgba.r, rgba.g, rgba.b));
 			}
 			else
 			{
 				dbuf.getrgb(i, j, 0, &rgb.r);
-				m_pImage->SetRGBA(i, j, RGBi((int) rgb.r, (int) rgb.g, (int) rgb.b));
+				m_pImage->SetRGB(i, j, RGBi((int) rgb.r, (int) rgb.g, (int) rgb.b));
 			}
 		}
 	}

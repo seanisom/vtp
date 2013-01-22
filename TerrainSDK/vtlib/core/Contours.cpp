@@ -147,7 +147,7 @@ vtGeode *vtContourConverter::Setup(vtTerrain *pTerr, const RGBf &color, float fH
 
 	// Create material and geometry to contain the vector geometry
 	vtMaterialArrayPtr pMats = new vtMaterialArray;
-	pMats->AddRGBMaterial(color, false, false, true);
+	pMats->AddRGBMaterial1(color, false, false, true);
 
 	m_pGeode = new vtGeode;
 	m_pGeode->setName("Contour Geometry");
@@ -268,13 +268,12 @@ void vtContourConverter::Flush()
 		{
 			if (m_pMF)
 			{
-				const bool bInterpolate = false;		// no need; it already hugs the ground
-				const bool bCurve = false;				// no need; it's already quite smooth
-				const bool bUseTrueElevation = true;	// use true elevation, not scaled
-				const float fSpacing = 0.0f;			// Doesn't matter, no interpolation.
+				bool bInterpolate = false;		// no need; it already hugs the ground
+				bool bCurve = false;			// no need; it's already quite smooth
+				bool bUseTrueElevation = true;	// use true elevation, not scaled
 
-				m_pMF->AddSurfaceLineToMesh(m_pTerrain->GetHeightField(),
-					m_line, fSpacing, m_fHeight, bInterpolate, bCurve, bUseTrueElevation);
+				m_pTerrain->AddSurfaceLineToMesh(m_pMF, m_line, m_fHeight,
+					bInterpolate, bCurve, bUseTrueElevation);
 			}
 			else if (m_pLS)
 			{
@@ -283,7 +282,7 @@ void vtContourConverter::Flush()
 			}
 		}
 	}
-	m_line.Clear();
+	m_line.Empty();
 }
 
 #endif // SUPPORT_QUIKGRID

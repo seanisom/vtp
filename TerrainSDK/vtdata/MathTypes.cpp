@@ -101,24 +101,14 @@ void DLine2::ReverseOrder()
  *  line is a triangle not a rectangle.  Remove the identical points to
  *  produce A B D.  Points are identical if they are within dEpsilon
  *  of each other.
- *
- * \param dEpsilon Distance.
- * \param bClosed If true, treat this as a closed polyline (a simple
- *  polygon) by wrapping around from the last to the first point.
  */
-int DLine2::RemoveDegeneratePoints(double dEpsilon, bool bClosed)
+int DLine2::RemoveDegeneratePoints(double dEpsilon)
 {
 	int removed = 0;
-
-	// If closed, the wrap around when looking for adjacent points.
-	// Otherwise, never consider removing the first or last point.
-	int preserve_endpoints = bClosed ? 0 : 1;
-
-	for (int i = preserve_endpoints; i < (int) GetSize() - preserve_endpoints; i++)
+	for (int i = 0; i < (int) GetSize(); i++)
 	{
-		// Compare each point to the previous
-		const double dist = (GetAt(i) - GetSafePoint(i-1)).Length();
-		if (dist < dEpsilon)
+		DPoint2 diff = GetSafePoint(i+1) - GetAt(i);
+		if (fabs(diff.x) < dEpsilon && fabs(diff.y) < dEpsilon)
 		{
 			RemoveAt(i);
 			removed++;
@@ -134,27 +124,18 @@ int DLine2::RemoveDegeneratePoints(double dEpsilon, bool bClosed)
 
  We could use another measure of linearity, the angle between (B-A)
  and (C-A), but didn't do that.
- 
- \param dEpsilon Distance.
- \param bClosed If true, treat this as a closed polyline (a simple
-   polygon) by wrapping around from the last to the first point.
  */
-int DLine2::RemoveColinearPoints(double dEpsilon, bool bClosed)
+int DLine2::RemoveColinearPoints(double dEpsilon)
 {
 	int removed = 0;
-
-	// If closed, the wrap around when looking for adjacent points.
-	// Otherwise, never consider removing the first or last point.
-	int preserve_endpoints = bClosed ? 0 : 1;
-
-	for (int i = preserve_endpoints; i < (int) GetSize() - preserve_endpoints; i++)
+	for (int i = 0; i < (int) GetSize(); i++)
 	{
-		const DPoint2 &prev = GetSafePoint(i-1);
-		const DPoint2 &next = GetSafePoint(i+1);
+		DPoint2 &prev = GetSafePoint(i-1);
+		DPoint2 &next = GetSafePoint(i+1);
 
 		DPoint2 ray = next - prev;
 		ray.Normalize();
-		const double dist = ray.Cross(GetAt(i) - prev);
+		double dist = ray.Cross(GetAt(i) - prev);
 		if (fabs(dist) < dEpsilon)
 		{
 			RemoveAt(i);
@@ -940,7 +921,7 @@ int DPolygon2::RemoveDegeneratePoints(double dEpsilon)
 	for (uint ring = 0; ring < size(); ring++)
 	{
 		DLine2 &dline = at(ring);
-		removed += dline.RemoveDegeneratePoints(dEpsilon, true);
+		removed += dline.RemoveDegeneratePoints(dEpsilon);
 		if (dline.GetSize() < 3)
 		{
 			int bad = 1;
@@ -960,7 +941,7 @@ int DPolygon2::RemoveColinearPoints(double dEpsilon)
 	for (uint ring = 0; ring < size(); ring++)
 	{
 		DLine2 &dline = at(ring);
-		removed += dline.RemoveColinearPoints(dEpsilon, true);
+		removed += dline.RemoveColinearPoints(dEpsilon);
 		if (dline.GetSize() < 3)
 		{
 			int bad = 1;
@@ -1507,71 +1488,6 @@ float vt_log2f(float n)
 	return logf(n) / LN_2;
 }
 
-/**
- Given three points in a polyline, determine a side vector will will offset
- the polyline, to the left, by a unit width.
- */
-double AngleSideVector(const DPoint2 &p0, const DPoint2 &p1, const DPoint2 &p2,
-					  DPoint2 &sideways)
-{
-	// Look at vectors to previous and next points
-	const DPoint2 v0 = (p1-p0).Normalize();
-	const DPoint2 v1 = (p2-p1).Normalize();
-
-	// we flip axes to turn the path vector 90 degrees (normal to path)
-	DPoint2 bisector(-(v0.y + v1.y), v0.x + v1.x);
-	bisector.Normalize();
-
-	double wider;
-	const double dot = v0.Dot(-v1);
-	if (dot <= -0.99 || dot >= 0.99)
-	{
-		// close enough to colinear, no need to widen
-		wider = 1.0f;
-	}
-	else
-	{
-		// factor to widen this corner is proportional to the angle
-		double angle = acos(dot);
-		wider = (float) (1.0 / sin(angle / 2));
-		bisector *= wider;
-	}
-	sideways = bisector;
-	return wider;
-}
-
-/**
- Given three points in a polyline, determine a side vector will will offset
- the polyline by a unit width.
- */
-float AngleSideVector(const FPoint3 &p0, const FPoint3 &p1, const FPoint3 &p2,
-					  FPoint3 &sideways)
-{
-	// Look at vectors to previous and next points
-	const FPoint3 v0 = (p1-p0).Normalize();
-	const FPoint3 v1 = (p2-p1).Normalize();
-
-	// we flip axes to turn the path vector 90 degrees (normal to path)
-	FPoint3 bisector(v0.z + v1.z, 0, -(v0.x + v1.x));
-	bisector.Normalize();
-
-	float wider;
-	const float dot = v0.Dot(-v1);
-	if (dot <= -0.97 || dot >= 0.97)
-	{
-		// close enough to colinear, no need to widen
-		wider = 1.0f;
-	}
-	else
-	{
-		// factor to widen this corner is proportional to the angle
-		float angle = acos(dot);
-		wider = (float) (1.0 / sin(angle / 2));
-		bisector *= wider;
-	}
-	sideways = bisector;
-	return wider;
-}
 
 /*
 * ======= Crossings algorithm ============================================

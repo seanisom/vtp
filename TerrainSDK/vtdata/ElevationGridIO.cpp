@@ -277,8 +277,8 @@ bool vtElevationGrid::LoadFromCDF(const char *szFileName,
 	nc_close(id);				// close netCDF dataset
 
 	// Now copy the values into the vtElevationGrid object
-	m_iSize.x = dimension[0];
-	m_iSize.y = dimension[1];
+	m_iColumns = dimension[0];
+	m_iRows = dimension[1];
 
 	m_bFloatMode = false;
 	if (!_AllocateArray())
@@ -286,11 +286,11 @@ bool vtElevationGrid::LoadFromCDF(const char *szFileName,
 	if (progress_callback != NULL) progress_callback(80);
 
 	int i, j;
-	for (i = 0; i < m_iSize.x; i++)
+	for (i = 0; i < m_iColumns; i++)
 	{
-		for (j = 0; j < m_iSize.y; j++)
+		for (j = 0; j < m_iRows; j++)
 		{
-			SetValue(i, m_iSize.y-1-j, (short)z[j*m_iSize.x+i]);
+			SetValue(i, m_iRows-1-j, (short)z[j*m_iColumns+i]);
 		}
 	}
 	if (progress_callback != NULL) progress_callback(90);
@@ -342,7 +342,8 @@ bool vtElevationGrid::LoadFrom3TX(const char *szFileName,
 
 	m_proj.SetProjectionSimple(false, 0, EPSG_DATUM_WGS84);
 
-	m_iSize.Set(1201, 1201);
+	m_iColumns = 1201;
+	m_iRows = 1201;
 	m_bFloatMode = false;
 	if (!_AllocateArray())
 		return false;
@@ -449,7 +450,8 @@ bool vtElevationGrid::LoadFromASC(const char *szFileName,
 		}
 	}
 
-	m_iSize.Set(ncols, nrows);
+	m_iColumns = ncols;
+	m_iRows = nrows;
 
 	// There is no projection info in a ASC file, but there might be
 	//  an accompanying .prj file, usually in the old ESRI .prj format.
@@ -488,7 +490,7 @@ bool vtElevationGrid::LoadFromASC(const char *szFileName,
 				return false;
 			if (i == 0)
 				VTLOG("(%f)", z);
-			if (z == nodata || z > 1E6 || z < -1E6)
+			if (z == nodata)
 				SetFValue(j, nrows-1-i, INVALID_ELEVATION);
 			else
 				SetFValue(j, nrows-1-i, z);
@@ -550,19 +552,19 @@ bool vtElevationGrid::LoadFromTerragen(const char *szFileName,
 		{
 			if (fread(&svalue, 2, 1, fp) != 1) return false;
 			if (fread(&dummy, 2, 1, fp) != 1) return false;
-			m_iSize.y = m_iSize.x = svalue + 1;
+			m_iRows = m_iColumns = svalue + 1;
 		}
 		else if (!strncmp(buf, "XPTS", 4))
 		{
 			if (fread(&svalue, 2, 1, fp) != 1) return false;
 			if (fread(&dummy, 2, 1, fp) != 1) return false;
-			m_iSize.x = svalue;
+			m_iColumns = svalue;
 		}
 		else if (!strncmp(buf, "YPTS", 4))
 		{
 			if (fread(&svalue, 2, 1, fp) != 1) return false;
 			if (fread(&dummy, 2, 1, fp) != 1) return false;
-			m_iSize.y = svalue;
+			m_iRows = svalue;
 		}
 		else if (!strncmp(buf, "SCAL", 4))
 		{
@@ -590,10 +592,10 @@ bool vtElevationGrid::LoadFromTerragen(const char *szFileName,
 
 			if (!_AllocateArray())
 				return false;
-			for (j = 0; j < m_iSize.y; j++)
+			for (j = 0; j < m_iRows; j++)
 			{
-				if (progress_callback != NULL) progress_callback(j*100/m_iSize.y);
-				for (i = 0; i < m_iSize.x; i++)
+				if (progress_callback != NULL) progress_callback(j*100/m_iRows);
+				for (i = 0; i < m_iColumns; i++)
 				{
 					if (fread(&svalue, 2, 1, fp) != 1) return false;
 					SetFValue(i, j, scale.z * (BaseHeight + ((float)svalue * HeightScale / 65536.0f)));
@@ -609,8 +611,8 @@ bool vtElevationGrid::LoadFromTerragen(const char *szFileName,
 
 	// make up some extents, based on the scaling
 	m_EarthExtents.left = 0;
-	m_EarthExtents.right = (m_iSize.x - 1) * scale.x;
-	m_EarthExtents.top = (m_iSize.y - 1) * scale.y;
+	m_EarthExtents.right = (m_iColumns - 1) * scale.x;
+	m_EarthExtents.top = (m_iRows - 1) * scale.y;
 	m_EarthExtents.bottom = 0;
 	ComputeCornersFromExtents();
 
@@ -771,15 +773,15 @@ bool vtElevationGrid::LoadFromDTED(const char *szFileName,
 		fseek(fp, 4+3+12, SEEK_CUR);
 
 		// get dimensions
-		get_dddd(fp, m_iSize.x);
-		get_dddd(fp, m_iSize.y);
+		get_dddd(fp, m_iColumns);
+		get_dddd(fp, m_iRows);
 
 		// imply other corners
 		m_Corners[1].x = m_Corners[0].x;
-		m_Corners[1].y = m_Corners[0].y + yInterval * (m_iSize.y - 1);
-		m_Corners[2].x = m_Corners[0].x + xInterval * (m_iSize.x - 1);
-		m_Corners[2].y = m_Corners[0].y + yInterval * (m_iSize.y - 1);
-		m_Corners[3].x = m_Corners[0].x + xInterval * (m_iSize.x - 1);
+		m_Corners[1].y = m_Corners[0].y + yInterval * (m_iRows - 1);
+		m_Corners[2].x = m_Corners[0].x + xInterval * (m_iColumns - 1);
+		m_Corners[2].y = m_Corners[0].y + yInterval * (m_iRows - 1);
+		m_Corners[3].x = m_Corners[0].x + xInterval * (m_iColumns - 1);
 		m_Corners[3].y = m_Corners[0].y;
 		ComputeExtentsFromCorners();
 
@@ -793,7 +795,7 @@ bool vtElevationGrid::LoadFromDTED(const char *szFileName,
 		return false;
 
 	// REF: record header length + (2 * number of rows) + checksum length
-	int line_length = 8 + (2 * m_iSize.y) + 4;
+	int line_length = 8 + (2 * m_iRows) + 4;
 	uchar *linebuf = new uchar[line_length];
 
 	// Skip DSI and ACC headers
@@ -804,10 +806,10 @@ bool vtElevationGrid::LoadFromDTED(const char *szFileName,
 	uchar swap[z_len];
 
 	int i, j, offset;
-	for (i = 0; i < m_iSize.x; i++)
+	for (i = 0; i < m_iColumns; i++)
 	{
 		if (progress_callback != NULL)
-			progress_callback(i * 100 / m_iSize.x);
+			progress_callback(i * 100 / m_iColumns);
 
 		if (fread(linebuf, line_length, 1, fp) != 1)
 			return false;
@@ -816,7 +818,7 @@ bool vtElevationGrid::LoadFromDTED(const char *szFileName,
 
 		offset = 8;	// record header length
 
-		for (j = 0; j < m_iSize.y; j++)
+		for (j = 0; j < m_iRows; j++)
 		{
 			// memcpy(z, linebuf + offset, z_len);
 			swap[1] = *(linebuf + offset);
@@ -953,18 +955,20 @@ bool vtElevationGrid::LoadFromGTOPO30(const char *szFileName,
 	ComputeCornersFromExtents();
 
 	// set up for an array of the indicated size
-	m_iSize.Set(gh.NumCols, gh.NumRows);
+	m_iColumns = gh.NumCols;
+	m_iRows = gh.NumRows;
 
 	if (!_AllocateArray())
 		return false;
 
 	// read the file
+	int i, j;
 	short z;
 	char *cp = (char *)&z, temp;
-	for (int j = 0; j < m_iSize.y; j++)
+	for (j = 0; j < m_iRows; j++)
 	{
-		if (progress_callback != NULL) progress_callback(10 + j * 90 / m_iSize.y);
-		for (int i = 0; i < m_iSize.x; i++)
+		if (progress_callback != NULL) progress_callback(10 + j * 90 / m_iRows);
+		for (i = 0; i < m_iColumns; i++)
 		{
 			/*  FIXME:  there be byte order issues here.  See below in this routine.  */
 			if (fread(&z, sizeof(short), 1, fp) != 1)
@@ -976,7 +980,7 @@ bool vtElevationGrid::LoadFromGTOPO30(const char *szFileName,
 				cp[0] = cp[1];
 				cp[1] = temp;
 			}
-			SetValue(i, m_iSize.y-1-j, (z == gh.NoData) ? INVALID_ELEVATION : z);
+			SetValue(i, m_iRows-1-j, (z == gh.NoData) ? INVALID_ELEVATION : z);
 		}
 	}
 	return true;
@@ -1063,11 +1067,11 @@ bool vtElevationGrid::LoadFromGLOBE(const char *szFileName,
 
 	// Read the number of rows
 	hdrFile >> strName >> szEqual >> strValue;
-	m_iSize.y = atol(strValue);
+	m_iRows = atol(strValue);
 
 	// Read the number of columns
 	hdrFile >> strName >> szEqual >> strValue;
-	m_iSize.x = atol(strValue);
+	m_iColumns = atol(strValue);
 
 	// OK to skip the rest of the file, parameters which we will assume
 
@@ -1099,16 +1103,16 @@ bool vtElevationGrid::LoadFromGLOBE(const char *szFileName,
 	// read the file
 	int i, j;
 	short z;
-	for (j = 0; j < m_iSize.y; j++)
+	for (j = 0; j < m_iRows; j++)
 	{
-		if (progress_callback != NULL) progress_callback(10 + j * 90 / m_iSize.y);
-		for (i = 0; i < m_iSize.x; i++)
+		if (progress_callback != NULL) progress_callback(10 + j * 90 / m_iRows);
+		for (i = 0; i < m_iColumns; i++)
 		{
 			if (fread(&z, sizeof(short), 1, fp) != 1)
 				return false;
 			if (z == -500)	// 'unknown' generally used for ocean surface
 				z = 0;
-			SetValue(i, m_iSize.y-1-j, z);
+			SetValue(i, m_iRows-1-j, z);
 		}
 	}
 	return true;
@@ -1152,15 +1156,17 @@ bool vtElevationGrid::LoadFromDSAA(const char* szFileName, bool progress_callbac
 	m_EarthExtents.bottom = ylo;
 	ComputeCornersFromExtents();
 
-	m_iSize.Set(nx, ny);
+	m_iColumns = nx;
+	m_iRows = ny;
 
 	if (!_AllocateArray())
 		return false;
 
+	int x, y;
 	float z;
-	for (int y = 0; y < ny; y++)
+	for (y = 0; y < ny; y++)
 	{
-		if (progress_callback != NULL && (y%20) == 0)
+		if (progress_callback != NULL)
 		{
 			if (progress_callback(y * 100 / ny))
 			{
@@ -1169,7 +1175,7 @@ bool vtElevationGrid::LoadFromDSAA(const char* szFileName, bool progress_callbac
 				return false;
 			}
 		}
-		for (int x = 0; x < nx; x++)
+		for (x = 0; x < nx; x++)
 		{
 			if (fscanf(fp, "%f", &z) != 1)
 				return false;
@@ -1197,7 +1203,7 @@ bool vtElevationGrid::LoadFromDSAA(const char* szFileName, bool progress_callbac
  * \returns \c true if the file was successfully opened and read.
  */
 bool vtElevationGrid::LoadFromGRD(const char *szFileName,
-								  bool progress_callback(int))
+								bool progress_callback(int))
 {
 	// Free buffers to prepare to receive new data
 	FreeData();
@@ -1296,14 +1302,15 @@ bool vtElevationGrid::LoadFromGRD(const char *szFileName,
 	m_EarthExtents.bottom = ylo;
 	ComputeCornersFromExtents();
 
-	m_iSize.Set(nx, ny);
+	m_iColumns = nx;
+	m_iRows = ny;
 
 	if (!_AllocateArray())
 		return false;
 
+	int x, y;
 	float z;
-	double dz;
-	for (int y = 0; y < ny; y++)
+	for (y = 0; y < ny; y++)
 	{
 		if (progress_callback != NULL)
 		{
@@ -1314,14 +1321,15 @@ bool vtElevationGrid::LoadFromGRD(const char *szFileName,
 				return false;
 			}
 		}
-		for (int x = 0; x < nx; x++)
+		for (x = 0; x < nx; x++)
 		{
 			if (bDSRB) //DSRB format
 			{
+				double dz;
 				quiet = fread(&dz, 8, 1, fp);
-				z = (float) dz;
+				z = (float)dz;
 
-				if (z < zlo || z > zhi)
+				if(z < zlo || z > zhi)
 					z = INVALID_ELEVATION;
 
 				SetFValue(x, y, z);
@@ -1330,7 +1338,7 @@ bool vtElevationGrid::LoadFromGRD(const char *szFileName,
 			{
 				quiet = fread(&z, 4, 1, fp);
 
-				if (z < zlo || z > zhi)
+				if(z < zlo || z > zhi)
 					z = INVALID_ELEVATION;
 
 				SetFValue(x, y, z);
@@ -1504,7 +1512,8 @@ bool vtElevationGrid::LoadFromPGM(const char *szFileName, bool progress_callback
 	SetEarthExtents(ext);
 	ComputeCornersFromExtents();
 
-	m_iSize.Set(xsize, ysize);
+	m_iColumns = xsize;
+	m_iRows = ysize;
 
 	if (!_AllocateArray())
 		return false;
@@ -1574,8 +1583,8 @@ bool vtElevationGrid::SaveToTerragen(const char *szFileName) const
 	if (!fp)
 		return false;
 
-	short w = (short) m_iSize.x;
-	short h = (short) m_iSize.y;
+	short w = (short) m_iColumns;
+	short h = (short) m_iRows;
 	short dummy = 0;
 
 	// write identifying header
@@ -1631,9 +1640,9 @@ bool vtElevationGrid::SaveToTerragen(const char *szFileName) const
 }
 
 
-bool vtElevationGrid::SaveTo3TX(const char *szFileName, bool progress_callback(int)) const
+bool vtElevationGrid::SaveTo3TX(const char *szFileName, bool progress_callback(int))
 {
-	if (m_iSize.x != 1201 || m_iSize.y != 1201)
+	if (m_iColumns != 1201 || m_iRows != 1201)
 		return false;
 
 	FILE *fp = vtFileOpen(szFileName, "wb");
@@ -1681,20 +1690,17 @@ bool vtElevationGrid::SaveToGeoTIFF(const char *szFileName) const
 	// GDAL doesn't yet support utf-8 or wide filenames, so convert
 	vtString fname_local = UTF8ToLocal(szFileName);
 
-	GDALDataset *pDataset;
-	if (m_bFloatMode)
-		pDataset = pDriver->Create(fname_local, m_iSize.x, m_iSize.y,
-			1, GDT_Float32, papszParmList );
-	else
-		pDataset = pDriver->Create(fname_local, m_iSize.x, m_iSize.y,
-			1, GDT_Int16, papszParmList );
+	GDALDataset *pDataset = pDriver->Create(fname_local, m_iColumns, m_iRows,
+		1, GDT_Int16, papszParmList );
 	if (!pDataset)
 		return false;
 
-	const DPoint2 &spacing = GetSpacing();
+	DPoint2 spacing = GetSpacing();
 	double adfGeoTransform[6] = { m_EarthExtents.left, spacing.x, 0,
 								  m_EarthExtents.top, 0, -spacing.y };
 	pDataset->SetGeoTransform(adfGeoTransform);
+
+	GInt16 *raster = new GInt16[m_iColumns*m_iRows];
 
 	char *pszSRS_WKT = NULL;
 	m_proj.exportToWkt( &pszSRS_WKT );
@@ -1703,38 +1709,21 @@ bool vtElevationGrid::SaveToGeoTIFF(const char *szFileName) const
 
 	GDALRasterBand *pBand = pDataset->GetRasterBand(1);
 
-	if (m_bFloatMode)
+	int x, y;
+	float value;
+	for (x = 0; x < m_iColumns; x++)
 	{
-		float *raster = new float[m_iSize.x*m_iSize.y];
-		for (int x = 0; x < m_iSize.x; x++)
+		for (y = 0; y < m_iRows; y++)
 		{
-			for (int y = 0; y < m_iSize.y; y++)
-			{
-				// flip as we copy
-				const float value = GetFValue(x, m_iSize.y-1-y);
-				raster[y*m_iSize.x + x] = value;
-			}
+			// flip as we copy
+			value = GetFValue(x, m_iRows-1-y);
+			raster[y*m_iColumns + x] = (short) value;
 		}
-		pBand->RasterIO(GF_Write, 0, 0, m_iSize.x, m_iSize.y,
-			raster, m_iSize.x, m_iSize.y, GDT_Float32, 0, 0);
-		delete raster;
 	}
-	else
-	{
-		GInt16 *raster = new GInt16[m_iSize.x*m_iSize.y];
-		for (int x = 0; x < m_iSize.x; x++)
-		{
-			for (int y = 0; y < m_iSize.y; y++)
-			{
-				// flip as we copy
-				const float value = GetFValue(x, m_iSize.y-1-y);
-				raster[y*m_iSize.x + x] = (short) value;
-			}
-		}
-		pBand->RasterIO(GF_Write, 0, 0, m_iSize.x, m_iSize.y,
-			raster, m_iSize.x, m_iSize.y, GDT_Int16, 0, 0);
-		delete raster;
-	}
+	pBand->RasterIO( GF_Write, 0, 0, m_iColumns, m_iRows,
+		raster, m_iColumns, m_iRows, GDT_Int16, 0, 0 );
+
+	delete raster;
 	GDALClose(pDataset);
 
 	return true;
@@ -1756,14 +1745,16 @@ bool vtElevationGrid::SaveToBMP(const char *szFileName) const
 	float fScale = (fRange == 0.0f ? 0.0f : 255.0f / fRange);
 
 	vtDIB dib;
-	if (!dib.Create(m_iSize, 8, true))
+	if (!dib.Create(m_iColumns, m_iRows, 8, true))
 		return false;
 
-	for (int x = 0; x < m_iSize.x; x++)
+	int x, y;
+	float value;
+	for (x = 0; x < m_iColumns; x++)
 	{
-		for (int y = 0; y < m_iSize.y; y++)
+		for (y = 0; y < m_iRows; y++)
 		{
-			const float value = GetFValue(x, y);
+			value = GetFValue(x, y);
 			dib.SetPixel8(x, y, (uchar) ((value - fMin) * fScale));
 		}
 	}
@@ -1802,8 +1793,8 @@ bool vtElevationGrid::LoadWithGDAL(const char *szFileName,
 		// failed.
 		return false;
 	}
-	m_iSize.x = poDataset->GetRasterXSize();
-	m_iSize.y = poDataset->GetRasterYSize();
+	m_iColumns = poDataset->GetRasterXSize();
+	m_iRows = poDataset->GetRasterYSize();
 
 	// Get the projection information
 	const char *str1 = poDataset->GetProjectionRef();
@@ -1822,13 +1813,13 @@ bool vtElevationGrid::LoadWithGDAL(const char *szFileName,
 		// Upper left corner is adfGeoTransform[0], adfGeoTransform[3]
 		m_EarthExtents.left = adfGeoTransform[0];
 		m_EarthExtents.top = adfGeoTransform[3];
-		m_EarthExtents.right = m_EarthExtents.left + (adfGeoTransform[1] * m_iSize.x);
-		m_EarthExtents.bottom = m_EarthExtents.top + (adfGeoTransform[5] * m_iSize.y);
+		m_EarthExtents.right = m_EarthExtents.left + (adfGeoTransform[1] * m_iColumns);
+		m_EarthExtents.bottom = m_EarthExtents.top + (adfGeoTransform[5] * m_iRows);
 	}
 	else
 	{
 		// No extents
-		m_EarthExtents.SetToZero();
+		m_EarthExtents.Empty();
 	}
 
 	ComputeCornersFromExtents();
@@ -1844,8 +1835,6 @@ bool vtElevationGrid::LoadWithGDAL(const char *szFileName,
 
 	// Check data type - it's either integer or float
 	GDALDataType rtype = poBand->GetRasterDataType();
-	VTLOG("vtElevationGrid::LoadWithGDAL: Raster size %d x %d, type '%s'\n",
-		m_iSize.x, m_iSize.y, GDALGetDataTypeName(rtype));
 	if (rtype == GDT_Int16 || rtype == GDT_Byte)
 		m_bFloatMode = false;
 	else
@@ -1880,7 +1869,7 @@ bool vtElevationGrid::LoadWithGDAL(const char *szFileName,
 	pasScanline = (short *) CPLMalloc(sizeof(short)*nXSize);
 	pafScanline = (float *) CPLMalloc(sizeof(float)*nXSize);
 	int i, j;
-	for (j = 0; j < m_iSize.y; j++)
+	for (j = 0; j < m_iRows; j++)
 	{
 		if (m_bFloatMode)
 		{
@@ -1894,9 +1883,9 @@ bool vtElevationGrid::LoadWithGDAL(const char *szFileName,
 				// check for several different commonly used values meaning
 				// "no data at this location"
 				if (fElev == -9999 || fElev == -32766 || fElev == 32767 || fElev == -32767 || fElev < -100000)
-					SetValue(i, m_iSize.y-1-j, INVALID_ELEVATION);
+					SetValue(i, m_iRows-1-j, INVALID_ELEVATION);
 				else
-					SetFValue(i, m_iSize.y-1-j, fElev * fScale);
+					SetFValue(i, m_iRows-1-j, fElev * fScale);
 			}
 		}
 		else
@@ -1911,14 +1900,14 @@ bool vtElevationGrid::LoadWithGDAL(const char *szFileName,
 				// check for several different commonly used values meaning
 				// "no data at this location"
 				if (elev == -9999 || elev == -32766 || elev == 32767)
-					SetValue(i, m_iSize.y-1-j, INVALID_ELEVATION);
+					SetValue(i, m_iRows-1-j, INVALID_ELEVATION);
 				else
-					SetFValue(i, m_iSize.y-1-j, elev * fScale);
+					SetFValue(i, m_iRows-1-j, elev * fScale);
 			}
 		}
 		if (progress_callback != NULL)
 		{
-			if (progress_callback(100*j/m_iSize.y))
+			if (progress_callback(100*j/m_iRows))
 			{
 				// Cancel
 				delete poDataset;
@@ -2043,8 +2032,8 @@ bool vtElevationGrid::ParseNTF5(OGRDataSource *pDatasource, vtString &msg,
 
 	int iColCount = iTotalCells / iRowCount;
 
-	m_iSize.x = iColCount;
-	m_iSize.y = iRowCount;
+	m_iColumns = iColCount;
+	m_iRows = iRowCount;
 	m_proj.SetSpatialReference(pSpatialRef);
 
 	// One online reference says of NTF elevation:
@@ -2098,7 +2087,7 @@ bool vtElevationGrid::ParseNTF5(OGRDataSource *pDatasource, vtString &msg,
 	VTLOG("ParseNTF5 read: %.2f seconds.\n", time_read);
 
 	ComputeHeightExtents();
-	msg.Format("Read %d cells (%d x %d)", iTotalCells, m_iSize.x, m_iSize.y);
+	msg.Format("Read %d cells (%d x %d)", iTotalCells, m_iColumns, m_iRows);
 
 	// Time Test
 	float time = ((float)clock() - tm1)/CLOCKS_PER_SEC;
@@ -2183,7 +2172,8 @@ bool vtElevationGrid::LoadFromRAW(const char *szFileName, int width, int height,
 	if (!fp)
 		return false;
 
-	m_iSize.Set(width, height);
+	m_iColumns = width;
+	m_iRows = height;
 
 	// set extents arbitrarily for now; if the user knows them, they can set
 	// them after loading
@@ -2211,33 +2201,33 @@ bool vtElevationGrid::LoadFromRAW(const char *szFileName, int width, int height,
 	int i, j, z;
 	void *data = &z;
 	int quiet;
-	for (j = 0; j < m_iSize.y; j++)
+	for (j = 0; j < m_iRows; j++)
 	{
 		if (progress_callback != NULL)
 		{
-			if (progress_callback(100*j/m_iSize.y))
+			if (progress_callback(100*j/m_iRows))
 			{
 				// Cancel
 				fclose(fp);
 				return false;
 			}
 		}
-		for (i = 0; i < m_iSize.x; i++)
+		for (i = 0; i < m_iColumns; i++)
 		{
 			if (bytes_per_element == 1)
 			{
 				quiet = fread(data, 1, 1, fp);
-				SetValue(i, m_iSize.y-1-j, *((uchar *)data));
+				SetValue(i, m_iRows-1-j, *((uchar *)data));
 			}
 			if (bytes_per_element == 2)
 			{
 				FRead(data, DT_SHORT, 1, fp, order);
-				SetFValue(i, m_iSize.y-1-j, *((short *)data) * vertical_units);
+				SetFValue(i, m_iRows-1-j, *((short *)data) * vertical_units);
 			}
 			if (bytes_per_element == 4)
 			{
 				FRead(data, DT_FLOAT, 1, fp, order);
-				SetFValue(i, m_iSize.y-1-j, *((float *)data) * vertical_units);
+				SetFValue(i, m_iRows-1-j, *((float *)data) * vertical_units);
 			}
 		}
 	}
@@ -2412,7 +2402,8 @@ bool vtElevationGrid::LoadFromMicroDEM(const char *szFileName, bool progress_cal
 	// set the corresponding vtElevationGrid info
 	m_bFloatMode = false;
 
-	m_iSize.Set(xsize, ysize);
+	m_iColumns = xsize;
+	m_iRows = ysize;
 
 	if (!_AllocateArray())
 		return false;
@@ -2642,7 +2633,7 @@ bool vtElevationGrid::LoadFromXYZ(FILE *fp, const char *pattern, bool progress_c
 
 	// Create the grid, then go back and read all the points
 	vtProjection unknown;
-	Create(extents, IPoint2(iColumns, iRows), !bInteger, unknown);
+	Create(extents, iColumns, iRows, !bInteger, unknown);
 
 	DPoint2 base(extents.left, extents.bottom);
 	DPoint2 spacing = GetSpacing();
@@ -2730,27 +2721,27 @@ bool vtElevationGrid::LoadFromHGT(const char *szFileName, bool progress_callback
 	m_bFloatMode = false;
 
 	if (b1arcsec)
-		m_iSize.x = m_iSize.y = 3601;
+		m_iColumns = m_iRows = 3601;
 	else
-		m_iSize.x = m_iSize.y = 1201;
+		m_iColumns = m_iRows = 1201;
 	if (!_AllocateArray())
 		return false;
 
 #define SWAP_2(x) ( (((x) & 0xff) << 8) | ((unsigned short)(x) >> 8) )
 
-	short *buf = new short[m_iSize.x];
+	short *buf = new short[m_iColumns];
 	short value;
 	int i, j;
-	for (j = 0; j < m_iSize.y; j++)
+	for (j = 0; j < m_iRows; j++)
 	{
 		if (progress_callback != NULL)
-			progress_callback(j * 100 / m_iSize.y);
+			progress_callback(j * 100 / m_iRows);
 
-		reader.read(buf, m_iSize.x * sizeof(short));
-		for (i = 0; i < m_iSize.x; i++)
+		reader.read(buf, m_iColumns * sizeof(short));
+		for (i = 0; i < m_iColumns; i++)
 		{
 			value = SWAP_2(buf[i]);
-			SetValue(i, m_iSize.y-1-j, value);
+			SetValue(i, m_iRows-1-j, value);
 		}
 	}
 	delete [] buf;
@@ -2783,19 +2774,19 @@ bool vtElevationGrid::SaveToSTM(const char *szFileName, bool progress_callback(i
 	if (!outf)
 		return false;
 
-	short *data = new short[m_iSize.x];
+	short *data = new short[m_iColumns];
 
 	bitTest test;
 	test.val = MAGIC_VALUE;
-	fprintf(outf, "STM %d %d %c%c%c%c", m_iSize.x, m_iSize.y,
+	fprintf(outf, "STM %d %d %c%c%c%c", m_iColumns, m_iRows,
 		test.bytes[0], test.bytes[1], test.bytes[2], test.bytes[3]);
 	fputc(0x0A, outf);
 
-	for (int j = 0; j < m_iSize.y; j++)
+	for (int j = 0; j < m_iRows; j++)
 	{
 		if (progress_callback != NULL)
-			progress_callback(j * 100 / m_iSize.y);
-		for (int i = 0; i < m_iSize.x; i++)
+			progress_callback(j * 100 / m_iRows);
+		for (int i = 0; i < m_iColumns; i++)
 		{
 			/* This byte swap is only necessary for PC and Alpha machines */
 			short val = (short) GetFValue(i, j);
@@ -2803,7 +2794,7 @@ bool vtElevationGrid::SaveToSTM(const char *szFileName, bool progress_callback(i
 			data[i] = val;
 			data[i] += 32767;
 		}
-		fwrite(data, sizeof(short), m_iSize.x, outf);
+		fwrite(data, sizeof(short), m_iColumns, outf);
 	}
 	delete [] data;
 	fclose(outf);
@@ -2827,8 +2818,8 @@ bool vtElevationGrid::SaveToPlanet(const char *szDirName, bool progress_callback
 		return false;
 
 	const int TILE_SIZE = 2048;
-	int xtiles = (m_iSize.x + TILE_SIZE - 1) / TILE_SIZE;
-	int ytiles = (m_iSize.y + TILE_SIZE - 1) / TILE_SIZE;
+	int xtiles = (m_iColumns + TILE_SIZE - 1) / TILE_SIZE;
+	int ytiles = (m_iRows + TILE_SIZE - 1) / TILE_SIZE;
 
 	for (int xtile = 0; xtile < xtiles; xtile++)
 	for (int ytile = 0; ytile < ytiles; ytile++)
@@ -2842,15 +2833,15 @@ bool vtElevationGrid::SaveToPlanet(const char *szDirName, bool progress_callback
 
 		int xbase = xtile * TILE_SIZE;
 		int ybase = ytile * TILE_SIZE;
-		int xsize = (xtile < xtiles-1) ? TILE_SIZE : m_iSize.x-xbase;
-		int ysize = (ytile < ytiles-1) ? TILE_SIZE : m_iSize.y-ybase;
+		int xsize = (xtile < xtiles-1) ? TILE_SIZE : m_iColumns-xbase;
+		int ysize = (ytile < ytiles-1) ? TILE_SIZE : m_iRows-ybase;
 
 		short* pixels = new short[xsize * ysize];
 		int idx = 0;
 		for (int j = 0; j < ysize; j++)
 		{
 			if ((j % 5) == 0 && progress_callback != NULL)
-				progress_callback(j * 100 / m_iSize.y);
+				progress_callback(j * 100 / m_iRows);
 
 			int y = ybase + ysize - 1 - j;	// flip order within block
 			for (int i = 0; i < xsize; i++)
@@ -2867,11 +2858,11 @@ bool vtElevationGrid::SaveToPlanet(const char *szDirName, bool progress_callback
 
 		// Planet uses cell-edge, not cell-center for its extents.  That is,
 		//  the area affected by the elevation grid points.
-		area.left = m_EarthExtents.left + (xbase * m_dStep.x) - (m_dStep.x / 2.0f);
-		area.right = area.left + (xsize * m_dStep.x);
+		area.left = m_EarthExtents.left + (xbase * m_dXStep) - (m_dXStep / 2.0f);
+		area.right = area.left + (xsize * m_dXStep);
 
-		area.bottom = m_EarthExtents.bottom + (ybase * m_dStep.y) - (m_dStep.y / 2.0f);
-		area.top = area.bottom + (ysize * m_dStep.y);
+		area.bottom = m_EarthExtents.bottom + (ybase * m_dYStep) - (m_dYStep / 2.0f);
+		area.top = area.bottom + (ysize * m_dYStep);
 
 		vtString fname2 = StartOfFilename(fname_dat);
 
@@ -2879,7 +2870,7 @@ bool vtElevationGrid::SaveToPlanet(const char *szDirName, bool progress_callback
 			(const char *) fname2,
 			area.left,   area.right,
 			area.bottom, area.top,
-			m_dStep.x);		// apparently spacing must be even in both directions
+			m_dXStep);		// apparently spacing must be even in both directions
 	}
 	fclose(indexfile);
 
@@ -2903,11 +2894,11 @@ bool vtElevationGrid::SaveToASC(const char *szFileName,
 	if (progress_callback != NULL) progress_callback(0);
 
 	// write dimension IDs
-	fprintf(fp, "ncols %d\n", m_iSize.x);
-	fprintf(fp, "nrows %d\n", m_iSize.y);
+	fprintf(fp, "ncols %d\n", m_iColumns);
+	fprintf(fp, "nrows %d\n", m_iRows);
 	fprintf(fp, "xllcorner %lf\n", m_EarthExtents.left);
 	fprintf(fp, "yllcorner %lf\n", m_EarthExtents.bottom);
-	fprintf(fp, "cellsize %lf\n", m_dStep.x);
+	fprintf(fp, "cellsize %lf\n", m_dXStep);
 
 	// Try to decrease filesize by choosing a nodata value appropriately
 	int nodata = INVALID_ELEVATION;
@@ -2930,9 +2921,9 @@ bool vtElevationGrid::SaveToASC(const char *szFileName,
 		//  existing values are all actually integral.  It's worth taking
 		//  a second to scan, as it makes a much smaller output file.
 		bWriteIntegers = true;
-		for (i = 0; i < m_iSize.y; i++)
+		for (i = 0; i < m_iRows; i++)
 		{
-			for (j = 0; j < m_iSize.x; j++)
+			for (j = 0; j < m_iColumns; j++)
 			{
 				z = GetFValue(j, i);
 				if (z == INVALID_ELEVATION)
@@ -2945,14 +2936,14 @@ bool vtElevationGrid::SaveToASC(const char *szFileName,
 		}
 	}
 	// Now we can write the actual data
-	for (i = 0; i < m_iSize.y; i++)
+	for (i = 0; i < m_iRows; i++)
 	{
 		if (progress_callback != NULL)
-			progress_callback(i*100/m_iSize.y);
+			progress_callback(i*100/m_iRows);
 
-		for (j = 0; j < m_iSize.x; j++)
+		for (j = 0; j < m_iColumns; j++)
 		{
-			z = GetFValue(j, m_iSize.y-1-i);
+			z = GetFValue(j, m_iRows-1-i);
 			if (z == INVALID_ELEVATION)
 				fprintf(fp, " %d", nodata);
 			else
@@ -3008,10 +2999,10 @@ bool vtElevationGrid::SaveToVRML(const char *szFileName, bool progress_callback(
 	fprintf(fp, "\t\t\t}\n");
 	fprintf(fp, "\t\t\tgeometry ElevationGrid\n");
 	fprintf(fp, "\t\t\t{\n");
-	fprintf(fp, "\t\t\t	xDimension %d\n", m_iSize.x);
-	fprintf(fp, "\t\t\t\txSpacing %f\n", m_fStep.x);
-	fprintf(fp, "\t\t\t\tzDimension %d\n", m_iSize.y);
-	fprintf(fp, "\t\t\t\tzSpacing %f\n", m_fStep.y);
+	fprintf(fp, "\t\t\t	xDimension %d\n", m_iColumns);
+	fprintf(fp, "\t\t\t\txSpacing %f\n", m_fXStep);
+	fprintf(fp, "\t\t\t\tzDimension %d\n", m_iRows);
+	fprintf(fp, "\t\t\t\tzSpacing %f\n", m_fZStep);
 	fprintf(fp, "\t\t\t\tsolid FALSE\n");
 	fprintf(fp, "\t\t\t\theight\n");
 	fprintf(fp, "\t\t\t\t[\n");
@@ -3028,9 +3019,9 @@ bool vtElevationGrid::SaveToVRML(const char *szFileName, bool progress_callback(
 		//  existing values are all actually integral.  It's worth taking
 		//  a second to scan, as it makes a much smaller output file.
 		bWriteIntegers = true;
-		for (i = 0; i < m_iSize.y; i++)
+		for (i = 0; i < m_iRows; i++)
 		{
-			for (j = 0; j < m_iSize.x; j++)
+			for (j = 0; j < m_iColumns; j++)
 			{
 				z = GetFValue(j, i);
 				if (z == INVALID_ELEVATION)
@@ -3043,17 +3034,17 @@ bool vtElevationGrid::SaveToVRML(const char *szFileName, bool progress_callback(
 		}
 	}
 	// Now we can write the actual data
-	for (i = 0; i < m_iSize.y; i++)
+	for (i = 0; i < m_iRows; i++)
 	{
 		if (progress_callback != NULL)
-			progress_callback(i*100/m_iSize.y);
+			progress_callback(i*100/m_iRows);
 
-		for (j = 0; j < m_iSize.x; j++)
+		for (j = 0; j < m_iColumns; j++)
 		{
 			if (j > 0 && (j%20) == 0)
 				fprintf(fp, "\n");
 
-			z = GetFValue(j, m_iSize.y-1-i);
+			z = GetFValue(j, m_iRows-1-i);
 			if (z == INVALID_ELEVATION)
 				fprintf(fp, " %d", (int) nodata);
 			else
@@ -3095,9 +3086,9 @@ bool vtElevationGrid::SaveToXYZ(const char *szFileName, bool progress_callback(i
 	bool bGeo = (m_proj.IsGeographic() != 0);
 
 	DPoint3 loc;
-	for (int i = 0; i < m_iSize.x; i++)
+	for (int i = 0; i < m_iColumns; i++)
 	{
-		for (int j = 0; j < m_iSize.y; j++)
+		for (int j = 0; j < m_iRows; j++)
 		{
 			GetEarthLocation(i, j, loc);
 			if (bGeo)
@@ -3128,13 +3119,13 @@ bool vtElevationGrid::SaveToRAWINF(const char *szFileName, bool progress_callbac
 	if (!fp)
 		return false;
 	int i, j;
-	for (j = 0; j < m_iSize.y; j++)
+	for (j = 0; j < m_iRows; j++)
 	{
 		if (progress_callback != NULL)
-			progress_callback(j * 100 / m_iSize.y);
-		for (i = 0; i < m_iSize.x; i++)
+			progress_callback(j * 100 / m_iRows);
+		for (i = 0; i < m_iColumns; i++)
 		{
-			float val = GetFValue(i, m_iSize.y-1-j);
+			float val = GetFValue(i, m_iRows-1-j);
 			short s = (short) val;
 			fwrite(&s, 1, sizeof(short), fp);
 		}
@@ -3166,10 +3157,10 @@ bool vtElevationGrid::SaveToRAWINF(const char *szFileName, bool progress_callbac
 	fprintf(fp, "  Lat               = %lf\n", m_EarthExtents.top);
 	// The longitude of the northwest corner of the bounding area.
 	fprintf(fp, "  Lon               = %lf\n", m_EarthExtents.left);
-	fprintf(fp, "  NumOfCellsPerLine = %d\n", m_iSize.x);
-	fprintf(fp, "  NumOfLines        = %d\n", m_iSize.y);
-	fprintf(fp, "  CellXdimensionDeg = %.16lf\n", m_EarthExtents.Width() / m_iSize.x);
-	fprintf(fp, "  CellYdimensionDeg = %.16lf\n", m_EarthExtents.Height() / m_iSize.y);
+	fprintf(fp, "  NumOfCellsPerLine = %d\n", m_iColumns);
+	fprintf(fp, "  NumOfLines        = %d\n", m_iRows);
+	fprintf(fp, "  CellXdimensionDeg = %.16lf\n", m_EarthExtents.Width() / m_iColumns);
+	fprintf(fp, "  CellYdimensionDeg = %.16lf\n", m_EarthExtents.Height() / m_iRows);
 	fprintf(fp, "  ScaleinMeters     = 1.0\n");
 	fclose(fp);
 
@@ -3231,14 +3222,14 @@ bool vtElevationGrid::SaveToPNG16(const char *fname)
 	int color_type = PNG_COLOR_TYPE_GRAY;
 	int png_bit_depth = 16;
 
-	png_set_IHDR(png_ptr, info_ptr, m_iSize.x, m_iSize.y, png_bit_depth, color_type,
+	png_set_IHDR(png_ptr, info_ptr, m_iColumns, m_iRows, png_bit_depth, color_type,
 		PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE);
 
 	/* Write the file header information.  REQUIRED */
 	png_write_info(png_ptr, info_ptr);
 
 	/* Write the image. */
-	png_uint_32 k, height = m_iSize.y, width = m_iSize.x;
+	png_uint_32 k, height = m_iRows, width = m_iColumns;
 	png_byte *image = (png_byte *)malloc(height * width * 2);
 	png_bytep *row_pointers = (png_bytep *)malloc(height * sizeof(png_bytep *));
 	for (k = 0; k < height; k++)

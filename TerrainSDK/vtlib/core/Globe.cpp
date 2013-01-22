@@ -145,11 +145,11 @@ void vtIcoGlobe::CreateMeshMat(int iTriangleCount)
 void vtIcoGlobe::CreateCoreMaterials()
 {
 	m_coremats = new vtMaterialArray;
-	m_red = m_coremats->AddRGBMaterial(RGBf(1.0f, 0.0f, 0.0f),	// red
+	m_red = m_coremats->AddRGBMaterial1(RGBf(1.0f, 0.0f, 0.0f),	// red
 					 false, false, true);
-	m_yellow = m_coremats->AddRGBMaterial(RGBf(1.0f, 1.0f, 0.0f),	// yellow
+	m_yellow = m_coremats->AddRGBMaterial1(RGBf(1.0f, 1.0f, 0.0f),	// yellow
 					 false, false, false);
-	m_white = m_coremats->AddRGBMaterial(RGBf(0.2f, 0.2f, 0.2f),
+	m_white = m_coremats->AddRGBMaterial1(RGBf(0.2f, 0.2f, 0.2f),
 					 true, true, true, 1);
 	m_coremats->at(m_white)->SetTransparent(true, true);
 }
@@ -171,7 +171,7 @@ vtMaterialArray *vtIcoGlobe::CreateMaterialsFromFiles(const vtString &strImagePr
 				float r = (pair+1) * (1.0f / 10);
 				float g = (j+1) * (1.0f / m_freq);
 				float b = (i+1) * (1.0f / m_freq);
-				m_globe_mat[mat++] = mats->AddRGBMaterial(RGBf(r, g, b),
+				m_globe_mat[mat++] = mats->AddRGBMaterial1(RGBf(r, g, b),
 						true, true);
 			}
 		}
@@ -224,7 +224,7 @@ vtMaterialArray *vtIcoGlobe::CreateMaterialsFromFiles(const vtString &strImagePr
 							bCulling, bLighting,
 							GetDepth(img) == 32, false,	// transp, additive
 							0.1f, 1.0f, 1.0f, 0.0f,		// ambient, diffuse, alpha, emmisive
-							true, false);		// clamp, mipmap
+							false, true, false);		// texgen, clamp, mipmap
 			}
 			else
 				index = -1;
@@ -251,8 +251,8 @@ vtMaterialArray *vtIcoGlobe::CreateMaterialsFromImages(vtImage **images)
 		int index = mats->AddTextureMaterial(img,
 					 bCulling, bLighting,
 					 img->GetDepth() == 32, false,	// transp, additive
-					 0.1f, 1.0f, 1.0f, 0.0f,		// ambient, diffuse, alpha, emmisive
-					 true, false);					// clamp, mipmap
+					 0.1f, 1.0f, 1.0f, 0.0f,	// ambient, diffuse, alpha, emmisive
+					 false, true, false);		// texgen, clamp, mipmap
 		m_globe_mat[pair] = index;
 	}
 	return mats;
@@ -328,13 +328,13 @@ void vtIcoGlobe::SetUnfolding(float f)
 	q1.Slerp(qnull, m_Rotation, 1-f);
 	q1.GetMatrix(m3);
 	m4 = m3;
-	m_top->SetTransform(m3);
+	m_top->SetTransform1(m3);
 
 	// interpolate from No rotation to the desired rotation
 	q2.Slerp(qnull, m_diff, f);
 	q2.GetMatrix(m3);
 	m4 = m3;
-	m_mface[0].xform->SetTransform(m3);
+	m_mface[0].xform->SetTransform1(m3);
 }
 
 void vtIcoGlobe::SetCulling(bool bCull)
@@ -349,7 +349,7 @@ void vtIcoGlobe::SetCulling(bool bCull)
 
 void vtIcoGlobe::SetLighting(bool bLight)
 {
-	for (uint i = 0; i < m_earthmats->size(); i++)
+	for (int i = 0; i < 10; i++)
 	{
 		vtMaterial *pApp = m_earthmats->at(m_globe_mat[i]);
 		pApp->SetLighting(bLight);
@@ -403,7 +403,7 @@ void vtIcoGlobe::SetTime(const vtTime &time)
 
 	// don't do time rotation on unfolded(ing) globes
 	if (!m_bUnfolded)
-		m_top->SetTransform(m4);
+		m_top->SetTransform1(m4);
 }
 
 void vtIcoGlobe::ShowAxis(bool bShow)
@@ -433,7 +433,7 @@ int vtIcoGlobe::AddGlobeFeatures(const char *fname, float fSize)
 	BuildSphericalFeatures(gl, fSize);
 	BuildFlatFeatures(gl, fSize);
 
-	return feat->NumEntities();
+	return feat->GetNumEntities();
 }
 
 void vtIcoGlobe::RemoveLayer(GlobeLayer *glay)
@@ -462,7 +462,7 @@ void vtIcoGlobe::BuildSphericalPoints(GlobeLayer *glay, float fSize)
 	int i, j, size;
 	vtArray<FSphere> spheres;
 
-	size = feat->NumEntities();
+	size = feat->GetNumEntities();
 	spheres.SetSize(size);
 
 	vtFeatureSetPoint2D *pSetP2 = dynamic_cast<vtFeatureSetPoint2D*>(feat);
@@ -575,13 +575,13 @@ void vtIcoGlobe::BuildSphericalPoints(GlobeLayer *glay, float fSize)
 		if (bArea)
 		{
 			// scale just the radius of the cylinder
-			mgeom->Scale(spheres[i].radius, 0.001f, spheres[i].radius);
+			mgeom->Scale3(spheres[i].radius, 0.001f, spheres[i].radius);
 		}
 		else
 		{
 			// scale just the height of the cylinder
 			double area = PIf * spheres[i].radius * spheres[i].radius;
-			mgeom->Scale(0.002f, (float)area*1000, 0.002f);
+			mgeom->Scale3(0.002f, (float)area*1000, 0.002f);
 		}
 		m_SurfaceGroup->addChild(mgeom);
 		glay->addChild(mgeom);
@@ -596,7 +596,7 @@ void vtIcoGlobe::BuildSphericalLines(GlobeLayer *glay, float fSize)
 		return;
 
 	int i, size;
-	size = feat->NumEntities();
+	size = feat->GetNumEntities();
 
 	vtGeode *geode = new vtGeode;
 	geode->setName("spherical lines");
@@ -620,7 +620,7 @@ void vtIcoGlobe::BuildSphericalPolygons(GlobeLayer *glay, float fSize)
 		return;
 
 	int i, size;
-	size = feat->NumEntities();
+	size = feat->GetNumEntities();
 
 	vtGeode *geode = new vtGeode;
 	geode->setName("spherical lines");
@@ -655,7 +655,7 @@ void vtIcoGlobe::BuildFlatFeatures(GlobeLayer *glay, float fSize)
 		}
 
 		int i, size;
-		size = feat->NumEntities();
+		size = feat->GetNumEntities();
 
 		for (i = 0; i < size; i++)
 			BuildFlatPoint(glay, i, fSize);
@@ -705,7 +705,7 @@ void vtIcoGlobe::BuildFlatPoint(GlobeLayer *glay, int i, float fSize)
 	mgeom->SetTrans(p_out);
 
 	// scale just the radius of the cylinder
-	mgeom->Scale(fSize, 0.001f, fSize);
+	mgeom->Scale3(fSize, 0.001f, fSize);
 
 	m_mface[mface].surfgroup->addChild(mgeom);
 	glay->addChild(mgeom);
@@ -798,8 +798,8 @@ double vtIcoGlobe::AddSurfaceLineToMesh(vtGeomFactory *pMF, const DLine2 &line)
 
 	for (i = 0; i < size-1; i++)
 	{
-		g1 = line[i];
-		g2 = line[i+1];
+		g1 = line.GetAt(i);
+		g2 = line.GetAt(i+1);
 
 		// for each pair of points, determine how many more points are needed
 		//  for a smooth arc
@@ -836,7 +836,7 @@ double vtIcoGlobe::AddSurfaceLineToMesh(vtGeomFactory *pMF, const DLine2 &line)
 	// last vertex
 	if (size > 1)
 	{
-		g2 = line[size-1];
+		g2 = line.GetAt(size-1);
 		geo_to_xyz(1.0, g2, p2);
 		pMF->AddVertex(p2 * scale);
 		length++;
@@ -1286,7 +1286,7 @@ void vtIcoGlobe::SetMeshConnect(int mface)
 
 	// translate vertices to set origin of this mface
 	int i;
-	int verts = mesh->NumVertices();
+	int verts = mesh->GetNumVertices();
 	FPoint3 pos;
 
 	FPoint3 edge_center = m_mface[mface].local_origin;
@@ -1298,9 +1298,9 @@ void vtIcoGlobe::SetMeshConnect(int mface)
 		mesh->SetVtxPos(i, pos);
 	}
 	if (parent_mface == 0)
-		xform->Translate(edge_center);
+		xform->Translate1(edge_center);
 	else
-		xform->Translate(edge_center - m_mface[parent_mface].local_origin);
+		xform->Translate1(edge_center - m_mface[parent_mface].local_origin);
 }
 
 void vtIcoGlobe::CreateUnfoldableDymax()
@@ -1380,7 +1380,7 @@ void vtIcoGlobe::CreateUnfoldableDymax()
 
 	// Show axis of rotation (north and south poles)
 	vtMaterialArray *pMats = new vtMaterialArray;
-	int green = pMats->AddRGBMaterial(RGBf(0,1,0), false, false);
+	int green = pMats->AddRGBMaterial1(RGBf(0,1,0), false, false);
 	m_pAxisGeom = new vtGeode;
 	m_pAxisGeom->setName("AxisGeom");
 	m_pAxisGeom->SetMaterials(pMats);
@@ -1664,7 +1664,7 @@ vtTransform *WireAxis(RGBf color, float len)
 	geode->setName("axis");
 
 	vtMaterialArray *pMats = new vtMaterialArray;
-	int index = pMats->AddRGBMaterial(color, false, false);
+	int index = pMats->AddRGBMaterial1(color, false, false);
 	geode->SetMaterials(pMats);
 
 	vtMesh *mesh = new vtMesh(osg::PrimitiveSet::LINES, 0, 6);
@@ -1692,7 +1692,7 @@ vtMovGeode *CreateSimpleEarth(const vtString &strDataPath)
 	mesh->CreateEllipsoid(FPoint3(0,0,0), size, res);
 
 	// fix up the texture coordinates
-	int numvtx = mesh->NumVertices();
+	int numvtx = mesh->GetNumVertices();
 	for (int i = 0; i < numvtx; i++)
 	{
 		FPoint2 coord;
@@ -1709,7 +1709,7 @@ vtMovGeode *CreateSimpleEarth(const vtString &strDataPath)
 	bool bCulling = false;
 	bool bLighting = false;
 	bool bTransp = false;
-	pMats->AddTextureMaterial(strDataPath + "WholeEarth/earth2k_free.jpg",
+	pMats->AddTextureMaterial2(strDataPath + "WholeEarth/earth2k_free.jpg",
 						 bCulling, bLighting, bTransp);
 	geode->SetMaterials(pMats);
 

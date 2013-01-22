@@ -1,7 +1,7 @@
 //
 // Name: LayerDlg.cpp
 //
-// Copyright (c) 2003-2013 Virtual Terrain Project
+// Copyright (c) 2003-2011 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -12,17 +12,14 @@
 #include "wx/wx.h"
 #endif
 
-#include "vtdata/vtLog.h"
-#include "vtdata/FileFilters.h"
 #include "vtlib/vtlib.h"
-#include "vtlib/core/Building3d.h"
 #include "vtlib/core/Terrain.h"
 #include "vtlib/core/Globe.h"
+#include "vtdata/vtLog.h"
 #include "vtui/Helper.h"	// for progress dialog
-
-#include "EnviroGUI.h"		// for GetCurrentTerrain
+#include "EnviroGUI.h"  // for GetCurrentTerrain
 #include "EnviroFrame.h"
-#include "EnviroCanvas.h"	// for EnableContinuousRendering
+#include "canvas.h"		// for EnableContinuousRendering
 #include "StyleDlg.h"
 #include "LayerDlg.h"
 
@@ -51,7 +48,6 @@
 
 #include "wxosg/icons/top.xpm"
 #include "icons/raw.xpm"
-#include "icons/elevation.xpm"
 #include "icons/raw_yellow.xpm"
 
 #define LocalIcon(X) wxIcon( (const char**) X##_xpm )
@@ -64,8 +60,7 @@
 #define ICON_INSTANCE	5
 #define ICON_TOP		6
 #define ICON_IMAGE		7
-#define ICON_ELEV		8
-#define ICON_RAW_YELLOW	9
+#define ICON_RAW_YELLOW	8
 
 /////////////////////////////
 
@@ -82,7 +77,7 @@
 BEGIN_EVENT_TABLE(LayerDlg,wxPanel)
 	EVT_INIT_DIALOG (LayerDlg::OnInitDialog)
 	EVT_TREE_SEL_CHANGED( ID_LAYER_TREE, LayerDlg::OnSelChanged )
-	EVT_TREE_ITEM_ACTIVATED( ID_LAYER_TREE, LayerDlg::OnItemActived )
+
 	EVT_CHECKBOX( ID_SHOW_ALL, LayerDlg::OnShowAll )
 	EVT_CHECKBOX( ID_LAYER_VISIBLE, LayerDlg::OnVisible )
 	EVT_CHECKBOX( ID_LAYER_SHADOW, LayerDlg::OnShadowVisible )
@@ -118,9 +113,9 @@ void LayerToolBarFunc(wxToolBar *bar)
     bar->AddTool( ID_LAYER_SAVE_AS, _("Save As"), wxBITMAP(save_as),	  wxNullBitmap, wxITEM_NORMAL, _("Save Layer As...") );
     bar->AddTool( ID_LAYER_DELETE, _("Delete"),	  wxBITMAP(delete1),	  wxNullBitmap, wxITEM_NORMAL, _("Delete Layer") );
     bar->AddSeparator();
-    bar->AddTool( ID_LAYER_ZOOM_TO, _("Zoom"),	  wxBITMAP(zoom_to),	  wxNullBitmap, wxITEM_NORMAL, _("Zoom To") );
+    bar->AddTool( ID_LAYER_ZOOM_TO, _("Zoom"),	  wxBITMAP(zoom_to),	  wxNullBitmap, wxITEM_NORMAL, _("Zoom to Layer") );
     bar->AddTool( ID_LAYER_VISIBLE, _("Visible"), wxBITMAP(eye),		  wxNullBitmap, wxITEM_CHECK, _("Toggle Layer Visibility") );
-    bar->AddTool( ID_LAYER_TABLE, wxT(""),		  wxBITMAP(grid),		  wxNullBitmap, wxITEM_NORMAL, _("Table of Features") );
+    bar->AddTool( ID_LAYER_TABLE, wxT(""),		  wxBITMAP(grid),		  wxNullBitmap, wxITEM_NORMAL, _("Table of Attributes") );
     bar->AddTool( ID_LAYER_SHADOW, _("Shadow"),	  wxBITMAP(shadow),		  wxNullBitmap, wxITEM_CHECK, _("Toggle Structure Shadow") );
     bar->AddTool( ID_LAYER_REFRESH, _("Refresh"), wxBITMAP(refresh),	  wxNullBitmap, wxITEM_NORMAL, _("Refresh") );
     bar->AddSeparator();
@@ -134,11 +129,7 @@ LayerDlg::LayerDlg( wxWindow *parent, wxWindowID id, const wxString &title,
 	const wxPoint &position, const wxSize& size, long style ) :
 	wxPanel( parent, id, position, size, style )
 {
-	m_pTerrain = NULL;
-	m_bShowAll = false;
-	m_imageListNormal = NULL;
-
-	const long tbstyle = wxTB_FLAT | wxTB_NODIVIDER;
+	long tbstyle = wxTB_FLAT | wxTB_NODIVIDER;
 	//tbstyle |= wxTB_HORZ_TEXT;
 	m_pToolbar = new wxToolBar(this, wxID_ANY, wxDefaultPosition, wxDefaultSize, tbstyle);
 	m_pToolbar->SetToolBitmapSize(wxSize(20, 20));
@@ -172,6 +163,9 @@ LayerDlg::LayerDlg( wxWindow *parent, wxWindowID id, const wxString &title,
 
 	m_main->SetSizer( item0 );
 
+	m_bShowAll = false;
+	m_imageListNormal = NULL;
+
 	CreateImageList(16);
 
 	// Note that the sizer for the _main_ pain informs the window of its
@@ -198,7 +192,7 @@ void LayerDlg::CreateImageList(int size)
 	// Make an image list containing small icons
 	m_imageListNormal = new wxImageList(size, size, TRUE);
 
-	wxIcon icons[10];
+	wxIcon icons[9];
 	icons[0] = wxICON(building);		// ICON_BUILDING
 	icons[1] = wxICON(road);			// ICON_ROAD
 	icons[2] = wxICON(veg1);			// ICON_VEG1
@@ -207,8 +201,7 @@ void LayerDlg::CreateImageList(int size)
 	icons[5] = wxICON(instance);		// ICON_INSTANCE
 	icons[6] = LocalIcon(top);			// ICON_TOP
 	icons[7] = wxICON(image);			// ICON_IMAGE
-	icons[8] = LocalIcon(elevation);	// ICON_ELEV
-	icons[9] = LocalIcon(raw_yellow);	// ICON_RAW_YELLOW
+	icons[8] = LocalIcon(raw_yellow);	// ICON_RAW_YELLOW
 
 	int sizeOrig = icons[0].GetWidth();
 	for ( size_t i = 0; i < WXSIZEOF(icons); i++ )
@@ -245,7 +238,7 @@ osg::Node *LayerDlg::GetNodeFromItem(wxTreeItemId item, bool bContainer)
 		return NULL;
 
 	vtStructure3d *str3d = data->m_slay->GetStructure3d(data->m_item);
-	vtStructure *str = data->m_slay->at(data->m_item);
+	vtStructure *str = data->m_slay->GetAt(data->m_item);
 	vtStructureType typ = str->GetType();
 
 	if (bContainer && typ != ST_LINEAR)
@@ -309,7 +302,7 @@ wxString MakeVegLayerString(vtPlantInstanceArray3d &pia)
 {
 	wxString str(pia.GetFilename(), wxConvUTF8);
 	wxString str2;
-	str2.Printf(_(" (Plants: %d)"), pia.NumEntities());
+	str2.Printf(_(" (Plants: %d)"), pia.GetNumEntities());
 	str += str2;
 	return str;
 }
@@ -327,7 +320,7 @@ void MakeAbsLayerString(vtAbstractLayer *alay, wxString &str,
 	str += wxString(OGRGeometryTypeToName(fset->GetGeomType()), wxConvLibc);
 
 	str += _(", Features: ");
-	vs.Format("%d", fset->NumEntities());
+	vs.Format("%d", fset->GetNumEntities());
 	str += wxString(vs, wxConvLibc);
 
 	selected = fset->NumSelected();
@@ -343,69 +336,36 @@ void MakeAbsLayerString(vtAbstractLayer *alay, wxString &str,
 
 void LayerDlg::RefreshTreeTerrain()
 {
-	if (!m_pTerrain)
+	vtTerrain *terr = GetCurrentTerrain();
+	if (!terr)
 		return;
 
 	m_root = m_pTree->AddRoot(_("Layers"), ICON_TOP, ICON_TOP);
 
 	wxString str;
 	vtString vs;
-	LayerSet &layers = m_pTerrain->GetLayers();
-	for (uint i = 0; i < layers.size(); i++)
+	uint i, j;
+	LayerSet &layers = terr->GetLayers();
+	for (i = 0; i < layers.size(); i++)
 	{
-		vtLayer *layer = layers[i].get();
-		LayerItemData *lid;
-		int icon;
-
-		// Structure layers
-		vtStructureLayer *slay = dynamic_cast<vtStructureLayer*>(layer);
+		vtStructureLayer *slay = dynamic_cast<vtStructureLayer*>(layers[i].get());
 		if (slay)
 		{
 			str = wxString(slay->GetFilename(), wxConvUTF8);
-			icon = ICON_BUILDING;
-			wxTreeItemId hLayer = m_pTree->AppendItem(m_root, str, icon, icon);
-			if (slay == m_pTerrain->GetStructureLayer())
+			wxTreeItemId hLayer = m_pTree->AppendItem(m_root, str, ICON_BUILDING, ICON_BUILDING);
+			if (slay == terr->GetStructureLayer())
 				m_pTree->SetItemBold(hLayer, true);
-			lid = new LayerItemData(slay, i, -1);
-			lid->m_text = str;
-			lid->m_icon = icon;
-			m_pTree->SetItemData(hLayer, lid);
+			m_pTree->SetItemData(hLayer, new LayerItemData(slay, i, -1));
 
 			wxTreeItemId hItem;
 			if (m_bShowAll)
 			{
-				for (uint j = 0; j < slay->size(); j++)
+				for (j = 0; j < slay->GetSize(); j++)
 				{
-					vtBuilding *bld = slay->GetBuilding(j);
-					if (bld)
-					{
-						vtString value;
-						wxString label;
-						if (bld->GetValueString("id", value))
-						{
-							label += _("id: ");
-							label += wxString::FromUTF8(value);
-						}
-						if (bld->GetValueString("name", value))
-						{
-							if (label != _T(""))
-								label += _T(", ");
-							label += _("name: ");
-							label += _T("'");
-							label += wxString::FromUTF8(value);
-							label += _T("'");
-						}
-						if (label == _T(""))
-							label = _("Building");
-
-						icon = ICON_BUILDING;
-						hItem = m_pTree->AppendItem(hLayer, label, icon, icon);
-					}
+					if (slay->GetBuilding(j))
+						hItem = m_pTree->AppendItem(hLayer, _("Building"), ICON_BUILDING, ICON_BUILDING);
 					if (slay->GetFence(j))
-					{
-						icon = ICON_FENCE;
-						hItem = m_pTree->AppendItem(hLayer, _("Fence"), icon, icon);
-					}
+						hItem = m_pTree->AppendItem(hLayer, _("Fence"), ICON_FENCE, ICON_FENCE);
 					if (vtStructInstance *inst = slay->GetInstance(j))
 					{
 						vs = inst->GetValueString("filename", true);
@@ -420,19 +380,15 @@ void LayerDlg::RefreshTreeTerrain()
 							str = _("Item ");
 							str += wxString((const char *)vs, wxConvUTF8);
 						}
-						icon = ICON_INSTANCE;
-						hItem = m_pTree->AppendItem(hLayer, str, icon, icon);
+						hItem = m_pTree->AppendItem(hLayer, str, ICON_INSTANCE, ICON_INSTANCE);
 					}
-					lid = new LayerItemData(slay, i, j);
-					lid->m_text = str;
-					lid->m_icon = icon;
-					m_pTree->SetItemData(hItem, lid);
+					m_pTree->SetItemData(hItem, new LayerItemData(slay, i, j));
 				}
 			}
 			else
 			{
 				int bld = 0, fen = 0, inst = 0;
-				for (uint j = 0; j < slay->size(); j++)
+				for (j = 0; j < slay->GetSize(); j++)
 				{
 					if (slay->GetBuilding(j)) bld++;
 					if (slay->GetFence(j)) fen++;
@@ -441,95 +397,56 @@ void LayerDlg::RefreshTreeTerrain()
 				if (bld)
 				{
 					str.Printf(_("Buildings: %d"), bld);
-					icon = ICON_BUILDING;
-					hItem = m_pTree->AppendItem(hLayer, str, icon, icon);
-					lid = new LayerItemData(slay, i, -1);
-					lid->m_text = str;
-					lid->m_icon = icon;
-					m_pTree->SetItemData(hItem, lid);
+					hItem = m_pTree->AppendItem(hLayer, str, ICON_BUILDING, ICON_BUILDING);
+					m_pTree->SetItemData(hItem, new LayerItemData(slay, i, -1));
 				}
 				if (fen)
 				{
 					str.Printf(_("Fences: %d"), fen);
-					icon = ICON_FENCE;
-					hItem = m_pTree->AppendItem(hLayer, str, icon, icon);
-					lid = new LayerItemData(slay, i, -1);
-					lid->m_text = str;
-					lid->m_icon = icon;
-					m_pTree->SetItemData(hItem, lid);
+					hItem = m_pTree->AppendItem(hLayer, str, ICON_FENCE, ICON_FENCE);
+					m_pTree->SetItemData(hItem, new LayerItemData(slay, i, -1));
 				}
 				if (inst)
 				{
 					str.Printf(_("Instances: %d"), inst);
-					icon = ICON_INSTANCE;
-					hItem = m_pTree->AppendItem(hLayer, str, icon, icon);
-					lid = new LayerItemData(slay, i, -1);
-					lid->m_text = str;
-					lid->m_icon = icon;
-					m_pTree->SetItemData(hItem, lid);
+					hItem = m_pTree->AppendItem(hLayer, str, ICON_INSTANCE, ICON_INSTANCE);
+					m_pTree->SetItemData(hItem, new LayerItemData(slay, i, -1));
 				}
 			}
 			m_pTree->Expand(hLayer);
 		}
 
 		// Now, abstract layers
-		vtAbstractLayer *alay = dynamic_cast<vtAbstractLayer*>(layer);
+		vtAbstractLayer *alay = dynamic_cast<vtAbstractLayer*>(layers[i].get());
 		if (alay)
 		{
 			wxString str;
 			uint selected;
 			MakeAbsLayerString(alay, str, selected);
 
-			icon = (selected != 0 ? ICON_RAW_YELLOW : ICON_RAW);
+			int icon = (selected != 0 ? ICON_RAW_YELLOW : ICON_RAW);
 			wxTreeItemId hLayer = m_pTree->AppendItem(m_root, str, icon, icon);
 			vtFeatureSet *fset = alay->GetFeatureSet();
-			lid = new LayerItemData(alay, fset);
-			lid->m_text = str;
-			lid->m_icon = icon;
-			m_pTree->SetItemData(hLayer, lid);
+			m_pTree->SetItemData(hLayer, new LayerItemData(alay, fset));
 		}
-		// Image layers
-		vtImageLayer *ilay = dynamic_cast<vtImageLayer*>(layer);
+		vtImageLayer *ilay = dynamic_cast<vtImageLayer*>(layers[i].get());
 		if (ilay)
 		{
 			vs = ilay->GetLayerName();
 			str = wxString(vs, wxConvUTF8);
 
-			icon = ICON_IMAGE;
-			wxTreeItemId hLayer = m_pTree->AppendItem(m_root, str, icon, icon);
-			lid = new LayerItemData(ilay);
-			lid->m_text = str;
-			lid->m_icon = icon;
-			m_pTree->SetItemData(hLayer, lid);
-		}
-		// Vegetation
-		vtVegLayer *vlay = dynamic_cast<vtVegLayer*>(layer);
-		if (vlay)
-		{
-			str = MakeVegLayerString(*vlay);
-
-			icon = ICON_VEG1;
-			wxTreeItemId hLayer = m_pTree->AppendItem(m_root, str, icon, icon);
-			lid = new LayerItemData(vlay);
-			lid->m_text = str;
-			lid->m_icon = icon;
-			m_pTree->SetItemData(hLayer, lid);
-		}
-		// Elevation
-		vtElevLayer *elay = dynamic_cast<vtElevLayer*>(layer);
-		if (elay)
-		{
-			vs = elay->GetLayerName();
-			str = wxString(vs, wxConvUTF8);
-
-			icon = ICON_ELEV;
-			wxTreeItemId hLayer = m_pTree->AppendItem(m_root, str, icon, icon);
-			lid = new LayerItemData(elay);
-			lid->m_text = str;
-			lid->m_icon = icon;
-			m_pTree->SetItemData(hLayer, lid);
+			wxTreeItemId hLayer = m_pTree->AppendItem(m_root, str, ICON_IMAGE, ICON_IMAGE);
+			m_pTree->SetItemData(hLayer, new LayerItemData(ilay));
 		}
 	}
+
+	// Vegetation: always show
+	vtPlantInstanceArray3d &pia = terr->GetPlantInstances();
+	str = MakeVegLayerString(pia);
+
+	wxTreeItemId hLayer = m_pTree->AppendItem(m_root, str, ICON_VEG1, ICON_VEG1);
+	m_pTree->SetItemData(hLayer, new LayerItemData(LT_VEG));
+
 	m_pTree->Expand(m_root);
 }
 
@@ -538,7 +455,8 @@ void LayerDlg::RefreshTreeTerrain()
 //
 void LayerDlg::UpdateTreeTerrain()
 {
-	if (!m_pTerrain)
+	vtTerrain *terr = GetCurrentTerrain();
+	if (!terr)
 		return;
 
 	if (!m_root.IsOk())
@@ -547,56 +465,37 @@ void LayerDlg::UpdateTreeTerrain()
 	wxTreeItemIdValue cookie;
 	wxTreeItemId id;
 	int count = 0;
-	for (id = m_pTree->GetFirstChild(m_root, cookie); id.IsOk();
+	for (id = m_pTree->GetFirstChild(m_root, cookie);
+		id.IsOk();
 		id = m_pTree->GetNextChild(m_root, cookie))
 	{
 		LayerItemData *data = GetLayerDataFromItem(id);
 
 		if (data)
 		{
-			wxString str;
-
-			// Hightlight the active layer in Bold
-			if (data->m_layer && data->m_layer == m_pTerrain->GetActiveLayer())
-			{
-				if (!m_pTree->IsBold(id))
-					m_pTree->SetItemBold(id, true);
-			}
+			// Hightlight the active structure layer in Bold
+			if (data->m_slay && data->m_slay == terr->GetStructureLayer() && data->m_item == -1)
+				m_pTree->SetItemBold(id, true);
 			else
-			{
-				if (m_pTree->IsBold(id))
-					m_pTree->SetItemBold(id, false);
-			}
+				m_pTree->SetItemBold(id, false);
 
 			// Refresh the vegetation count
-			if (data->m_vlay)
+			if (data->m_type == LT_VEG)
 			{
-				str = MakeVegLayerString(*(data->m_vlay));
-				if (str != data->m_text)
-				{
-					data->m_text = str;
-					m_pTree->SetItemText(id, str);
-				}
-				m_pTree->SetItemImage(id, ICON_VEG1);
+				vtPlantInstanceArray3d &pia = terr->GetPlantInstances();
+				m_pTree->SetItemText(id, MakeVegLayerString(pia));
 			}
 
 			// Update text and icon for abstract layers
 			if (data->m_alay)
 			{
+				wxString str;
 				uint selected;
 				MakeAbsLayerString(data->m_alay, str, selected);
 				int icon = (selected != 0 ? ICON_RAW_YELLOW : ICON_RAW);
 
-				if (str != data->m_text)
-				{
-					data->m_text = str;
-					m_pTree->SetItemText(id, str);
-				}
-				if (icon != data->m_icon)
-				{
-					data->m_icon = icon;
-					m_pTree->SetItemImage(id, icon);
-				}
+				m_pTree->SetItemText(id, str);
+				m_pTree->SetItemImage(id, icon);
 			}
 		}
 		count++;
@@ -622,7 +521,7 @@ void LayerDlg::RefreshTreeSpace()
 		m_pTree->SetItemData(hItem, new LayerItemData(glay));
 
 		OGRwkbGeometryType type = feat->GetGeomType();
-		int num = feat->NumEntities();
+		int num = feat->GetNumEntities();
 		str.Printf(_T("%d "), num);
 		if (type == wkbPoint)
 			str += _T("Point");
@@ -656,7 +555,7 @@ void LayerDlg::OnLayerRemove( wxCommandEvent &event )
 			g_App.OnSetDelete(data->m_alay->GetFeatureSet());
 
 		OpenProgressDialog(_T("Deleting layer"), false, this);
-		m_pTerrain->RemoveLayer(data->m_layer, progress_callback);
+		GetCurrentTerrain()->RemoveLayer(data->m_layer, progress_callback);
 		CloseProgressDialog();
 	}
 	else if (data->m_glay != NULL)
@@ -668,42 +567,33 @@ void LayerDlg::OnLayerRemove( wxCommandEvent &event )
 
 void LayerDlg::OnLayerCreate( wxCommandEvent &event )
 {
-	if (!m_pTerrain)
+	vtTerrain *pTerr = GetCurrentTerrain();
+	if (!pTerr)
 		return;
 
 	wxArrayString choices;
 	choices.Add(_("Abstract (Points with labels)"));
 	choices.Add(_("Structure"));
-	choices.Add(_("Vegetation"));
 	int index = wxGetSingleChoiceIndex(_("Layer type:"), _("Create new layer"), choices, this);
 	if (index == 0)
 	{
-		if (CreateNewAbstractPointLayer(m_pTerrain))
+		if (CreateNewAbstractPointLayer(pTerr))
 			RefreshTreeContents();
 	}
 	else if (index == 1)
 	{
 		// make a new structure layer
-		vtStructureLayer *slay = m_pTerrain->NewStructureLayer();
+		vtStructureLayer *slay = pTerr->NewStructureLayer();
 		slay->SetFilename("Untitled.vtst");
-		m_pTerrain->SetActiveLayer(slay);
-		RefreshTreeContents();
-	}
-	else if (index == 2)
-	{
-		// make a new veg layer
-		vtVegLayer *vlay = m_pTerrain->NewVegLayer();
-		vlay->SetFilename("Untitled.vf");
-		m_pTerrain->SetActiveLayer(vlay);
+		slay->m_proj = pTerr->GetProjection();
 		RefreshTreeContents();
 	}
 }
 
 //Helper
-bool SaveAbstractLayer(vtAbstractLayer *alay, bool bAskFilename)
+bool SaveAbstractLayer(vtFeatureSet *set, bool bAskFilename)
 {
-	vtFeatureSet *fset = alay->GetFeatureSet();
-	vtString fname = fset->GetFilename();
+	vtString fname = set->GetFilename();
 
 	if (bAskFilename)
 	{
@@ -715,7 +605,7 @@ bool SaveAbstractLayer(vtAbstractLayer *alay, bool bAskFilename)
 
 		EnableContinuousRendering(false);
 		wxFileDialog saveFile(NULL, _("Save Abstract Data"), default_dir,
-			default_file, FSTRING_SHP, wxFD_SAVE);
+			default_file, _("GIS Files (*.shp)|*.shp"), wxFD_SAVE);
 		bool bResult = (saveFile.ShowModal() == wxID_OK);
 		EnableContinuousRendering(true);
 		if (!bResult)
@@ -725,14 +615,14 @@ bool SaveAbstractLayer(vtAbstractLayer *alay, bool bAskFilename)
 		}
 		wxString str = saveFile.GetPath();
 		fname = str.mb_str(wxConvUTF8);
-		fset->SetFilename(fname);
+		set->SetFilename(fname);
 	}
-	bool success = fset->SaveToSHP(fname);
+	bool success = set->SaveToSHP(fname);
 
-	if (success)
-		alay->SetModified(false);
-	else
+	if (!success)
+	{
 		wxMessageBox(_("Couldn't save layer."));
+	}
 
 	return success;
 }
@@ -743,15 +633,18 @@ void LayerDlg::OnLayerLoad( wxCommandEvent &event )
 
 	bool bTerrain = (g_App.m_state == AS_Terrain);
 
-	wxString filter = _("Layer Formats|");
-	AddType(filter, FSTRING_SHP);
+	wxString filter = _("GIS Files (*.shp)|*.shp");
 	if (bTerrain)
 	{
-		AddType(filter, FSTRING_VTST);
-		AddType(filter, FSTRING_VF);
+		filter += _T("|");
+		filter += _("Structure Files (*.vtst)|*.vtst");
+		filter += _T("|");
+		filter += _("All supported layer formats (*.shp;*.vtst)|*.shp;*.vtst");
 	}
 
 	wxFileDialog loadFile(NULL, _("Load Layer"), _T(""), _T(""), filter, wxFD_OPEN);
+	if (bTerrain)
+		loadFile.SetFilterIndex(2);
 	bool bResult = (loadFile.ShowModal() == wxID_OK);
 	if (!bResult)
 		return;
@@ -764,7 +657,8 @@ void LayerDlg::OnLayerLoad( wxCommandEvent &event )
 
 	if (bTerrain)
 	{
-		vtLayer *lay = m_pTerrain->LoadLayer(fname);
+		vtTerrain *terr = GetCurrentTerrain();
+		vtLayer *lay = terr->LoadLayer(fname);
 
 		if (!lay)
 		{
@@ -772,13 +666,16 @@ void LayerDlg::OnLayerLoad( wxCommandEvent &event )
 			return;
 		}
 
-		// Abstract layers aren't constructed yet, giving us a chance to ask
-		// for styling.
+		vtStructureLayer *slay = dynamic_cast<vtStructureLayer*>(lay);
 		vtAbstractLayer *alay = dynamic_cast<vtAbstractLayer*>(lay);
+
+		if (slay)
+			terr->CreateStructures(slay);
+
 		if (alay)
 		{
 			// Ask style for the newly loaded layer
-			vtTagArray &props = alay->Props();
+			vtTagArray &props = alay->GetProperties();
 
 			StyleDlg dlg(NULL, -1, _("Style"), wxDefaultPosition, wxDefaultSize,
 				wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER);
@@ -787,14 +684,14 @@ void LayerDlg::OnLayerLoad( wxCommandEvent &event )
 			if (dlg.ShowModal() != wxID_OK)
 			{
 				// The layer is reference-counted, so it will be freed when we remove it
-				m_pTerrain->GetLayers().Remove(alay);
+				terr->GetLayers().Remove(alay);
 				return;
 			}
 			// Copy all the style attributes to the new featureset
 			VTLOG1("  Setting featureset properties.\n");
 			dlg.GetOptions(props);
 
-			m_pTerrain->CreateAbstractLayerVisuals(alay);
+			alay->CreateStyledFeatures();
 		}
 
 		if (lay)
@@ -823,13 +720,16 @@ void LayerDlg::OnLayerSave( wxCommandEvent &event )
 
 	bool bSaved = false;
 	if (data->m_type == LT_STRUCTURE && data->m_slay != NULL)
+	{
+		GetCurrentTerrain()->SetStructureLayer(data->m_slay);
 		bSaved = g_App.SaveStructures(false);	// don't ask for filename
+	}
 
 	if (data->m_type == LT_VEG)
 		bSaved = g_App.SaveVegetation(false);	// don't ask for filename
 
-	if (data->m_type == LT_ABSTRACT)
-		bSaved = SaveAbstractLayer(data->m_alay, false);	// don't ask for filename
+	if (data->m_fset)
+		bSaved = SaveAbstractLayer(data->m_fset, false);	// don't ask for filename
 
 	// Update the (*) next to the modified layer name
 	if (bSaved)
@@ -851,8 +751,8 @@ void LayerDlg::OnLayerSaveAs( wxCommandEvent &event )
 	if (data->m_type == LT_VEG)
 		bSaved = g_App.SaveVegetation(true);	// ask for filename
 
-	if (data->m_type == LT_ABSTRACT)
-		bSaved = SaveAbstractLayer(data->m_alay, true);	// ask for filename
+	if (data->m_fset)
+		bSaved = SaveAbstractLayer(data->m_fset, true);	// ask for filename
 
 	// The filename may have changed
 	if (bSaved)
@@ -875,8 +775,8 @@ void LayerDlg::OnZoomTo( wxCommandEvent &event )
 		float alpha = smallest / 2.0f;
 		float distance = sphere.radius / tanf(alpha);
 		pCam->Identity();
-		pCam->Rotate(FPoint3(1,0,0), -PID2f/2);	// tilt down a little
-		pCam->Translate(sphere.center);
+		pCam->Rotate2(FPoint3(1,0,0), -PID2f/2);	// tilt down a little
+		pCam->Translate1(sphere.center);
 		pCam->TranslateLocal(FPoint3(0.0f, 0.0f, distance));
 	}
 }
@@ -885,6 +785,14 @@ void LayerDlg::OnShadowVisible( wxCommandEvent &event)
 {
 	bool bShow = event.IsChecked();
 
+#if OLD_OSG_SHADOWS
+	osg::Node *pThing = GetNodeFromItem(m_item);
+	if (pThing)
+	{
+		vtGetScene()->ShadowVisibleNode(pThing, bVis);
+		vtGetScene()->ComputeShadows();
+	}
+#else
 	LayerItemData *data = GetLayerDataFromItem(m_item);
 	if (!data)
 		return;
@@ -897,7 +805,7 @@ void LayerDlg::OnShadowVisible( wxCommandEvent &event)
 			vtStructure3d *str3d = slay->GetStructure3d(data->m_item);
 			str3d->SetCastShadow(bShow);
 
-			vtStructure *str = slay->at(data->m_item);
+			vtStructure *str = slay->GetAt(data->m_item);
 			// remember state
 			if (!bShow)
 				str->SetValueBool("shadow", false);
@@ -911,10 +819,29 @@ void LayerDlg::OnShadowVisible( wxCommandEvent &event)
 			// whole layer is selected
 			slay->SetShadows(bShow);
 	}
+#endif
 }
 
 void LayerDlg::OnUpdateShadow(wxUpdateUIEvent& event)
 {
+#if OLD_OSG_SHADOWS
+	bool bShadows = false;
+	osg::Node *pThing = NULL;
+
+	LayerItemData *data = GetLayerDataFromItem(m_item);
+	if (data && data->m_slay)
+	{
+		pThing = GetNodeFromItem(m_item);
+		vtTerrain *terr = GetCurrentTerrain();
+		bShadows = (terr && terr->GetParams().GetValueBool(STR_STRUCT_SHADOWS) &&
+			pThing != NULL);
+	}
+
+	event.Enable(bShadows);
+
+	if (pThing)
+		event.Check(vtGetScene()->IsShadowVisibleNode(pThing));
+#else
 	LayerItemData *data = GetLayerDataFromItem(m_item);
 	if (!data)
 	{
@@ -938,7 +865,7 @@ void LayerDlg::OnUpdateShadow(wxUpdateUIEvent& event)
 	else
 	{
 		// whole layer is selected
-		int count = slay->size();
+		int count = slay->GetSize();
 		if (count)
 		{
 			// just use first item
@@ -949,6 +876,7 @@ void LayerDlg::OnUpdateShadow(wxUpdateUIEvent& event)
 		else
 			event.Enable(false);
 	}
+#endif
 }
 
 void LayerDlg::OnVisible( wxCommandEvent &event )
@@ -957,8 +885,6 @@ void LayerDlg::OnVisible( wxCommandEvent &event )
 
 	if (g_App.m_state == AS_Terrain)
 	{
-		// Structure layers are special because they have items which can be
-		// individually shown/hidden:
 		vtStructureLayer *slay = GetStructureLayerFromItem(m_item);
 		osg::Node *pThing = GetNodeFromItem(m_item);
 		if (pThing && slay != NULL)
@@ -966,8 +892,6 @@ void LayerDlg::OnVisible( wxCommandEvent &event )
 			SetEnabled(pThing, bVis);
 			return;
 		}
-
-		// General case is to show/hide the whole layer.
 		vtLayer *lay = GetLayerFromItem(m_item);
 		if (lay)
 			lay->SetVisible(bVis);
@@ -1069,14 +993,15 @@ void LayerDlg::OnShowAll( wxCommandEvent &event )
 	{
 		// Count all the structures in all the layers
 		int total = 0;
-		if (!m_pTerrain)
+		vtTerrain *terr = GetCurrentTerrain();
+		if (!terr)
 			return;
-		LayerSet &layers = m_pTerrain->GetLayers();
+		LayerSet &layers = terr->GetLayers();
 		for (uint i = 0; i < layers.size(); i++)
 		{
 			vtStructureLayer *slay = dynamic_cast<vtStructureLayer*>(layers[i].get());
 			if (slay)
-				total += slay->size();
+				total += slay->GetSize();
 		}
 		if (total > 5000)
 		{
@@ -1103,24 +1028,18 @@ void LayerDlg::OnSelChanged( wxTreeEvent &event )
 	m_item = event.GetItem();
 
 	LayerItemData *data = GetLayerDataFromItem(m_item);
-	if (data && data->m_layer != NULL)
+	if (data && data->m_slay != NULL)
 	{
-		vtLayer *newlay = data->m_layer;
-		vtLayer *oldlay = m_pTerrain->GetActiveLayer();
+		vtStructureLayer *newlay = data->m_slay;
+		vtStructureLayer *oldlay = GetCurrentTerrain()->GetStructureLayer();
 		if (newlay != oldlay)
 		{
-			m_pTerrain->SetActiveLayer(newlay);
+			GetCurrentTerrain()->SetStructureLayer(newlay);
 			UpdateTreeTerrain();
 		}
 	}
 
 	UpdateEnabling();
-}
-
-void LayerDlg::OnItemActived( wxTreeEvent &event )
-{
-	// The item was activated (double click, enter, space)
-	OnZoomTo(event);
 }
 
 void LayerDlg::UpdateEnabling()
@@ -1141,9 +1060,9 @@ void LayerDlg::UpdateEnabling()
 		if (data->m_type == LT_ABSTRACT)
 			bRemovable = bSaveable = true;
 
-		// We can save a vegetation layer
+		// We can save (but not remove) a vegetation layer
 		if (data->m_type == LT_VEG)
-			bRemovable = bSaveable = true;
+			bSaveable = true;
 	}
 
 	m_pToolbar->EnableTool(ID_LAYER_TABLE, (data && data->m_alay));

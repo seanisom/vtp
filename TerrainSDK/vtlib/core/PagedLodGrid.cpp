@@ -195,7 +195,7 @@ vtPagedStructureLOD *vtPagedStructureLodGrid::FindPagedCellParent(const FPoint3 
 	if (a < 0 || a >= m_dim || b < 0 || b >= m_dim)
 		return NULL;
 
-	const int i = CellIndex(a, b);
+	int i = CellIndex(a, b);
 	if (!m_pCells[i])
 		AllocateCell(a, b);
 
@@ -232,10 +232,10 @@ vtPagedStructureLOD *vtPagedStructureLodGrid::FindGroup(vtStructure *str)
 	if (str->GetExtents(rect))
 	{
 		float xmin, xmax, zmin, zmax;
-		m_pHeightField->m_Conversion.convert_earth_to_local_xz(rect.left, rect.bottom, xmin, zmin);
-		m_pHeightField->m_Conversion.convert_earth_to_local_xz(rect.right, rect.top, xmax, zmax);
+		g_Conv.convert_earth_to_local_xz(rect.left, rect.bottom, xmin, zmin);
+		g_Conv.convert_earth_to_local_xz(rect.right, rect.top, xmax, zmax);
 
-		const FPoint3 mid((xmin+xmax) / 2, 0.0f, (zmin+zmax)/2);
+		FPoint3 mid((xmin+xmax) / 2, 0.0f, (zmin+zmax)/2);
 
 		return FindPagedCellParent(mid);
 	}
@@ -245,7 +245,7 @@ vtPagedStructureLOD *vtPagedStructureLodGrid::FindGroup(vtStructure *str)
 bool vtPagedStructureLodGrid::AppendToGrid(vtStructureArray3d *pArray, int iIndex)
 {
 	// Get 2D extents from the unbuild structure
-	vtStructure *str = pArray->at(iIndex);
+	vtStructure *str = pArray->GetAt(iIndex);
 	vtPagedStructureLOD *pGroup = FindGroup(str);
 	if (pGroup)
 	{
@@ -258,7 +258,7 @@ bool vtPagedStructureLodGrid::AppendToGrid(vtStructureArray3d *pArray, int iInde
 void vtPagedStructureLodGrid::RemoveFromGrid(vtStructureArray3d *pArray, int iIndex)
 {
 	// Get 2D extents from the unbuild structure
-	vtStructure *str = pArray->at(iIndex);
+	vtStructure *str = pArray->GetAt(iIndex);
 	vtPagedStructureLOD *pGroup = FindGroup(str);
 	if (pGroup)
 		pGroup->Remove(pArray, iIndex);
@@ -379,8 +379,8 @@ void vtPagedStructureLodGrid::SortQueue()
 	// Prioritization is by distance.
 	// We can measure horizontal distance, which is faster.
 	DPoint3 cam_epos, cam_epos2;
-	m_pHeightField->m_Conversion.ConvertToEarth(CamPos, cam_epos);
-	m_pHeightField->m_Conversion.ConvertToEarth(CamPos+CamDir, cam_epos2);
+	g_Conv.ConvertToEarth(CamPos, cam_epos);
+	g_Conv.ConvertToEarth(CamPos+CamDir, cam_epos2);
 	DPoint2 cam_pos(cam_epos.x, cam_epos.y);
 	DPoint2 cam_dir(cam_epos2.x - cam_epos.x, cam_epos2.y - cam_epos.y);
 	cam_dir.Normalize();
@@ -389,7 +389,7 @@ void vtPagedStructureLodGrid::SortQueue()
 	for (uint i = 0; i < m_Queue.size(); i++)
 	{
 		QueueEntry &e = m_Queue[i];
-		vtStructure *st = e.pStructureArray->at(e.iStructIndex);
+		vtStructure *st = e.pStructureArray->GetAt(e.iStructIndex);
 		vtBuilding *bld = st->GetBuilding();
 		vtStructInstance *inst = st->GetInstance();
 		if (bld)
@@ -429,10 +429,10 @@ void vtPagedStructureLodGrid::ClearQueue(vtStructureArray3d *pArray)
  */
 void vtPagedStructureLodGrid::RefreshPaging(vtStructureArray3d *pArray)
 {
-	for (uint i = 0; i < pArray->size(); i++)
+	for (uint i = 0; i < pArray->GetSize(); i++)
 	{
 		// Get 2D extents from the unbuild structure
-		vtStructure *str = pArray->at(i);
+		vtStructure *str = pArray->GetAt(i);
 		vtPagedStructureLOD *pGroup = FindGroup(str);
 		if (pGroup)
 			pGroup->m_bAddedToQueue = false;

@@ -2,7 +2,7 @@
 // Name:     app.cpp
 // Purpose:  The application class for a wxWidgets application.
 //
-// Copyright (c) 2001-2012 Virtual Terrain Project
+// Copyright (c) 2001-2006 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -25,6 +25,7 @@
 #include "frame.h"
 
 #include "vtui/Helper.h"
+#include "wxosg/GraphicsWindowWX.h"
 #include "canvas.h"
 
 /* wxGTK and X11 multihtreading issues
@@ -81,7 +82,7 @@ bool vtApp::OnInit(void)
 	ConvertArgcArgv(wxApp::argc, wxApp::argv, &MyArgc, &MyArgv);
 	vtGetScene()->Init(MyArgc, MyArgv);
 
-	m_pFrame->m_canvas->InitGraphicsWindowWX();
+	vtGetScene()->SetGraphicsContext(new GraphicsWindowWX(m_pFrame->m_canvas));
 
 	// Make sure the scene knows the size of the canvas
 	//  (on wxGTK, the first size events arrive too early before the Scene exists)
@@ -148,13 +149,13 @@ bool vtApp::CreateScene()
 	float fSpeed = pTerr->GetParams().GetValueFloat(STR_NAVSPEED);
 
 	vtTerrainFlyer *pFlyer = new vtTerrainFlyer(fSpeed);
-	pFlyer->AddTarget(pCamera);
+	pFlyer->SetTarget(pCamera);
 	pFlyer->SetHeightField(pTerr->GetHeightField());
 	pScene->AddEngine(pFlyer);
 
 	// Minimum height over terrain is 100 m
 	vtHeightConstrain *pConstrain = new vtHeightConstrain(100);
-	pConstrain->AddTarget(pCamera);
+	pConstrain->SetTarget(pCamera);
 	pConstrain->SetHeightField(pTerr->GetHeightField());
 	pScene->AddEngine(pConstrain);
 

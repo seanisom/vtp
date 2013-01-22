@@ -1,7 +1,7 @@
 //
 // StructLayer.cpp
 //
-// Copyright (c) 2001-2012 Virtual Terrain Project
+// Copyright (c) 2001-2009 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -13,7 +13,6 @@
 
 #include "vtdata/DLG.h"
 #include "vtdata/Fence.h"
-#include "vtdata/FileFilters.h"
 #include "vtdata/ElevationGrid.h"
 #include "vtdata/FilePath.h"
 #include "vtdata/Triangulate.h"
@@ -24,8 +23,8 @@
 #include "ElevLayer.h"
 #include "BuilderView.h"
 #include "vtui/BuildingDlg.h"
-#include "vtui/Helper.h"
 #include "vtui/InstanceDlg.h"
+#include "vtui/Helper.h"
 #include "ImportStructDlg.h"
 
 wxPen orangePen;
@@ -79,7 +78,10 @@ bool vtStructureLayer::GetExtent(DRECT &rect)
 		offset.x /= fMetersPerUnit;
 		offset.y /= fMetersPerUnit;
 	}
-	rect.Grow(offset.x, offset.y);
+	rect.left -= offset.x;
+	rect.right += offset.x;
+	rect.bottom -= offset.y;
+	rect.top += offset.y;
 
 	return true;
 }
@@ -90,7 +92,7 @@ void vtStructureLayer::DrawLayer(wxDC *pDC, vtScaledView *pView)
 	if (m_size > 5) m_size = 5;
 	if (m_size < 1) m_size = 1;
 
-	uint structs = size();
+	uint structs = GetSize();
 	pDC->SetBrush(*wxTRANSPARENT_BRUSH);
 	pDC->SetPen(orangePen);
 	DrawStructures(pDC, pView, false);	// unselected
@@ -106,11 +108,11 @@ void vtStructureLayer::DrawLayer(wxDC *pDC, vtScaledView *pView)
 
 void vtStructureLayer::DrawStructures(wxDC *pDC, vtScaledView *pView, bool bOnlySelected)
 {
-	uint structs = size();
+	uint structs = GetSize();
 	for (unsigned i = 0; i < structs; i++)
 	{
 		// draw each building
-		vtStructure *str = at(i);
+		vtStructure *str = GetAt(i);
 		if (bOnlySelected && !str->IsSelected())
 			continue;
 
@@ -158,8 +160,8 @@ void vtStructureLayer::DrawBuildingHighlight(wxDC *pDC, vtScaledView *pView)
 		const DLine2 &dline = dl[ring];
 		int sides = dline.GetSize();
 		wxPoint p[2];
-		pView->screen(dline[j], p[0]);
-		pView->screen(dline[(j+1)%sides], p[1]);
+		pView->screen(dline.GetAt(j), p[0]);
+		pView->screen(dline.GetAt((j+1)%sides), p[1]);
 		pDC->DrawLines(2, p);
 	}
 }
@@ -178,7 +180,7 @@ void vtStructureLayer::DrawBuilding(wxDC *pDC, vtScaledView *pView,
 	pDC->DrawLine(origin.x, origin.y-m_size, origin.x, origin.y+m_size+1);
 
 	// draw building footprint for all levels
-	int levs = bld->NumLevels();
+	int levs = bld->GetNumLevels();
 
 	// unless we're XORing, in which case multiple overlapping level would
 	// cancel each other out
@@ -246,10 +248,10 @@ bool vtStructureLayer::OnLoad()
 
 void vtStructureLayer::ResolveInstancesOfItems()
 {
-	uint structs = size();
+	uint structs = GetSize();
 	for (uint i = 0; i < structs; i++)
 	{
-		vtStructure *str = at(i);
+		vtStructure *str = GetAt(i);
 		vtStructInstance *inst = str->GetInstance();
 		if (!inst)
 			continue;
@@ -261,13 +263,13 @@ void vtStructureLayer::CleanFootprints(double epsilon, int &degenerate, int &ove
 {
 	degenerate = 0;
 	overlapping = 0;
-	for (uint i = 0; i < size(); i++)
+	for (uint i = 0; i < GetSize(); i++)
 	{
-		vtStructure *pStructure = at(i);
+		vtStructure *pStructure = GetAt(i);
 		vtBuilding *bld = pStructure->GetBuilding();
 		if (!bld)
 			continue;
-		for (uint j = 0; j < bld->NumLevels(); j++)
+		for (uint j = 0; j < bld->GetNumLevels(); j++)
 		{
 			vtLevel *lev = bld->GetLevel(j);
 			DPolygon2 &dp = lev->GetFootprint();
@@ -281,11 +283,11 @@ void vtStructureLayer::CleanFootprints(double epsilon, int &degenerate, int &ove
 				DLine2 &ring = dp[r];
 				for (uint k2 = 1; k2 < ring.GetSize(); k2++)
 				{
-					const DPoint2 &p2 = ring[k2];
+					DPoint2 &p2 = ring.GetAt(k2);
 					for (uint k1 = 0; k1 < k2; k1++)
 					{
-						const DPoint2 &p1 = ring[k1];
-						const DPoint2 diff = p1 - p2;
+						DPoint2 &p1 = ring.GetAt(k1);
+						DPoint2 diff = p1 - p2;
 						if (fabs(diff.x) < epsilon && fabs(diff.y) < epsilon)
 						{
 							ring.RemoveAt(k2);
@@ -313,11 +315,7 @@ void vtStructureLayer::GetProjection(vtProjection &proj)
 
 void vtStructureLayer::SetProjection(const vtProjection &proj)
 {
-	if (m_proj == proj)
-		return;
-
 	m_proj = proj;
-	SetModified(true);
 }
 
 bool vtStructureLayer::TransformCoords(vtProjection &proj)
@@ -334,10 +332,10 @@ bool vtStructureLayer::TransformCoords(vtProjection &proj)
 
 	DPoint2 loc;
 	uint i, j;
-	uint count = size();
+	uint count = GetSize();
 	for (i = 0; i < count; i++)
 	{
-		vtStructure *str = at(i);
+		vtStructure *str = GetAt(i);
 		vtBuilding *bld = str->GetBuilding();
 		if (bld)
 			bld->TransformCoords(trans);
@@ -347,8 +345,11 @@ bool vtStructureLayer::TransformCoords(vtProjection &proj)
 		{
 			DLine2 line = fen->GetFencePoints();
 			for (j = 0; j < line.GetSize(); j++)
-				trans->Transform(1, &line[j].x, &line[j].y);
-			fen->SetFencePoints(line);
+			{
+				loc = line[j];
+				trans->Transform(1, &loc.x, &loc.y);
+				line[j] = loc;
+			}
 		}
 
 		vtStructInstance *inst = str->GetInstance();
@@ -359,12 +360,11 @@ bool vtStructureLayer::TransformCoords(vtProjection &proj)
 			inst->SetPoint(loc);
 		}
 	}
-	delete trans;
 
 	// set the projection
 	m_proj = proj;
-	SetModified(true);
 
+	delete trans;
 	return true;
 }
 
@@ -376,14 +376,14 @@ bool vtStructureLayer::AppendDataFrom(vtLayer *pL)
 
 	vtStructureLayer *pFrom = (vtStructureLayer *)pL;
 
-	int count = pFrom->size();
+	int count = pFrom->GetSize();
 	for (int i = 0; i < count; i++)
 	{
-		vtStructure *str = pFrom->at(i);
-		push_back(str);
+		vtStructure *str = pFrom->GetAt(i);
+		Append(str);
 	}
 	// tell the source layer that it has no structures (we have taken them)
-	pFrom->clear();
+	pFrom->SetSize(0);
 
 	return true;
 }
@@ -395,27 +395,29 @@ void vtStructureLayer::Offset(const DPoint2 &delta)
 
 void vtStructureLayer::GetPropertyText(wxString &strIn)
 {
+	int i, size = GetSize();
+
 	strIn += _("Filename: ");
 	strIn += GetLayerFilename();
 	strIn += _T("\n");
 
 	wxString str;
-	str.Printf(_("Number of structures: %d\n"), size());
+	str.Printf(_("Number of structures: %d\n"), size);
 	strIn += str;
 
 	int bld = 0, lin = 0, ins = 0;
-	for (uint i = 0; i < size(); i++)
+	for (i = 0; i < size; i++)
 	{
-		const vtStructure *sp = at(i);
-		if (sp->GetType() == ST_BUILDING) bld++;
-		else if (sp->GetType() == ST_LINEAR) lin++;
-		else if (sp->GetType() ==ST_INSTANCE) ins++;
+		vtStructure *sp = GetAt(i);
+		if (sp->GetBuilding()) bld++;
+		else if (sp->GetFence()) lin++;
+		else if (sp->GetInstance()) ins++;
 	}
 	str.Printf(_("\t %d Buildings (procedural)\n"), bld);
 	strIn += str;
-	str.Printf(_("\t %d Linears (fences/walls)\n"), lin);
+	str.Printf(_("\t %d Linear (fences/walls)\n"), lin);
 	strIn += str;
-	str.Printf(_("\t %d Instances (external 3D models)\n"), ins);
+	str.Printf(_("\t %d Instances (imported models)\n"), ins);
 	strIn += str;
 
 	str.Printf(_("Number of selected structures: %d\n"), NumSelected());
@@ -436,8 +438,9 @@ void vtStructureLayer::OnLeftDown(BuilderView *pView, UIContext &ui)
 	case LB_AddLinear:
 		if (ui.m_pCurLinear == NULL)
 		{
-			ui.m_pCurLinear = AddNewFence();
+			ui.m_pCurLinear = NewFence();
 			ui.m_pCurLinear->SetParams(g_bld->m_LSOptions);
+			Append(ui.m_pCurLinear);
 			ui.m_bRubber = true;
 		}
 		ui.m_pCurLinear->AddPoint(ui.m_CurLocation);
@@ -548,13 +551,13 @@ void vtStructureLayer::OnLeftDownEditBuilding(BuilderView *pView, UIContext &ui)
 	if (found1)
 	{
 		// closest point is a building center
-		ui.m_pCurBuilding = at(building1)->GetBuilding();
+		ui.m_pCurBuilding = GetAt(building1)->GetBuilding();
 		ui.m_bDragCenter = true;
 	}
 	if (found2)
 	{
 		// closest point is a building corner
-		ui.m_pCurBuilding = at(building2)->GetBuilding();
+		ui.m_pCurBuilding = GetAt(building2)->GetBuilding();
 		ui.m_bDragCenter = false;
 		ui.m_iCurCorner = corner;
 		ui.m_bRotate = ui.m_bControl;
@@ -577,7 +580,7 @@ void vtStructureLayer::OnLeftDownBldAddPoints(BuilderView *pView, UIContext &ui)
 	if (!FindClosestBuilding(ui.m_DownLocation, dEpsilon, iStructure, dClosest))
 		return;
 
-	vtBuilding *pBuilding = at(iStructure)->GetBuilding();
+	vtBuilding *pBuilding = GetAt(iStructure)->GetBuilding();
 
 	// Find extent of building and refresh that area of the window
 	DRECT Extent;
@@ -599,7 +602,7 @@ void vtStructureLayer::OnLeftDownBldAddPoints(BuilderView *pView, UIContext &ui)
 	if (-1 == iLevel)
 	{
 		// Add in all levels
-		iNumLevels = pBuilding->NumLevels();
+		iNumLevels = pBuilding->GetNumLevels();
 		for (i = 0; i < iNumLevels; i++)
 		{
 			pLevel = pBuilding->GetLevel(i);
@@ -637,7 +640,7 @@ void vtStructureLayer::OnLeftDownBldDeletePoints(BuilderView *pView, UIContext &
 	if (!FindClosestBuilding(ui.m_DownLocation, dEpsilon, iStructure, dClosest))
 		return;
 
-	vtBuilding *pBuilding = at(iStructure)->GetBuilding();
+	vtBuilding *pBuilding = GetAt(iStructure)->GetBuilding();
 
 	// Find extent of building before any point removal
 	DRECT Extent;
@@ -653,7 +656,7 @@ void vtStructureLayer::OnLeftDownBldDeletePoints(BuilderView *pView, UIContext &
 	if (-1 == iLevel)
 	{
 		// Remove in all levels
-		iNumLevels = pBuilding->NumLevels();
+		iNumLevels = pBuilding->GetNumLevels();
 		for (i = 0; i <iNumLevels; i++)
 		{
 			pLevel = pBuilding->GetLevel(i);
@@ -689,7 +692,7 @@ void vtStructureLayer::OnLeftDownEditLinear(BuilderView *pView, UIContext &ui)
 	if (found1)
 	{
 		// closest point is a building center
-		ui.m_pCurLinear = at(structure)->GetFence();
+		ui.m_pCurLinear = GetAt(structure)->GetFence();
 		ui.m_iCurCorner = corner;
 		ui.m_bRubber = true;
 
@@ -750,7 +753,7 @@ void vtStructureLayer::OnMouseMove(BuilderView *pView, UIContext &ui)
 	{
 		wxPoint p1, p2;
 		DLine2 &pts = ui.m_pCurLinear->GetFencePoints();
-		pView->screen(pts[pts.GetSize()-1], p1);
+		pView->screen(pts.GetAt(pts.GetSize()-1), p1);
 		dc.DrawLine(p1, ui.m_LastPoint);
 		dc.DrawLine(p1, ui.m_CurPoint);
 	}
@@ -770,7 +773,7 @@ void vtStructureLayer::UpdateMove(UIContext &ui)
 	DPoint2 p;
 	DPoint2 moved_by = ui.m_CurLocation - ui.m_DownLocation;
 
-	int i, levs = ui.m_pCurBuilding->NumLevels();
+	int i, levs = ui.m_pCurBuilding->GetNumLevels();
 	for (i = 0; i < levs; i++)
 	{
 		DPolygon2 dl = ui.m_pCurBuilding->GetFootprint(i);
@@ -793,7 +796,7 @@ void vtStructureLayer::UpdateRotate(UIContext &ui)
 	double angle_diff = angle2 - angle1;
 
 	DPoint2 p;
-	uint i, j, r, levs = ui.m_pCurBuilding->NumLevels();
+	uint i, j, r, levs = ui.m_pCurBuilding->GetNumLevels();
 	for (i = 0; i < levs; i++)
 	{
 		DPolygon2 foot = ui.m_pCurBuilding->GetFootprint(i);
@@ -802,7 +805,7 @@ void vtStructureLayer::UpdateRotate(UIContext &ui)
 			DLine2 &dl = foot[r];
 			for (j = 0; j < dl.GetSize(); j++)
 			{
-				p = dl[j];
+				p = dl.GetAt(j);
 				p -= origin;
 				p.Rotate(angle_diff);
 				p += origin;
@@ -829,7 +832,7 @@ void vtStructureLayer::UpdateResizeScale(BuilderView *pView, UIContext &ui)
 	if (ui.m_bShift)
 	{
 		// Scale evenly
-		uint levs = ui.m_pCurBuilding->NumLevels();
+		uint levs = ui.m_pCurBuilding->GetNumLevels();
 		for (i = 0; i < levs; i++)
 		{
 			DPolygon2 foot = ui.m_pCurBuilding->GetFootprint(i);
@@ -838,7 +841,7 @@ void vtStructureLayer::UpdateResizeScale(BuilderView *pView, UIContext &ui)
 				DLine2 &dl = foot[r];
 				for (j = 0; j < dl.GetSize(); j++)
 				{
-					p = dl[j];
+					p = dl.GetAt(j);
 					p -= origin;
 					p *= fScale;
 					p += origin;
@@ -856,7 +859,7 @@ void vtStructureLayer::UpdateResizeScale(BuilderView *pView, UIContext &ui)
 		int vert = ui.m_iCurCorner;
 		int ring = footprint.WhichRing(vert);
 		DLine2 &foot = footprint[ring];
-		p = foot[vert];
+		p = foot.GetAt(vert);
 
 		int points = foot.GetSize();
 		if (pView->m_bConstrain && points > 3)
@@ -888,7 +891,7 @@ void vtStructureLayer::UpdateResizeScale(BuilderView *pView, UIContext &ui)
 		// Changing only the lowest level is near useless.  For the great
 		//  majority of cases, the user will want the footprints for all
 		//  levels to remain in sync.
-		for (i = 0; i < ui.m_EditBuilding.NumLevels(); i++)
+		for (i = 0; i < ui.m_EditBuilding.GetNumLevels(); i++)
 			ui.m_EditBuilding.SetFootprint(i, footprint);
 
 		// A better guess might be to offset the footprint points of each
@@ -904,10 +907,10 @@ bool vtStructureLayer::EditBuildingProperties()
 	// Look for the first selected building, and count how many are selected
 	int count = 0;
 	vtBuilding *bld_selected=NULL;
-
-	for (uint i = 0; i < size(); i++)
+	int size = GetSize();
+	for (int i = 0; i < size; i++)
 	{
-		vtStructure *str = at(i);
+		vtStructure *str = GetAt(i);
 		vtBuilding *bld = str->GetBuilding();
 		if (bld && str->IsSelected())
 		{
@@ -964,7 +967,7 @@ void vtStructureLayer::AddFoundations(vtElevLayer *pEL)
 		float fMin = 1E9, fMax = -1E9;
 		for (j = 0; j < pts; j++)
 		{
-			fElev = pEL->GetElevation(foot[j]);
+			fElev = pEL->GetElevation(foot.GetAt(j));
 			if (fElev == INVALID_ELEVATION)
 				continue;
 
@@ -994,18 +997,20 @@ void vtStructureLayer::AddFoundations(vtElevLayer *pEL)
 
 void vtStructureLayer::InvertSelection()
 {
-	for (uint i = 0; i < size(); i++)
+	int i, size = GetSize();
+	for (i = 0; i < size; i++)
 	{
-		vtStructure *str = at(i);
+		vtStructure *str = GetAt(i);
 		str->Select(!str->IsSelected());
 	}
 }
 
 void vtStructureLayer::DeselectAll()
 {
-	for (uint i = 0; i < size(); i++)
+	int i, size = GetSize();
+	for (i = 0; i < size; i++)
 	{
-		vtStructure *str = at(i);
+		vtStructure *str = GetAt(i);
 		str->Select(false);
 	}
 }
@@ -1015,9 +1020,9 @@ int vtStructureLayer::DoBoxSelect(const DRECT &rect, SelectionType st)
 	int affected = 0;
 	bool bWas;
 
-	for (uint i = 0; i < size(); i++)
+	for (uint i = 0; i < GetSize(); i++)
 	{
-		vtStructure *str = at(i);
+		vtStructure *str = GetAt(i);
 
 		bWas = str->IsSelected();
 		if (st == ST_NORMAL)
@@ -1105,8 +1110,10 @@ void vtStructureLayer::AddElementsFromDLG(vtDLGFile *pDlg)
 
 bool vtStructureLayer::AskForSaveFilename()
 {
-	wxString filter = FSTRING_VTST;
-	AddType(filter, FSTRING_VTSTGZ);
+	wxString filter;
+	filter += _("VTST File (.vtst)|*.vtst");
+	filter += _T("|");
+	filter += _("GZipped VTST File (.vtst.gz)|*.vtst.gz");
 
 	wxFileDialog saveFile(NULL, _("Save Layer"), _T(""), GetLayerFilename(),
 		filter, wxFD_SAVE | wxFD_OVERWRITE_PROMPT);

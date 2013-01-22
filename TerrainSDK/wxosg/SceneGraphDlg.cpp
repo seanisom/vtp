@@ -261,7 +261,7 @@ void SceneGraphDlg::AddNodeItemsRecursively(wxTreeItemId hParentItem,
 	osg::Geode *geode = dynamic_cast<osg::Geode*>(pNode);
 	if (pGeode)
 	{
-		int num_mesh = pGeode->NumMeshes();
+		int num_mesh = pGeode->GetNumMeshes();
 		wxTreeItemId	hGeomItem;
 
 		for (int i = 0; i < num_mesh; i++)
@@ -273,8 +273,8 @@ void SceneGraphDlg::AddNodeItemsRecursively(wxTreeItemId hParentItem,
 
 			if (pMesh)
 			{
-				int iNumPrim = pMesh->NumPrims();
-				int iNumVert = pMesh->NumVertices();
+				int iNumPrim = pMesh->GetNumPrims();
+				int iNumVert = pMesh->GetNumVertices();
 
 				vtMesh::PrimType ptype = pMesh->getPrimType();
 				const char *mtype="";
@@ -289,8 +289,6 @@ void SceneGraphDlg::AddNodeItemsRecursively(wxTreeItemId hParentItem,
 				case osg::PrimitiveSet::QUADS: mtype = "Quads"; break;
 				case osg::PrimitiveSet::QUAD_STRIP: mtype = "QuadStrip"; break;
 				case osg::PrimitiveSet::POLYGON: mtype = "Polygon"; break;
-				default:	// Keep picky compilers quiet.
-					break;
 				}
 				str.Printf(_("%d: Mesh, %hs, %d verts, %d prims"), i, mtype, iNumVert, iNumPrim);
 				hGeomItem = m_pTree->AppendItem(hNewItem, str, 6, 6);
@@ -492,7 +490,7 @@ void SceneGraphDlg::OnLog( wxCommandEvent &event )
 	wxArrayString choices;
 	choices.Add(_("The standard log file (debug.txt)"));
 	choices.Add(_("A dot file (scene.dot)"));
-	int index = wxGetSingleChoiceIndex(_("Log the scene graph to:"), _T(""), choices, this);
+	int index = wxGetSingleChoiceIndex(_("Log the scene graph to:"), _(""), choices, this);
 	if (index == 0)
 	{
 		vtLogGraph(m_pSelectedNode);

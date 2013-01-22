@@ -36,6 +36,7 @@ EVT_INIT_DIALOG (EphemDlg::OnInitDialog)
 EVT_CHECKBOX( ID_OCEANPLANE, EphemDlg::OnCheckBox )
 EVT_CHECKBOX( ID_SKY, EphemDlg::OnCheckBox )
 EVT_COMBOBOX( ID_SKYTEXTURE, EphemDlg::OnSkyTexture )
+EVT_CHECKBOX( ID_HORIZON, EphemDlg::OnCheckBox )
 EVT_CHECKBOX( ID_FOG, EphemDlg::OnCheckBox )
 
 EVT_CHECKBOX( ID_SHADOWS, EphemDlg::OnCheckBox )
@@ -64,13 +65,13 @@ EphemDlg::EphemDlg(wxWindow *parent, wxWindowID id, const wxString &title,
 	m_iWindSpeedSlider = 0;
 	m_iWindDir = 0;
 	m_fWindSpeed = 0;
-	m_pTerrain = NULL;
 
 	AddValidator(this, ID_SKY, &m_bSky);
 	AddValidator(this, ID_SKYTEXTURE, &m_strSkyTexture);
 
 	AddValidator(this, ID_OCEANPLANE, &m_bOceanPlane);
 	AddNumValidator(this, ID_OCEANPLANEOFFSET, &m_fOceanPlaneLevel);
+	AddValidator(this, ID_HORIZON, &m_bHorizon);
 
 	// fog
 	AddValidator(this, ID_FOG, &m_bFog);
@@ -107,8 +108,8 @@ void EphemDlg::UpdateEnableState()
 	GetFog()->Enable(!m_bShadows);
 }
 
-#define DIST_MIN 1.698970004336		// 50 m
-#define DIST_MAX 4.903089986992		// 80 km
+#define DIST_MIN 1.0f   // 10 m
+#define DIST_MAX 4.69897000433f // 50 km
 #define DIST_RANGE (DIST_MAX-DIST_MIN)
 
 #define BIAS_MIN 0.0f
@@ -147,28 +148,30 @@ void EphemDlg::UpdateColorControl()
 void EphemDlg::SetToScene()
 {
 	vtTerrainScene *ts = vtGetTS();
-	TParams &param = m_pTerrain->GetParams();
+	vtTerrain *terr = GetCurrentTerrain();
+	TParams &param = terr->GetParams();
 	vtSkyDome *sky = ts->GetSkyDome();
 
 	param.SetValueBool(STR_SKY, m_bSky);
 	param.SetValueString(STR_SKYTEXTURE, (const char *) m_strSkyTexture.mb_str(wxConvUTF8));
-	ts->UpdateSkydomeForTerrain(m_pTerrain);
-	m_pTerrain->SetFeatureVisible(TFT_OCEAN, m_bOceanPlane);
-	m_pTerrain->SetWaterLevel(m_fOceanPlaneLevel);
-	m_pTerrain->SetFog(m_bFog);
-	m_pTerrain->SetFogDistance(m_fFogDistance);
+	ts->UpdateSkydomeForTerrain(terr);
+	terr->SetFeatureVisible(TFT_OCEAN, m_bOceanPlane);
+	terr->SetWaterLevel(m_fOceanPlaneLevel);
+	terr->SetFeatureVisible(TFT_HORIZON, m_bHorizon);
+	terr->SetFog(m_bFog);
+	terr->SetFogDistance(m_fFogDistance);
 	// shadows
-	m_pTerrain->SetShadows(m_bShadows);
+	terr->SetShadows(m_bShadows);
 	vtShadowOptions opt;
-	m_pTerrain->GetShadowOptions(opt);
+	terr->GetShadowOptions(opt);
 	opt.fDarkness = m_fDarkness;
 	opt.bShadowsEveryFrame = m_bShadowsEveryFrame;
 	opt.bShadowLimit = m_bShadowLimit;
 	opt.fShadowRadius = m_fShadowRadius;
-	m_pTerrain->SetShadowOptions(opt);
+	terr->SetShadowOptions(opt);
 
 	RGBi col(m_BgColor.Red(), m_BgColor.Green(), m_BgColor.Blue());
-	m_pTerrain->SetBgColor(col);
+	terr->SetBgColor(col);
 	vtGetScene()->SetBgColor(col);
 	g_App.SetWind(m_iWindDir, m_fWindSpeed);
 }

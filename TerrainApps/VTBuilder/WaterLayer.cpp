@@ -1,7 +1,7 @@
 //
 // WaterLayer.cpp
 //
-// Copyright (c) 2001-2012 Virtual Terrain Project
+// Copyright (c) 2001-2009 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -63,7 +63,6 @@ bool vtWaterLayer::TransformCoords(vtProjection &proj_new)
 		}
 	}
 	delete trans;
-	SetModified(true);
 	return true;
 }
 
@@ -247,8 +246,10 @@ void vtWaterLayer::AddElementsFromSHP(const wxString &filename,
 
 		// Copy each SHP Poly Coord
 		for (int j = 0; j < psShape->nVertices; j++)
-			dline[j].Set(psShape->padfX[j], psShape->padfY[j]);
-
+		{
+			dline.GetAt(j).x = psShape->padfX[j];
+			dline.GetAt(j).y = psShape->padfY[j];
+		}
 		m_Lines[i] = dline;
 		m_IsBody[i] = false;
 

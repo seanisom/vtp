@@ -1,7 +1,7 @@
 //
 // Name:		FeatureTableDlg3d.cpp
 //
-// Copyright (c) 2012 Virtual Terrain Project
+// Copyright (c) 2007 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -30,7 +30,7 @@ void FeatureTableDlg3d::OnModified()
 }
 void FeatureTableDlg3d::RefreshViz()
 {
-	m_pLayer->RefreshFeatureVisuals();
+	m_pLayer->Rebuild();
 }
 
 void FeatureTableDlg3d::OnFeatureDelete(vtFeature *f)
@@ -44,7 +44,7 @@ void FeatureTableDlg3d::OnFeatureDelete(vtFeature *f)
 
 void FeatureTableDlg3d::OnFieldEdited(uint iIndex)
 {
-	m_pLayer->RefreshFeature(iIndex);
+	m_pLayer->RebuildFeature(iIndex);
 }
 
 void FeatureTableDlg3d::OnEditEnd()

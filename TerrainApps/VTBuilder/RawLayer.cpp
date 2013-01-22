@@ -1,7 +1,7 @@
 //
 // RawLayer.cpp
 //
-// Copyright (c) 2001-2012 Virtual Terrain Project
+// Copyright (c) 2001-2011 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 // A 'raw' layer is just abstract data, without any specific correspondence
@@ -147,7 +147,7 @@ void vtRawLayer::DrawLayer(wxDC *pDC, vtScaledView *pView)
 	pDC->SetPen(DefPen);
 
 	wxPoint p;
-	uint i, j, entities = m_pSet->NumEntities();
+	uint i, j, entities = m_pSet->GetNumEntities();
 	OGRwkbGeometryType type = m_pSet->GetGeomType();
 	if (type == wkbPoint)
 	{
@@ -302,8 +302,6 @@ bool vtRawLayer::TransformCoords(vtProjection &proj)
 
 	m_pSet->SetProjection(proj);
 	m_bExtentComputed = false;
-	SetModified(true);
-
 	return true;
 }
 
@@ -426,7 +424,7 @@ void vtRawLayer::GetPropertyText(wxString &strIn)
 	str.Printf(_("Entity type: %hs\n"), OGRGeometryTypeToName(type));
 	strIn += str;
 
-	str.Printf(_("Entities: %d\n"), m_pSet->NumEntities());
+	str.Printf(_("Entities: %d\n"), m_pSet->GetNumEntities());
 	strIn += str;
 
 	if (type == wkbPoint25D)
@@ -457,7 +455,7 @@ void vtRawLayer::GetPropertyText(wxString &strIn)
 		}
 	}
 
-	int num_fields = m_pSet->NumFields();
+	int num_fields = m_pSet->GetNumFields();
 	if (num_fields)
 	{
 		strIn += _("Fields:\n");
@@ -483,7 +481,6 @@ void vtRawLayer::OnLeftDown(BuilderView *pView, UIContext &ui)
 
 	vtFeatureSetPoint2D *pSetP2 = dynamic_cast<vtFeatureSetPoint2D*>(m_pSet);
 	vtFeatureSetPoint3D *pSetP3 = dynamic_cast<vtFeatureSetPoint3D*>(m_pSet);
-	vtFeatureSetLineString *pSetL2 = dynamic_cast<vtFeatureSetLineString*>(m_pSet);
 	vtFeatureSetLineString3D *pSetL3 = dynamic_cast<vtFeatureSetLineString3D*>(m_pSet);
 
 	OGRwkbGeometryType type = m_pSet->GetGeomType();
@@ -518,17 +515,6 @@ void vtRawLayer::OnLeftDown(BuilderView *pView, UIContext &ui)
 		//		g_bld->UpdateFeatureDialog(this, pSetP3, iEnt);
 		//	}
 		//}
-		if (type == wkbLineString)
-		{
-			int close_feature;
-			DPoint2 close_point;
-			if (pSetL2->FindClosest(ui.m_DownLocation, close_feature, close_point))
-			{
-				//g_bld->UpdateFeatureDialog(this, pSetL3, close_feature);
-				VTLOG("Close 2D point: %lf, %lf\n", close_point.x, close_point.y);
-				g_bld->UpdateFeatureDialog(this, pSetL2, close_feature);
-			}
-		}
 		if (type == wkbLineString25D)
 		{
 			int close_feature;
@@ -537,7 +523,6 @@ void vtRawLayer::OnLeftDown(BuilderView *pView, UIContext &ui)
 			{
 				//g_bld->UpdateFeatureDialog(this, pSetL3, close_feature);
 				VTLOG("Close 3D point: %lf, %lf, %lf\n", close_point.x, close_point.y, close_point.z);
-				g_bld->UpdateFeatureDialog(this, pSetL3, close_feature);
 			}
 		}
 		break;
@@ -580,7 +565,7 @@ void vtRawLayer::ScaleHorizontally(double factor)
 	if (!m_pSet)
 		return;
 
-	uint i, j, entities = m_pSet->NumEntities();
+	uint i, j, entities = m_pSet->GetNumEntities();
 	OGRwkbGeometryType type = m_pSet->GetGeomType();
 	if (type == wkbPoint)
 	{
@@ -631,7 +616,7 @@ void vtRawLayer::ScaleVertically(double factor)
 	if (!m_pSet)
 		return;
 
-	uint i, j, entities = m_pSet->NumEntities();
+	uint i, j, entities = m_pSet->GetNumEntities();
 	OGRwkbGeometryType type = m_pSet->GetGeomType();
 	if (type == wkbPoint25D)
 	{
@@ -661,7 +646,7 @@ void vtRawLayer::OffsetVertically(double amount)
 	if (!m_pSet)
 		return;
 
-	uint i, j, entities = m_pSet->NumEntities();
+	uint i, j, entities = m_pSet->GetNumEntities();
 	OGRwkbGeometryType type = m_pSet->GetGeomType();
 	if (type == wkbPoint25D)
 	{

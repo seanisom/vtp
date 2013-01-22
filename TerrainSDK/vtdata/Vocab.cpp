@@ -29,7 +29,6 @@
 */
 
 #include "Vocab.h"
-#include "MaterialDescriptor.h"
 
 struct ColorEntry
 {
@@ -340,7 +339,7 @@ int TestParser::IsMaterial(int index)
 
 void TestParser::ParseInput(const char *string)
 {
-	sen.Clear();
+	sen.Empty();
 
 	InputToken *t;
 	char *word = strtok((char *)string, " ");

@@ -6,8 +6,8 @@
 //
 
 #include "vtlib/vtlib.h"
-#include "vtlib/core/Content3d.h"	// for vtGetContent
-#include "vtlib/core/GeomUtil.h"		// for CreateBoundSphereGeode
+#include "vtlib/core/TerrainScene.h"	// for vtGetContent
+#include "vtlib/core/GeomUtil.h"		// for CreateBoundSphereGeom
 #include "vtdata/vtLog.h"
 #include "CarEngine.h"
 #include "Vehicles.h"
@@ -175,7 +175,7 @@ void Vehicle::ShowBounds(bool bShow)
 				GetBoundSphere(sphere);
 				sphere.center.Set(0,0,0);
 
-				m_pHighlight = CreateBoundSphereGeode(sphere);
+				m_pHighlight = CreateBoundSphereGeom(sphere);
 				addChild(m_pHighlight);
 			}
 		}
@@ -201,7 +201,7 @@ void VehicleSet::AddEngine(CarEngine *e)
 	m_Engines.push_back(e);
 }
 
-int VehicleSet::FindClosestVehicle(const FPoint3 &point, double &closest)
+int VehicleSet::FindClosestVehicle(const FPoint3 &point, float &closest)
 {
 	closest = 1E9;
 	int vehicle = -1;

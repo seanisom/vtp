@@ -1,7 +1,7 @@
 //
 // vtTiledGeom: Renders tiled heightfields using Roettger's libMini library
 //
-// Copyright (c) 2005-2013 Virtual Terrain Project
+// Copyright (c) 2005-2009 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -162,7 +162,7 @@ static vtTiledGeom *s_pTiledGeom = NULL;
 TiledDatasetDescription::TiledDatasetDescription()
 {
 	cols = rows = lod0size = 0;
-	earthextents.SetToZero();
+	earthextents.Empty();
 	minheight = maxheight = INVALID_ELEVATION;
 	bJPEG = false;
 }
@@ -803,10 +803,19 @@ void vtTiledGeom::SetupMiniLoad(bool bThreading, bool bGradual)
 		if (bGradual)
 		{
 			VTLOG1(" Using gradual loading.\n");
-			// This ensures that lowest detail is loaded first? Actually, it
-			// doesn't seem to have much effect.  It seems the default behavior
-			// now is to load initially minimal tileset anyway.
-			m_pMiniLoad->updateroi(1.0f);
+			float rx = center.x;
+			float rz = center.z;
+			//float rrad = prange;
+			float rrad = 1.0f;
+			// This will start with a _very_ minimal tileset of 2x2 tiles
+			//m_pMiniLoad->restrictroi(rx, rz, rrad);
+
+			float res = TILEDGEOM_RESOLUTION_MIN;
+			float ex = center.x;
+			float ey = 10*farp;
+			float ez = center.z;
+			// This ensures that lowest detail is loaded first
+			m_pMiniLoad->updateroi(rrad);
 		}
 	}
 	else
@@ -1027,7 +1036,7 @@ void vtTiledGeom::DoCull(const vtCamera *pCam)
 
 	// Get up vector and direction vector from camera matrix
 	FMatrix4 mat;
-	pCam->GetTransform(mat);
+	pCam->GetTransform1(mat);
 	FPoint3 up(0.0f, 1.0f, 0.0f);
 	mat.TransformVector(up, eye_up);
 
@@ -1186,7 +1195,7 @@ bool vtTiledGeom::CastRayToSurface(const FPoint3 &point, const FPoint3 &dir,
 	return true;
 }
 
-FPoint2 vtTiledGeom::GetWorldSpacingAtPoint(const DPoint2 &p) const
+FPoint2 vtTiledGeom::GetWorldSpacingAtPoint(const DPoint2 &p)
 {
 	float x, z;
 	m_Conversion.ConvertFromEarth(p, x, z);

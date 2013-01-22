@@ -388,7 +388,8 @@ bool vtTagArray::WriteToXML(const char *fname, const char *title) const
 
 void vtTagArray::WriteToXMLBody(FILE *fp, int iIndent) const
 {
-	for (uint i = 0; i < NumTags(); i++)
+	uint i, size = NumTags();
+	for (i = 0; i < size; i++)
 	{
 		// indent
 		for (int j = 0; j < iIndent; j++)
@@ -464,21 +465,22 @@ void vtTagArray::LogTags() const
 
 vtItem::vtItem()
 {
-	m_extents.SetToZero();
+	m_extents.Empty();
 }
 
 vtItem::~vtItem()
 {
 	// clean up
-	DeleteModels();
+	Empty();
 }
 
-void vtItem::DeleteModels()
+void vtItem::Empty()
 {
 	for (uint i = 0; i < m_models.GetSize(); i++)
-		delete m_models[i];
-
-	m_models.Clear();
+	{
+		delete m_models.GetAt(i);
+	}
+	m_models.Empty();
 }
 
 void vtItem::RemoveModel(vtModel *model)
@@ -669,18 +671,19 @@ void ContentVisitor::data(const char * s, int length)
 vtContentManager::~vtContentManager()
 {
 	// clean up
-	Clear();
+	Empty();
 }
 
-void vtContentManager::Clear()
+void vtContentManager::Empty()
 {
 	uint items = m_items.GetSize();
 	if (items)
-		VTLOG("vtContentManager::Clear, %d items to delete\n", items);
+		VTLOG("vtContentManager::Empty, %d items to delete\n", items);
 	for (uint i = 0; i < items; i++)
-		delete m_items[i];
-
-	m_items.Clear();
+	{
+		delete m_items.GetAt(i);
+	}
+	m_items.Empty();
 }
 
 void vtContentManager::RemoveItem(vtItem *item)
@@ -694,7 +697,7 @@ vtItem *vtContentManager::FindItemByName(const char *name)
 {
 	for (uint i = 0; i < m_items.GetSize(); i++)
 	{
-		vtItem *pItem = m_items[i];
+		vtItem *pItem = m_items.GetAt(i);
 		if (!pItem->m_name.CompareNoCase(name))
 			return pItem;
 	}
@@ -705,7 +708,7 @@ vtItem *vtContentManager::FindItemByType(const char *type, const char *subtype)
 {
 	for (uint i = 0; i < m_items.GetSize(); i++)
 	{
-		vtItem *pItem = m_items[i];
+		vtItem *pItem = m_items.GetAt(i);
 		vtTag *tag1 = pItem->FindTag("type");
 		if (tag1 && !tag1->value.CompareNoCase(type))
 		{
@@ -769,7 +772,7 @@ void vtContentManager::WriteXML(const char *filename) const
 	fprintf(fp, "<vtp-content file-format-version=\"1.1\">\n");
 	for (i = 0; i < m_items.GetSize(); i++)
 	{
-		vtItem *pItem = m_items[i];
+		vtItem *pItem = m_items.GetAt(i);
 
 		// Write name
 		const char *name = pItem->m_name;

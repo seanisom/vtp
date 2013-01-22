@@ -29,15 +29,15 @@ vtLocationSaver::~vtLocationSaver()
 {
 	delete m_pConvertToWGS;
 	delete m_pConvertFromWGS;
-	Clear();
+	Empty();
 }
 
-void vtLocationSaver::Clear()
+void vtLocationSaver::Empty()
 {
 	int i, num = m_loc.GetSize();
 	for (i = 0; i < num; i++)
 		delete m_loc[i];
-	m_loc.Clear();
+	m_loc.Empty();
 }
 
 bool vtLocationSaver::Write(const vtString &fname_in)
@@ -220,13 +220,13 @@ bool vtLocationSaver::StoreTo(uint num, const LocNameString &name)
 
 	vtLocation *loc;
 	if (num < m_loc.GetSize())
-		loc = m_loc[num];
+		loc = m_loc.GetAt(num);
 	else
 		loc = new vtLocation;
 
 	// Get terrain coordinates for position and direction from the vtTransform
 	FMatrix4 mat;
-	m_pTransform->GetTransform(mat);
+	m_pTransform->GetTransform1(mat);
 
 	FPoint3 pos1 = m_pTransform->GetTrans();
 	FPoint3 pos2, dir;
@@ -334,7 +334,8 @@ int vtLocationSaver::FindLocation(const char *locname)
 
 void vtLocationSaver::Remove(int num)
 {
-	delete m_loc[num];
+	vtLocation *loc = m_loc.GetAt(num);
+	delete loc;
 	m_loc.RemoveAt(num);
 }
 

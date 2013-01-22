@@ -34,14 +34,19 @@ enum IntersectionType {
 	IT_STOPSIGN,  // a stop sign
 };
 
+enum LightStatus {
+	LT_INVALID,
+	LT_RED,
+	LT_YELLOW,
+	LT_GREEN
+};
+
 // link flags
-#define RF_SIDEWALK_LEFT	0x1000
-#define RF_SIDEWALK_RIGHT	0x0800
-#define RF_PARKING_RIGHT	0x2000
-#define RF_PARKING_LEFT		0x0400
-#define RF_MARGIN			0x0200
-#define RF_FORWARD			0x0080	// true if traffic flows from node 0 to 1
-#define RF_REVERSE			0x0040	// true if traffic flows from node 1 to 0
+#define RF_SIDEWALK	0x0800
+#define RF_PARKING	0x0400
+#define RF_MARGIN	0x0200
+#define RF_FORWARD	0x0080	// true if traffic flows from node 0 to 1
+#define RF_REVERSE	0x0040	// true if traffic flows from node 1 to 0
 // the following are for temporary, runtime use
 #define RF_HIT		0x0001
 
@@ -55,6 +60,24 @@ enum IntersectionType {
 // Nodes and Links refer to each other, so use forward declarations
 class TNode;
 class TLink;
+
+// Store the connectivity information for each place a link meets a node.
+struct LinkConnect
+{
+	TLink *pLink;
+
+	// True if the link starts at this node, false if it ends
+	bool bStart;
+
+	// intersection types of the link at this node.
+	IntersectionType eIntersection;
+
+	// light of the link at this node.
+	LightStatus eLight;
+
+	// angle of each link, not initialized till SortLinksByAngle is called
+	float fLinkAngle;
+};
 
 /**
  * A Transporation Node is a place where 2 or more links meet.
@@ -71,20 +94,22 @@ public:
 	//copies internal variables from another node.
 	void Copy(TNode* node);
 
-	TLink *GetLink(uint n) const;
-	int NumLinks() const { return m_connect.size(); }
-	int AddLink(TLink *pR);		// attaches a link to the node
-	void DetachLink(TLink *pR);	// detaches the link from the node
+	TLink *GetLink(int n);
+	int AddLink(TLink *pR, bool bStart);		// attaches a link to the node
+	void DetachLink(TLink *pR, bool bStart);	// detaches the link from the node
 	void DetermineLinkAngles();	// resulting angles > 0
-	float GetLinkAngle(uint iLinkNum);
+	float GetLinkAngle(int iLinkNum);
 	void SortLinksByAngle();	// sorts the internal links by angle.
 	DPoint2 GetAdjacentLinkPoint2d(int iLinkNum);  //returns the 2nd point on the link from the node.
 
-	int GetLinkNum(TLink *link);
+	int GetLinkNum(TLink *link, bool bStart);
+	LinkConnect &GetLinkConnect(int iLinkNum) { return m_connect[iLinkNum]; }
 
 	//sets intersection type for node.  returns false if link is invalid
-	bool SetIntersectType(uint linkNum, IntersectionType type);  //linkNum is internal index within the node
-	IntersectionType GetIntersectType(uint linkNum); //returns the intersection type of given link index (not ID)
+	bool SetIntersectType(int linkNum, IntersectionType type);  //linkNum is internal index within the node
+	IntersectionType GetIntersectType(int linkNum); //returns the intersection type of given link index (not ID)
+	LightStatus GetLightStatus(int linkNum);		//returns the light status of given link index (not ID)
+	bool SetLightStatus(int linkNum, LightStatus light); //sets the light status of given link index (not ID)
 
 	bool HasLights();
 	bool IsControlled();	// true if any stopsigns or stoplights
@@ -92,29 +117,18 @@ public:
 	//adjust the light relationship of the links at the node (if the intersection is has a signal light.)
 	void AdjustForLights();
 
+	DPoint2 m_p;	// utm coordinates of center
+	int m_iLinks;	// number of links meeting here
+
+	TNode *m_pNext;
+
 	// only used while reading from DLG/RMF/OSM
 	int FindLink(int linkID);	// returns internal number of link with given ID.  -1 if not found.
 	int m_id;
 
-	// Linked list
-	void SetNext(TNode *next) { m_pNext = next; }
-	TNode *GetNext() const { return m_pNext; }
-
-	// Position
-	void SetPos(const DPoint2 &pos) { m_p = pos; }
-	void SetPos(const double x, const double y) { m_p.Set(x, y); }
-	DPoint2 &Pos() { return m_p; }
-	const DPoint2 &Pos() const { return m_p; }
-
-	// angle of each link, not initialized till SortLinksByAngle is called
-	std::vector<float> m_fLinkAngle;
-
 protected:
-	DPoint2 m_p;	// utm coordinates of center
-	TNode *m_pNext;
-
 	// Information about the links that connect to or from this node.
-	std::vector<TLink*> m_connect;
+	std::vector<LinkConnect> m_connect;
 
 private:
 	// Don't let unsuspecting users stumble into assuming that object
@@ -138,19 +152,8 @@ public:
 	// comparison
 	bool operator==(TLink &ref);
 
-	void CopyAttributesFrom(TLink *rhs);
-
 	void SetNode(int n, TNode *pNode) { m_pNode[n] = pNode; }
-	void SetNodes(TNode *pNode0, TNode *pNode1) {
-		m_pNode[0] = pNode0;
-		m_pNode[1] = pNode1;
-	}
-	void ConnectNodes(TNode *pNode0, TNode *pNode1) {
-		SetNodes(pNode0, pNode1);
-		pNode0->AddLink(this);
-		pNode1->AddLink(this);
-	}
-	TNode *GetNode(int n) const { return m_pNode[n]; }
+	TNode *GetNode(int n) { return m_pNode[n]; }
 
 	// closest distance from point to the link
 	double GetLinearCoordinates(const DPoint2 &p, double &a, double &b,
@@ -163,8 +166,6 @@ public:
 	// accessors for flag properties
 	virtual void SetFlag(int flag, bool value);
 	int GetFlag(int flag);
-	int GetSidewalk();
-	int GetParking();
 
 	// Return length of link centerline.
 	float Length();
@@ -174,6 +175,7 @@ public:
 	unsigned short m_iLanes; // number of lanes
 	SurfaceType m_Surface;
 	short	m_iHwy;			// highway number: -1 for normal links
+	TLink	*m_pNext;		// the next Link, if links are maintained in link list form
 	short	m_iFlags;		// a flag to be used to holding any addition info.
 	int		m_id;			// only used during file reading
 	float	m_fSidewalkWidth;
@@ -182,36 +184,9 @@ public:
 	float	m_fLaneWidth;
 	float	m_fParkingWidth;
 
-	TLink *GetNext() const { return m_pNext; }
-	void SetNext(TLink *next) { m_pNext = next; }
-
-	void SetIntersectionType(int n, IntersectionType t)
-	{
-		m_eIntersection[n] = t;
-	}
-	void SetIntersectionType(TNode *node, IntersectionType t)
-	{
-		if (m_pNode[0] == node) m_eIntersection[0] = t;
-		if (m_pNode[1] == node) m_eIntersection[1] = t;
-	}
-	IntersectionType GetIntersectionType(int n)
-	{
-		return m_eIntersection[n];
-	}
-	IntersectionType GetIntersectionType(TNode *node)
-	{
-		if (m_pNode[0] == node) return m_eIntersection[0];
-		if (m_pNode[1] == node) return m_eIntersection[1];
-		return IT_NONE;
-	}
-
 protected:
-	TLink	*m_pNext;		// Next in linked list
 	TNode	*m_pNode[2];	// "from" and "to" nodes
-	float	m_fHeight[2];	// Height above the terrain heightfield
-
-	// Intersection type of this link at each node.
-	IntersectionType m_eIntersection[2];
+	float	m_fHeight[2];
 };
 
 typedef TLink *LinkPtr;
@@ -245,36 +220,15 @@ public:
 	virtual TNode *NewNode() { return new TNode; }
 	virtual TLink *NewLink() { return new TLink; }
 
-	void AddNode(TNode *pNode)
+	void	AddNode(TNode *pNode)
 	{
-		pNode->SetNext(m_pFirstNode);
+		pNode->m_pNext = m_pFirstNode;
 		m_pFirstNode = pNode;
 	}
-	void AddLink(TLink *pLink)
+	void	AddLink(TLink *pLink)
 	{
-		pLink->SetNext(m_pFirstLink);
+		pLink->m_pNext = m_pFirstLink;
 		m_pFirstLink = pLink;
-	}
-
-	virtual TNode *AddNewNode()
-	{
-		TNode *node = new TNode;
-		AddNode(node);
-		return node;
-	}
-	virtual TLink *AddNewLink()
-	{
-		TLink *link = new TLink;
-		AddLink(link);
-		return link;
-	}
-
-	void RemoveNode(TNode *pNode);
-	void RemoveLink(TLink *pLink);
-	void DetachLink(TLink *pLink)
-	{
-		pLink->GetNode(0)->DetachLink(pLink);
-		pLink->GetNode(1)->DetachLink(pLink);
 	}
 
 	TNode *FindNodeByID(int id);
@@ -283,10 +237,14 @@ public:
 	// cleaning function: remove unused nodes, return the number removed
 	int RemoveUnusedNodes();
 
-	bool ReadRMF(const char *filename);
+	// Other clean up functions
+	void RemoveNode(TNode *pNode);
+	void RemoveLink(TLink *pLink);
+
+	bool ReadRMF(const char *filename, bool bHwy, bool bPaved, bool bDirt);
 	bool WriteRMF(const char *filename);
 
-	vtProjection &GetAtProjection() { return m_proj; }
+	vtProjection &GetProjection() { return m_proj; }
 
 protected:
 	DRECT	m_extents;			// the extent of the roads in the RoadMap

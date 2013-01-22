@@ -76,14 +76,14 @@ struct TransformExtension: public NodeExtension
 
 	/** Apply a relative offset (translation) to the transform, in the frame
 		of its parent. */
-	void Translate(const FPoint3 &pos);
+	void Translate1(const FPoint3 &pos);
 
 	/** Apply a relative offset (translation) to the transform, in its own
 		frame of reference. */
 	void TranslateLocal(const FPoint3 &pos);
 
 	/** Rotate around a given axis by a given angle, in radians. */
-	void Rotate(const FPoint3 &axis, double angle);
+	void Rotate2(const FPoint3 &axis, double angle);
 
 	/** Similar to Rotate2, but operates in the local frame of reference. */
 	void RotateLocal(const FPoint3 &axis, double angle);
@@ -108,12 +108,12 @@ struct TransformExtension: public NodeExtension
 	/** Scale (stretch) by the given factor in all dimensions. */
 	void Scale(float factor);
 	/** Scale (stretch) by given factors in the x,y,z dimensions. */
-	void Scale(float x, float y, float z);
+	void Scale3(float x, float y, float z);
 
 	/** Set the entire transform with a 4x4 matrix. */
-	void SetTransform(const FMatrix4 &mat);
+	void SetTransform1(const FMatrix4 &mat);
 	/** Get the entire transform as a 4x4 matrix. */
-	void GetTransform(FMatrix4 &mat) const;
+	void GetTransform1(FMatrix4 &mat) const;
 
 	/** Rotate the object such that it points toward a given point.  By
 		convention, this means that the object's -Z axis points in the
@@ -121,6 +121,17 @@ struct TransformExtension: public NodeExtension
 	void PointTowards(const FPoint3 &point, bool bPitch = true);
 
 	osg::MatrixTransform *m_pTransform;
+};
+
+class vtMultiTexture
+{
+public:
+	int	m_iTextureUnit;
+#if VTLISPSM
+	int	m_iMode;
+#endif
+	osg::Node *m_pNode;
+	osg::ref_ptr<osg::Texture2D> m_pTexture;
 };
 
 
@@ -133,6 +144,11 @@ osg::Node *FindDescendent(osg::Group *node, const char *pName);
 
 void InsertNodeAbove(osg::Node *node, osg::Group *newnode);
 void InsertNodeBelow(osg::Group *group, osg::Group *newnode);
+
+vtMultiTexture *AddMultiTexture(osg::Node *onode, int iTextureUnit, vtImage *pImage,
+								int iTextureMode, const FPoint2 &scale, const FPoint2 &offset);
+void EnableMultiTexture(osg::Node *node, vtMultiTexture *mt, bool bEnable);
+bool MultiTextureIsEnabled(osg::Node *node, vtMultiTexture *mt);
 
 void LocalToWorld(osg::Node *node, FPoint3 &point);
 void GetBoundSphere(osg::Node *node, FSphere &sphere, bool bGlobal = false);
@@ -305,19 +321,14 @@ public:
 		currently contained. */
 	void RemoveMesh(vtMesh *pMesh);
 
-	/** Remove all meshes from the geomtry. They are refcounted so there is no
-		need to worry about freeing them. */
-	void RemoveAllMeshes();
-
 	/** Add a text mesh to this geometry.
 		\param pMesh The mesh to add
 		\param iMatIdx The material index for this mesh, which is an index
-			into the material array of the geometry.
-		\param bOutline true to put a dark outline around the text for contrast. */
-	void AddTextMesh(vtTextMesh *pMesh, int iMatIdx, bool bOutline = true);
+			into the material array of the geometry. */
+	void AddTextMesh(vtTextMesh *pMesh, int iMatIdx);
 
 	/** Return the number of contained meshes. */
-	uint NumMeshes() const;
+	uint GetNumMeshes() const;
 
 	/** Return a contained vtMesh by index. */
 	vtMesh *GetMesh(int i) const;
@@ -457,7 +468,7 @@ public:
 	virtual bool isSameKindAs(const osg::Object* obj) const { return dynamic_cast<const OsgDynMesh*>(obj)!=NULL; }
 	virtual const char* className() const { return "OsgDynMesh"; }
 
-	// Implement OSG::Drawable's computeBound.
+	// As of OSG 0.9.9, computeBound returns a BoundingBox
 	virtual osg::BoundingBox computeBound() const;
 	virtual void drawImplementation(osg::RenderInfo& renderInfo) const;
 
@@ -503,10 +514,10 @@ public:
 	//
 	int IsVisible(const FSphere &sphere) const;
 	int IsVisible(const FPoint3 &point0,
-				  const FPoint3 &point1,
-				  const FPoint3 &point2,
-				  const float fTolerance = 0.0f) const;
-	int IsVisible(const FPoint3 &point, float radius) const;
+					const FPoint3 &point1,
+					const FPoint3 &point2,
+					const float fTolerance = 0.0f) const;
+	int IsVisible(const FPoint3 &point, float radius);
 
 	// Tests a single point, returns true if in view
 	bool IsVisible(const FPoint3 &point) const;

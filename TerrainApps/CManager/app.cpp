@@ -16,8 +16,10 @@
 // Header for the vtlib librarys
 #include "vtlib/vtlib.h"
 #include "vtlib/core/NavEngines.h"
+#include "vtlib/core/vtSOG.h"
 #include "vtui/Helper.h"	// for ConvertArgcArgv
 #include "vtui/LogCatcher.h"
+#include "wxosg/GraphicsWindowWX.h"
 
 #include "app.h"
 #include "frame.h"
@@ -82,15 +84,14 @@ bool vtApp::OnInit(void)
 	// Create the main frame window
 	//
 	VTLOG("Creating frame\n");
-	vtFrame *frame = new vtFrame(NULL, _T("Content Manager"),
-		wxPoint(50, 50), wxSize(800, 600));
+	vtFrame *frame = new vtFrame(NULL, _T("Content Manager"), wxPoint(50, 50), wxSize(800, 600));
 
 	int MyArgc;
 	char** MyArgv;
 	ConvertArgcArgv(wxApp::argc, wxApp::argv, &MyArgc, &MyArgv);
 	pScene->Init(MyArgc, MyArgv);
 
-	frame->m_canvas->InitGraphicsWindowWX();
+	pScene->SetGraphicsContext(new GraphicsWindowWX(frame->m_canvas));
 
 	pScene->SetBgColor(RGBf(0.5f, 0.5f, 0.5f));		// grey
 
@@ -122,10 +123,38 @@ bool vtApp::OnInit(void)
 
 	frame->UseLight(pMovLight);
 
+	// SOG testing, currently disabled
+#if 0
+#if 0
+	// make a yellow sphere
+	vtMaterialArray *pMats = new vtMaterialArray;
+	pMats->AddRGBMaterial(RGBf(1.0f, 1.0f, 0.0f), RGBf(0.0f, 0.0f, 1.0f));
+	vtGeode *pGeode = CreateSphereGeom(pMats, 0, VT_Normals, 0.5, 16);
+	pGeode->setName("Yellow Sphere");
+	pMats->Release();
+
+	OutputSOG osog;
+
+	FILE *fp = fopen("output.sog", "wb");
+	osog.WriteHeader(fp);
+	osog.WriteSingleGeometry(fp, pGeode);
+	fclose(fp);
+	m_pRoot->addChild(pGeode);
+#else
+	InputSOG isog;
+
+	FILE *fp = fopen("output.sog", "rb");
+	vtGroup *pGroup = new vtGroup;
+	bool success = isog.ReadContents(fp, pGroup);
+	fclose(fp);
+	m_pRoot->addChild(pGroup);
+#endif
+#endif
+
 	// make a trackball controller for the camera
 	VTLOG(" creating trackball\n");
 	m_pTrackball = new vtTrackball(3.0f);
-	m_pTrackball->AddTarget(pScene->GetCamera());
+	m_pTrackball->SetTarget(pScene->GetCamera());
 	m_pTrackball->setName("Trackball");
 	m_pTrackball->SetRotateButton(VT_LEFT, 0);
 	m_pTrackball->SetZoomButton(VT_LEFT|VT_RIGHT, 0);

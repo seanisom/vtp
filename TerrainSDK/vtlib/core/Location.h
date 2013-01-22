@@ -85,7 +85,7 @@ public:
 	void Remove(int num);
 
 	/// Return number of locations
-	int NumLocations() { return m_loc.GetSize(); }
+	int GetNumLocations() { return m_loc.GetSize(); }
 
 	/// Get a location by index
 	vtLocation *GetLocation(int num) const { return m_loc[num]; }
@@ -93,7 +93,7 @@ public:
 	/// Find a location by name
 	int FindLocation(const char *locname);
 
-	void Clear();
+	void Empty();
 
 	// you must call these methods before this class is useful for vtTerrain:
 	/// Attach this LocationSaver to an object in the scenegraph
@@ -103,7 +103,6 @@ public:
 
 	/// Define the conversion between this saver and terrain coordinates
 	void SetConversion(const vtLocalConversion &conv) { m_conv = conv; }
-	const vtLocalConversion &GetConversion() { return m_conv; }
 
 	/// Define the projection of the object attached to this LocationSaver
 	void SetProjection(const vtProjection &proj);

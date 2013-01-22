@@ -175,7 +175,7 @@ protected:
 /**
  Calculates the bounding box of the geometry contained in and under this node
  in the scene graph.  Note that unlike the bounding sphere which is cached,
- this value is calculated each time this method is called.
+ this value is calculated every time.
 
  \param node The node to visit.
  \param box Will receive the bounding box.
@@ -399,7 +399,7 @@ void NodeExtension::SetEnabled(bool bOn)
 		if (m_bCastShadow)
 			m_pNode->setNodeMask(nm | 3);
 		else
-			m_pNode->setNodeMask((nm & ~3) | 1);
+			m_pNode->setNodeMask(nm & ~3 | 1);
 	}
 	else
 		m_pNode->setNodeMask(nm & ~3);
@@ -479,7 +479,7 @@ void TransformExtension::SetTrans(const FPoint3 &pos)
 	m_pTransform->dirtyBound();
 }
 
-void TransformExtension::Translate(const FPoint3 &pos)
+void TransformExtension::Translate1(const FPoint3 &pos)
 {
 	// OSG 0.8.43 and later
 	m_pTransform->postMult(osg::Matrix::translate(pos.x, pos.y, pos.z));
@@ -491,7 +491,7 @@ void TransformExtension::TranslateLocal(const FPoint3 &pos)
 	m_pTransform->preMult(osg::Matrix::translate(pos.x, pos.y, pos.z));
 }
 
-void TransformExtension::Rotate(const FPoint3 &axis, double angle)
+void TransformExtension::Rotate2(const FPoint3 &axis, double angle)
 {
 	// OSG 0.8.43 and later
 	m_pTransform->postMult(osg::Matrix::rotate(angle, axis.x, axis.y, axis.z));
@@ -531,7 +531,7 @@ void TransformExtension::SetDirection(const FPoint3 &point, bool bPitch)
 {
 	// get current matrix
 	FMatrix4 m4;
-	GetTransform(m4);
+	GetTransform1(m4);
 
 	// remember where it is now
 	FPoint3 trans = m4.GetTrans();
@@ -545,7 +545,7 @@ void TransformExtension::SetDirection(const FPoint3 &point, bool bPitch)
 	m4.SetTrans(trans);
 
 	// set current matrix
-	SetTransform(m4);
+	SetTransform1(m4);
 }
 
 void TransformExtension::Scale(float factor)
@@ -553,12 +553,12 @@ void TransformExtension::Scale(float factor)
 	m_pTransform->preMult(osg::Matrix::scale(factor, factor, factor));
 }
 
-void TransformExtension::Scale(float x, float y, float z)
+void TransformExtension::Scale3(float x, float y, float z)
 {
 	m_pTransform->preMult(osg::Matrix::scale(x, y, z));
 }
 
-void TransformExtension::SetTransform(const FMatrix4 &mat)
+void TransformExtension::SetTransform1(const FMatrix4 &mat)
 {
 	osg::Matrix mat_osg;
 
@@ -568,7 +568,7 @@ void TransformExtension::SetTransform(const FMatrix4 &mat)
 	m_pTransform->dirtyBound();
 }
 
-void TransformExtension::GetTransform(FMatrix4 &mat) const
+void TransformExtension::GetTransform1(FMatrix4 &mat) const
 {
 	const osg::Matrix &xform = m_pTransform->getMatrix();
 	ConvertMatrix4(&xform, &mat);
@@ -652,6 +652,78 @@ void InsertNodeBelow(osg::Group *group, osg::Group *newnode)
 
 	group->removeChildren(0, group->getNumChildren());
 	group->addChild(newnode);
+}
+
+vtMultiTexture *AddMultiTexture(osg::Node *onode, int iTextureUnit, vtImage *pImage,
+								int iTextureMode, const FPoint2 &scale, const FPoint2 &offset)
+{
+	vtMultiTexture *mt = new vtMultiTexture;
+	mt->m_pNode = onode;
+	mt->m_iTextureUnit = iTextureUnit;
+#if VTLISPSM
+	mt->m_iMode = iTextureMode;
+#endif
+
+	mt->m_pTexture = new osg::Texture2D(pImage);
+
+	mt->m_pTexture->setFilter(osg::Texture2D::MIN_FILTER, osg::Texture2D::NEAREST);
+	mt->m_pTexture->setFilter(osg::Texture2D::MAG_FILTER, osg::Texture2D::LINEAR);
+	mt->m_pTexture->setWrap(osg::Texture2D::WRAP_S, osg::Texture2D::CLAMP_TO_BORDER);
+	mt->m_pTexture->setWrap(osg::Texture2D::WRAP_T, osg::Texture2D::CLAMP_TO_BORDER);
+
+	// Set up the texgen
+	osg::ref_ptr<osg::TexGen> pTexgen = new osg::TexGen;
+	pTexgen->setMode(osg::TexGen::EYE_LINEAR);
+	pTexgen->setPlane(osg::TexGen::S, osg::Vec4(scale.x, 0.0f, 0.0f, -offset.x));
+	pTexgen->setPlane(osg::TexGen::T, osg::Vec4(0.0f, 0.0f, scale.y, -offset.y));
+
+	osg::TexEnv::Mode mode;
+	if (iTextureMode == GL_ADD) mode = osg::TexEnv::ADD;
+	if (iTextureMode == GL_BLEND) mode = osg::TexEnv::BLEND;
+	if (iTextureMode == GL_REPLACE) mode = osg::TexEnv::REPLACE;
+	if (iTextureMode == GL_MODULATE) mode = osg::TexEnv::MODULATE;
+	if (iTextureMode == GL_DECAL) mode = osg::TexEnv::DECAL;
+	osg::ref_ptr<osg::TexEnv> pTexEnv = new osg::TexEnv(mode);
+
+	// Apply state
+	osg::ref_ptr<osg::StateSet> pStateSet = onode->getOrCreateStateSet();
+
+	pStateSet->setTextureAttributeAndModes(iTextureUnit, mt->m_pTexture.get(), osg::StateAttribute::ON);
+	pStateSet->setTextureAttributeAndModes(iTextureUnit, pTexgen.get(), osg::StateAttribute::ON);
+	pStateSet->setTextureMode(iTextureUnit, GL_TEXTURE_GEN_S,  osg::StateAttribute::ON);
+	pStateSet->setTextureMode(iTextureUnit, GL_TEXTURE_GEN_T,  osg::StateAttribute::ON);
+	pStateSet->setTextureAttributeAndModes(iTextureUnit, pTexEnv.get(), osg::StateAttribute::ON);
+
+	// If texture mode is DECAL and intenal texture format does not have an alpha channel then
+	// force the format to be converted on texture binding
+	if ((GL_DECAL == iTextureMode) &&
+		(pImage->getInternalTextureFormat() != GL_RGBA))
+	{
+		// Force the internal format to RGBA
+		pImage->setInternalTextureFormat(GL_RGBA);
+	}
+
+	return mt;
+}
+
+void EnableMultiTexture(osg::Node *onode, vtMultiTexture *mt, bool bEnable)
+{
+	osg::ref_ptr<osg::StateSet> pStateSet = onode->getOrCreateStateSet();
+	if (bEnable)
+		pStateSet->setTextureAttributeAndModes(mt->m_iTextureUnit, mt->m_pTexture.get(), osg::StateAttribute::ON);
+	else
+	{
+		osg::StateAttribute *attr = pStateSet->getTextureAttribute(mt->m_iTextureUnit, osg::StateAttribute::TEXTURE);
+		if (attr != NULL)
+			pStateSet->removeTextureAttribute(mt->m_iTextureUnit, attr);
+	}
+}
+
+bool MultiTextureIsEnabled(osg::Node *onode, vtMultiTexture *mt)
+{
+	osg::ref_ptr<osg::StateSet> pStateSet = onode->getOrCreateStateSet();
+	osg::StateAttribute *attr = pStateSet->getTextureAttribute(mt->m_iTextureUnit, osg::StateAttribute::TEXTURE);
+	return (attr != NULL);
 }
 
 FSphere GetGlobalBoundSphere(osg::Node *node)
@@ -800,7 +872,10 @@ osg::Node *vtLoadModel(const char *filename, bool bAllowCache, bool bDisableMipm
 
 	// Workaround for OSG's OBJ-MTL reader which doesn't like backslashes
 	vtString fname = filename;
-	fname.Replace('\\', '/');
+	for (int i = 0; i < fname.GetLength(); i++)
+	{
+		if (fname.GetAt(i) == '\\') fname.SetAt(i, '/');
+	}
 
 #define HINT osgDB::ReaderWriter::Options::CacheHintOptions
 	// In case of reloading a previously loaded model, we must empty
@@ -1313,7 +1388,7 @@ float vtCamera::GetVertFOV() const
 void vtCamera::ZoomToSphere(const FSphere &sphere, float fPitch)
 {
 	Identity();
-	Translate(sphere.center);
+	Translate1(sphere.center);
 	RotateLocal(FPoint3(1,0,0), fPitch);
 	TranslateLocal(FPoint3(0.0f, 0.0f, sphere.radius));
 }
@@ -1375,7 +1450,7 @@ void vtGeode::CloneFromGeode(const vtGeode *rhs)
 	//  geometry that we are copying from.
 	SetMaterials(rhs->GetMaterials());
 	int idx;
-	for (uint i = 0; i < rhs->NumMeshes(); i++)
+	for (uint i = 0; i < rhs->GetNumMeshes(); i++)
 	{
 		vtMesh *mesh = rhs->GetMesh(i);
 		if (mesh)
@@ -1401,7 +1476,7 @@ void vtGeode::AddMesh(vtMesh *pMesh, int iMatIdx)
 	SetMeshMatIndex(pMesh, iMatIdx);
 }
 
-void vtGeode::AddTextMesh(vtTextMesh *pTextMesh, int iMatIdx, bool bOutline)
+void vtGeode::AddTextMesh(vtTextMesh *pTextMesh, int iMatIdx)
 {
 	// connect the underlying OSG objects
 	addDrawable(pTextMesh);
@@ -1430,8 +1505,7 @@ void vtGeode::AddTextMesh(vtTextMesh *pTextMesh, int iMatIdx, bool bOutline)
 	// A black outline around the font makes it easier to read against
 	// most backgrounds.
 	// TODO: expose a method to disable this behavior for special cases.
-	if (bOutline)
-		pTextMesh->setBackdropType(osgText::Text::OUTLINE);
+	pTextMesh->setBackdropType(osgText::Text::OUTLINE);
 
 	// In most cases, it is very helpful for text to face the user.
 	// TODO: expose a method to disable this behavior for special cases.
@@ -1484,13 +1558,7 @@ void vtGeode::RemoveMesh(vtMesh *pMesh)
 	removeDrawable(pMesh);
 }
 
-void vtGeode::RemoveAllMeshes()
-{
-	// This is a vector of ref_ptrs, so it will free meshes as appropriate.
-	_drawables.clear();
-}
-
-uint vtGeode::NumMeshes() const
+uint vtGeode::GetNumMeshes() const
 {
 	return getNumDrawables();
 }
@@ -1685,12 +1753,30 @@ vtDynGeom::vtDynGeom() : vtGeode()
  * Test a sphere against the view volume.
  *
  * \return VT_AllVisible if entirely inside the volume,
- *		   VT_Visible if partly inside,
- *		   otherwise 0.
+ *			VT_Visible if partly inside,
+ *			otherwise 0.
  */
 int vtDynGeom::IsVisible(const FSphere &sphere) const
 {
-	return IsVisible(sphere.center, sphere.radius);
+	uint vis = 0;
+
+	// cull against standard frustum
+	int i;
+	for (i = 0; i < 4; i++)
+	{
+		float dist = m_cullPlanes[i].Distance(sphere.center);
+		if (dist >= sphere.radius)
+			return 0;
+		if ((dist < 0) &&
+			(dist <= sphere.radius))
+			vis = (vis << 1) | 1;
+	}
+
+	// Notify renderer that object is entirely within standard frustum, so
+	// no clipping is necessary.
+	if (vis == 0x0F)
+		return VT_AllVisible;
+	return VT_Visible;
 }
 
 
@@ -1720,9 +1806,9 @@ bool vtDynGeom::IsVisible(const FPoint3& point) const
  *			otherwise 0.
  */
 int vtDynGeom::IsVisible(const FPoint3& point0,
-						 const FPoint3& point1,
-						 const FPoint3& point2,
-						 const float fTolerance) const
+							const FPoint3& point1,
+							const FPoint3& point2,
+							const float fTolerance) const
 {
 	uint outcode0 = 0, outcode1 = 0, outcode2 = 0;
 	register float dist;
@@ -1766,7 +1852,7 @@ int vtDynGeom::IsVisible(const FPoint3& point0,
  *			VT_Visible if partly intersecting,
  *			otherwise 0.
  */
-int vtDynGeom::IsVisible(const FPoint3 &point, float radius) const
+int vtDynGeom::IsVisible(const FPoint3 &point, float radius)
 {
 	uint incode = 0;
 

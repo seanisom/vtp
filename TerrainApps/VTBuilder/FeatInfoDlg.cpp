@@ -30,7 +30,6 @@ void FeatInfoDlg::OnModified()
 {
 	m_pLayer->SetModified(true);
 }
-
 void FeatInfoDlg::RefreshViz()
 {
 	m_pView->Refresh();

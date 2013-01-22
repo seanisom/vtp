@@ -38,7 +38,7 @@ enum LBMode {
 	LB_LinkExtend,  //extend a link selection,
 	LB_TSelect,		// select elevation layer
 	LB_Box,			// set area box
-	LB_FSelect,		// select feature (raw or structure)
+	LB_FSelect,		// select feature
 	LB_BldEdit,		// edit built structures
 	LB_BldAddPoints,		// add footprint points
 	LB_BldDeletePoints,		// delete footprint points
@@ -53,7 +53,7 @@ enum LBMode {
 };
 
 // A useful class to contain an array of bools
-typedef vtArray<bool> BoolArray;
+class BoolArray : public vtArray<bool> {};
 
 struct UIContext
 {

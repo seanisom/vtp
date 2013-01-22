@@ -78,13 +78,13 @@ bool CreateScene()
 	float fSpeed = pTerr->GetParams().GetValueFloat(STR_NAVSPEED);
 
 	vtTerrainFlyer *pFlyer = new vtTerrainFlyer(fSpeed);
-	pFlyer->AddTarget(pCamera);
+	pFlyer->SetTarget(pCamera);
 	pFlyer->SetHeightField(pTerr->GetHeightField());
 	pScene->AddEngine(pFlyer);
 
 	// Minimum height over terrain is 100 m
 	vtHeightConstrain *pConstrain = new vtHeightConstrain(100);
-	pConstrain->AddTarget(pCamera);
+	pConstrain->SetTarget(pCamera);
 	pConstrain->SetHeightField(pTerr->GetHeightField());
 	pScene->AddEngine(pConstrain);
 

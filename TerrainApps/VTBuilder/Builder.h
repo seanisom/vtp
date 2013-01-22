@@ -1,7 +1,7 @@
 //
 // Builder.h
 //
-// Copyright (c) 2001-2012 Virtual Terrain Project
+// Copyright (c) 2001-2011 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -52,7 +52,7 @@ public:
 	void DeleteContents();
 
 	// Layer methods
-	uint NumLayers() const { return m_Layers.size(); }
+	int NumLayers() const { return m_Layers.GetSize(); }
 	vtLayer *GetLayer(int i) const { return m_Layers[i]; }
 	vtLayer *LoadLayer(const wxString &fname);
 	void AddLayer(vtLayer *lp);
@@ -115,7 +115,7 @@ public:
 	// UI
 	virtual void RefreshTreeStatus() {}
 	virtual void RefreshStatusBar() {}
-	virtual void UpdateFeatureDialog(vtRawLayer *raw, vtFeatureSet *set, int iEntity) {}
+	virtual void UpdateFeatureDialog(vtRawLayer *raw, vtFeatureSetPoint2D *set, int iEntity) {}
 	virtual void OnSetMode(LBMode m) {}
 	virtual void OnSelectionChanged() {}
 	virtual void UpdateDistance(const DPoint2 &p1, const DPoint2 &p2) {}
@@ -138,7 +138,6 @@ public:
 	bool FillElevGaps(vtElevLayer *el, DRECT *area = NULL, int iMethod = -1);
 	void FlagStickyLayers(const std::vector<vtElevLayer*> &elevs);
 	vtElevLayer *ComputeDifference(vtElevLayer *pElev);
-	void CarveWithCulture(class vtElevLayer *pElev, float margin);
 
 	// Images
 	bool SampleCurrentImages(vtImageLayer *pTarget);
@@ -157,8 +156,8 @@ public:
 	// Vegetation
 	vtString m_strSpeciesFilename;
 	vtString m_strBiotypesFilename;
-	vtSpeciesList m_SpeciesList;
-	vtSpeciesList *GetSpeciesList() { return &m_SpeciesList; }
+	vtSpeciesList m_PlantList;
+	vtSpeciesList *GetPlantList() { return &m_PlantList; }
 	bool LoadSpeciesFile(const char *fname);
 	bool LoadBiotypesFile(const char *fname);
 
@@ -171,13 +170,7 @@ public:
 	// Import
 	void ImportData(LayerType ltype);
 	int ImportDataFromArchive(LayerType ltype, const wxString &fname_org, bool bRefresh);
-
-	bool ImportLayersFromFile(LayerType ltype, const wxString &strFileName,
-		LayerArray &layers, bool bRefresh = false, bool bWarn = false);
-
-	vtLayer *ImportLayerFromFile(LayerType ltype, const wxString &strFileName,
-		bool bRefresh = false, bool bWarn = false);
-
+	vtLayer *ImportDataFromFile(LayerType ltype, const wxString &strFileName, bool bRefresh = false, bool bWarn = false);
 	vtLayer *ImportFromDLG(const wxString &strFileName, LayerType ltype);
 	vtLayer *ImportFromSHP(const wxString &strFileName, LayerType ltype);
 	vtLayer *ImportFromDXF(const wxString &strFileName, LayerType ltype);
@@ -190,18 +183,13 @@ public:
 	void ImportFromMapSource(const char *fname);
 	vtFeatureSetPoint2D *ImportPointsFromDBF(const char *fname);
 	vtFeatureSet *ImportPointsFromCSV(const char *fname);
-	vtFeatureSet *ImportPointsFromXYZ(const char *fname,
-		bool progress_callback(int) = NULL);
-	void ImportDataPointsFromTable(const char *fname,
-		bool progress_callback(int) = NULL);
+	vtFeatureSet *ImportPointsFromXYZ(const char *fname, bool progress_callback(int) = NULL);
+	void ImportDataPointsFromTable(const char *fname, bool progress_callback(int) = NULL);
 	int ImportDataFromTIGER(const wxString &strDirName);
-	void ImportDataFromOSM(const wxString &strFileName, LayerArray &layers,
-		bool progress_callback(int));
-	void ImportDataFromNTF(const wxString &strFileName, LayerArray &layers);
+	void ImportDataFromNTF(const wxString &strFileName);
 	void ImportDataFromS57(const wxString &strDirName);
 	int ImportDataFromSCC(const char *filename);
 	bool ImportDataFromDXF(const char *filename);
-
 	LayerType GuessLayerTypeFromDLG(vtDLGFile *pDLG);
 	void ElevCopy();
 	void ElevPasteNew();
@@ -223,8 +211,8 @@ public:
 	void ElevExportTiles(BuilderView *pView = NULL);
 	void ImageExportTiles(BuilderView *pView = NULL);
 	void ImageExportPPM();
-	void AreaSampleElevTileset(BuilderView *pView = NULL);
-	void AreaSampleImageTileset(BuilderView *pView = NULL);
+	void ExportAreaOptimizedElevTileset(BuilderView *pView = NULL);
+	void ExportAreaOptimizedImageTileset(BuilderView *pView = NULL);
 
 	// Area tool
 	void SetArea(const DRECT &r) { m_area = r; }
@@ -233,12 +221,12 @@ public:
 
 	// Sampling
 	void ScanElevationLayers(int &count, int &floating, int &tins, DPoint2 &spacing);
-	void AreaSampleElevation(BuilderView *pView = NULL);
-	bool SampleElevationToTileset(BuilderView *pView, TilingOptions &opts, bool bFloat, bool bShowGridMarks = true);
-	bool DoSampleElevationToTileset(BuilderView *pView, TilingOptions &opts, bool bFloat, bool bShowGridMarks = true);
-	bool SampleImageryToTileset(BuilderView *pView, TilingOptions &opts, bool bShowGridMarks = true);
-	bool DoSampleImageryToTileset(BuilderView *pView, TilingOptions &opts, bool bShowGridMarks = true);
-	void AreaSampleImages(BuilderView *pView = NULL);
+	void MergeResampleElevation(BuilderView *pView = NULL);
+	bool SampleElevationToTilePyramids(BuilderView *pView, TilingOptions &opts, bool bFloat, bool bShowGridMarks = true);
+	bool DoSampleElevationToTilePyramids(BuilderView *pView, TilingOptions &opts, bool bFloat, bool bShowGridMarks = true);
+	bool SampleImageryToTilePyramids(BuilderView *pView, TilingOptions &opts, bool bShowGridMarks = true);
+	bool DoSampleImageryToTilePyramids(BuilderView *pView, TilingOptions &opts, bool bShowGridMarks = true);
+	void MergeResampleImages(BuilderView *pView = NULL);
 
 	// Application Data
 	wxFrame *m_pParentWindow;

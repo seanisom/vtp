@@ -48,12 +48,12 @@ vtBitmap::~vtBitmap()
 #endif
 }
 
-bool vtBitmap::Allocate(const IPoint2 &size, int iDepth)
+bool vtBitmap::Allocate(int iXSize, int iYSize, int iDepth)
 {
 	if (iDepth == 8)
-		return Allocate8(size);
+		return Allocate8(iXSize, iYSize);
 	else if (iDepth == 24)
-		return Allocate24(size);
+		return Allocate24(iXSize, iYSize);
 	else
 		return false;
 }
@@ -63,13 +63,13 @@ bool vtBitmap::IsAllocated() const
 	return (m_pBitmap != NULL && m_pBitmap->Ok());
 }
 
-bool vtBitmap::Allocate8(const IPoint2 &size)
+bool vtBitmap::Allocate8(int iXSize, int iYSize)
 {
 	// TODO: difficult, as wxImage can only be 24-bit.
 	return false;
 }
 
-bool vtBitmap::Allocate24(const IPoint2 &size)
+bool vtBitmap::Allocate24(int iXSize, int iYSize)
 {
 #if USE_DIBSECTIONS
 	BITMAPINFO ScanlineFormat =
@@ -85,14 +85,14 @@ bool vtBitmap::Allocate24(const IPoint2 &size)
 			0, 0	// colours used & important (0 for 24 bits per pixel)
 		}, 0
 	};
-	ScanlineFormat.bmiHeader.biWidth = size.x;
-	ScanlineFormat.bmiHeader.biHeight = -size.y;
+	ScanlineFormat.bmiHeader.biWidth = iXSize;
+	ScanlineFormat.bmiHeader.biHeight = -iYSize;
 
 	// Reportedly, biSizeImage need not be specified.
 	//  In fact, setting this field to other than 0 can produce crashes.
 	ScanlineFormat.bmiHeader.biSizeImage = 0;
 
-	m_iScanlineWidth = (((size.x)*(24) + 31) / 32 * 4);
+	m_iScanlineWidth = (((iXSize)*(24) + 31) / 32 * 4);
 
 	// The following sets the m_pScanline pointer, which points to a giant
 	// block of directly accesible image data!
@@ -112,7 +112,7 @@ bool vtBitmap::Allocate24(const IPoint2 &size)
 	m_pBitmap->SetDepth(24);
 #else
 	// yes, we could use some error-checking here
-	m_pImage = new wxImage(size.x, size.y);
+	m_pImage = new wxImage(iXSize, iYSize);
 	if (!m_pImage->Ok())
 	{
 		delete m_pImage;
@@ -179,9 +179,14 @@ void vtBitmap::SetPixel8(int x, int y, uchar color)
 	// unimplemented
 }
 
-IPoint2 vtBitmap::GetSize() const
+uint vtBitmap::GetWidth() const
 {
-	return IPoint2(m_pBitmap->GetWidth(), m_pBitmap->GetHeight());
+	return m_pBitmap->GetWidth();
+}
+
+uint vtBitmap::GetHeight() const
+{
+	return m_pBitmap->GetHeight();
 }
 
 uint vtBitmap::GetDepth() const
@@ -306,7 +311,7 @@ bool vtBitmap::ReadPNGFromMemory(uchar *buf, int len)
 			return false;
 	}
 
-	Allocate24(IPoint2(width, height));
+	Allocate24(width, height);
 
 	size_t png_stride = png_get_rowbytes(png, info);
 	uint row, col;

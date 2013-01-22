@@ -2,7 +2,7 @@
 // EnviroGUI.cpp
 // GUI-specific functionality of the Enviro class
 //
-// Copyright (c) 2003-2013 Virtual Terrain Project
+// Copyright (c) 2003-2011 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -15,7 +15,6 @@
 
 #include "vtlib/vtlib.h"
 #include "vtlib/core/Terrain.h"
-#include "vtdata/FileFilters.h"
 #include "vtdata/vtLog.h"
 #include "vtui/Helper.h"
 #include "vtui/InstanceDlg.h"
@@ -24,7 +23,7 @@
 #include "EnviroGUI.h"
 #include "EnviroApp.h"
 #include "EnviroFrame.h"
-#include "EnviroCanvas.h"
+#include "canvas.h"
 #include "../Options.h"
 
 // dialogs
@@ -157,19 +156,21 @@ void EnviroGUI::SetProgressTerrain(vtTerrain *pTerr)
 	pTerr->SetProgressCallback(progress_callback_minor);
 }
 
-void EnviroGUI::UpdateProgress(const char *msg1, const char *msg2, int amount1, int amount2)
+void EnviroGUI::UpdateProgress(const char *msg, int amount1, int amount2)
 {
-	wxString ws1(msg1, wxConvUTF8);
-	wxString ws2(msg2, wxConvUTF8);
+	wxString str(msg, wxConvUTF8);
 
-	// Try to translate the first part; a translation might be available.
+	// Try to translate it; a translation might be available.
 	// If the string is not found in any of the loaded message catalogs,
 	// the original string is returned.
-	if (ws1 != _T(""))
-		ws1 = wxGetTranslation(ws1);
+	wxString str2 = wxGetTranslation(str);
 
-	// Concatenate
-	UpdateProgressDialog2(amount1, amount2, ws1 + ws2);
+	UpdateProgressDialog2(amount1, amount2, str2);
+}
+
+void EnviroGUI::ExtendStructure(vtStructInstance *si)
+{
+	GetFrame()->ExtendStructure(si);
 }
 
 void EnviroGUI::AddVehicle(CarEngine *eng)
@@ -255,7 +256,7 @@ void EnviroGUI::SetupScene3()
 		m_pJFlyer = new vtJoystickEngine;
 		m_pJFlyer->setName("Joystick");
 		vtGetScene()->AddEngine(m_pJFlyer);
-		m_pJFlyer->AddTarget(m_pNormalCamera);
+		m_pJFlyer->SetTarget(m_pNormalCamera);
 	}
 #endif
 }
@@ -272,12 +273,9 @@ bool EnviroGUI::SaveVegetation(bool bAskFilename)
 	VTLOG1("EnviroGUI::SaveVegetation\n");
 
 	vtTerrain *pTerr = GetCurrentTerrain();
-	vtVegLayer *vlay = pTerr->GetVegLayer();
+	vtPlantInstanceArray &pia = pTerr->GetPlantInstances();
 
-	if (!vlay)
-		return false;
-
-	vtString fname = vlay->GetFilename();
+	vtString fname = pia.GetFilename();
 
 	if (bAskFilename)
 	{
@@ -289,7 +287,7 @@ bool EnviroGUI::SaveVegetation(bool bAskFilename)
 
 		EnableContinuousRendering(false);
 		wxFileDialog saveFile(NULL, _("Save Vegetation Data"), default_dir,
-			default_file, FSTRING_VF, wxFD_SAVE);
+			default_file, _("Vegetation Files (*.vf)|*.vf"), wxFD_SAVE);
 		bool bResult = (saveFile.ShowModal() == wxID_OK);
 		EnableContinuousRendering(true);
 		if (!bResult)
@@ -299,11 +297,9 @@ bool EnviroGUI::SaveVegetation(bool bAskFilename)
 		}
 		wxString str = saveFile.GetPath();
 		fname = str.mb_str(wxConvUTF8);
-		vlay->SetFilename(fname);
+		pia.SetFilename(fname);
 	}
-	bool success = vlay->WriteVF(fname);
-	if (success)
-		vlay->SetModified(false);
+	pia.WriteVF(fname);
 	return true;
 }
 
@@ -311,8 +307,8 @@ bool EnviroGUI::SaveStructures(bool bAskFilename)
 {
 	VTLOG1("EnviroGUI::SaveStructures\n");
 
-	vtStructureLayer *st_layer = GetCurrentTerrain()->GetStructureLayer();
-	vtString fname = st_layer->GetFilename();
+	vtStructureArray3d *sa = GetCurrentTerrain()->GetStructureLayer();
+	vtString fname = sa->GetFilename();
 	if (bAskFilename)
 	{
 		// save current directory
@@ -323,7 +319,7 @@ bool EnviroGUI::SaveStructures(bool bAskFilename)
 
 		EnableContinuousRendering(false);
 		wxFileDialog saveFile(NULL, _("Save Built Structures Data"),
-			default_dir, default_file, FSTRING_VTST,
+			default_dir, default_file, _("Structure Files (*.vtst)|*.vtst"),
 			wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
 		bool bResult = (saveFile.ShowModal() == wxID_OK);
 		EnableContinuousRendering(true);
@@ -334,11 +330,11 @@ bool EnviroGUI::SaveStructures(bool bAskFilename)
 		}
 		wxString str = saveFile.GetPath();
 		fname = str.mb_str(wxConvUTF8);
-		st_layer->SetFilename(fname);
+		sa->SetFilename(fname);
 	}
 	bool success = false;
 	try {
-		success = st_layer->WriteXML(fname);
+		success = sa->WriteXML(fname);
 	}
 	catch (xh_io_exception &e)
 	{
@@ -346,8 +342,6 @@ bool EnviroGUI::SaveStructures(bool bAskFilename)
 		VTLOG("  Error: %s\n", str.c_str());
 		wxMessageBox(wxString(str.c_str(), wxConvUTF8), _("Error"));
 	}
-	if (success)
-		st_layer->SetModified(false);
 	return success;
 }
 
@@ -381,8 +375,6 @@ void EnviroGUI::ShowMessage(const vtString &str)
 }
 
 ///////////////////////////////////////////////////////////////////////
-
-#if wxUSE_JOYSTICK || WIN32
 
 vtJoystickEngine::vtJoystickEngine()
 {
@@ -420,7 +412,7 @@ void vtJoystickEngine::Eval()
 			if (fabs(dx) > dead_zone)
 				pTarget->TranslateLocal(FPoint3(dx * m_fSpeed * fElapsed, 0.0f, 0.0f));
 			if (fabs(dy) > dead_zone)
-				pTarget->Translate(FPoint3(0.0f, dy * m_fSpeed * fElapsed, 0.0f));
+				pTarget->Translate1(FPoint3(0.0f, dy * m_fSpeed * fElapsed, 0.0f));
 		}
 		else if (buttons & wxJOY_BUTTON3)
 		{
@@ -442,8 +434,6 @@ void vtJoystickEngine::Eval()
 	m_fLastTime = fTime;
 }
 
-#endif  // wxUSE_JOYSTICK || WIN32
-
 
 ///////////////////////////////////////////////////////////////////////
 // Helpers
@@ -455,9 +445,6 @@ vtAbstractLayer *CreateNewAbstractPointLayer(vtTerrain *pTerr, bool bAskStyle)
 	pSet->SetFilename("Untitled.shp");
 	pSet->AddField("Label", FT_String);
 
-	// Inherit projection
-	pSet->SetProjection(pTerr->GetProjection());
-
 	// Ask style for the new point layer
 	vtTagArray props;
 	props.SetValueBool("ObjectGeometry", false, true);
@@ -465,7 +452,6 @@ vtAbstractLayer *CreateNewAbstractPointLayer(vtTerrain *pTerr, bool bAskStyle)
 	props.SetValueRGBi("LabelColor", RGBi(255,255,0), true);
 	props.SetValueFloat("LabelHeight", 10.0f, true);
 	props.SetValueInt("TextFieldIndex", 0, true);
-	props.SetValueBool("LabelOutline", true, true);
 
 	if (bAskStyle)
 	{
@@ -481,21 +467,18 @@ vtAbstractLayer *CreateNewAbstractPointLayer(vtTerrain *pTerr, bool bAskStyle)
 	}
 
 	// wrap the features in an abstract layer
-	vtAbstractLayer *ab_layer = new vtAbstractLayer;
-	ab_layer->SetFeatureSet(pSet);
-	ab_layer->AddProps(props);
+	vtAbstractLayer *pLay = new vtAbstractLayer(pTerr);
+	pLay->SetFeatureSet(pSet);
+	pLay->SetProperties(props);
 
 	// add the new layer to the terrain
-	pTerr->GetLayers().push_back(ab_layer);
-	pTerr->SetActiveLayer(ab_layer);
-
-	// Construct it once so it is set up for future visuals.
-	pTerr->CreateAbstractLayerVisuals(ab_layer);
+	pTerr->GetLayers().push_back(pLay);
+	pTerr->SetAbstractLayer(pLay);
 
 	// and show it in the layers dialog
 	GetFrame()->m_pLayerDlg->RefreshTreeContents();	// full refresh
 
-	return ab_layer;
+	return pLay;
 }
 
 vtAbstractLayer *CreateNewAbstractLineLayer(vtTerrain *pTerr, bool bAskStyle)
@@ -528,19 +511,16 @@ vtAbstractLayer *CreateNewAbstractLineLayer(vtTerrain *pTerr, bool bAskStyle)
 	}
 
 	// wrap the features in an abstract layer
-	vtAbstractLayer *ab_layer = new vtAbstractLayer();
-	ab_layer->SetFeatureSet(pSet);
-	ab_layer->SetProps(props);
+	vtAbstractLayer *pLay = new vtAbstractLayer(pTerr);
+	pLay->SetFeatureSet(pSet);
+	pLay->SetProperties(props);
 
 	// add the new layer to the terrain
-	pTerr->GetLayers().push_back(ab_layer);
-	pTerr->SetActiveLayer(ab_layer);
-
-	// Construct it once so it is set up for future visuals.
-	pTerr->CreateAbstractLayerVisuals(ab_layer);
+	pTerr->GetLayers().push_back(pLay);
+	pTerr->SetAbstractLayer(pLay);
 
 	// and show it in the layers dialog
 	GetFrame()->m_pLayerDlg->RefreshTreeContents();	// full refresh
 
-	return ab_layer;
+	return pLay;
 }

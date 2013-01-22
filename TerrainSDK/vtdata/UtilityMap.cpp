@@ -1,7 +1,7 @@
 //
 // UtilityMap.cpp
 //
-// Copyright (c) 2001-2013 Virtual Terrain Project
+// Copyright (c) 2001-2008 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -9,43 +9,52 @@
 #include "UtilityMap.h"
 #include "vtString.h"
 #include "vtLog.h"
-#include "Version.h"
 #include "shapelib/shapefil.h"
 #include "xmlhelper/easyxml.hpp"
 
-
-//
-// Make a polyline for this vtLine by using the points from each node.
-//
-void vtLine::MakePolyline(DLine2 &polyline)
-{
-	const uint num = m_poles.size();
-	polyline.SetSize(num);
-	for (uint i = 0; i < num; i++)
-		polyline[i] = m_poles[i]->m_p;
-}
-
-///////////////////////////////////////////////////////////////////////////////
-
 vtUtilityMap::vtUtilityMap()
 {
-	m_iNextAvailableID = 0;
 }
 
 vtUtilityMap::~vtUtilityMap()
 {
-	for (uint i = 0; i < m_Poles.size(); i++)
-		delete m_Poles[i];
-	m_Poles.clear();
+}
 
-	for (uint i = 0; i < m_Lines.size(); i++)
-		delete m_Lines[i];
-	m_Lines.clear();
+
+bool vtUtilityMap::ImportPolesFromSHP(const char *fname)
+{
+	SHPHandle hSHP;
+	int		nEntities, nShapeType;
+	DPoint2 point;
+
+	// SHPOpen doesn't yet support utf-8 or wide filenames, so convert
+	vtString fname_local = UTF8ToLocal(fname);
+
+	hSHP = SHPOpen(fname_local, "rb");
+	if (!hSHP)
+		return false;
+
+	SHPGetInfo(hSHP, &nEntities, &nShapeType, NULL, NULL);
+	if (nShapeType != SHPT_POINT)
+		return false;
+
+	for (int i = 0; i < nEntities; i++)
+	{
+		SHPObject *psShape = SHPReadObject(hSHP, i);
+		point.x = psShape->padfX[0];
+		point.y = psShape->padfY[0];
+		vtPole *pole = new vtPole;
+		pole->m_p = point;
+		m_Poles.Append(pole);
+		SHPDestroyObject(psShape);
+	}
+	SHPClose(hSHP);
+	return true;
 }
 
 vtPole *vtUtilityMap::ClosestPole(const DPoint2 &p)
 {
-	uint npoles = m_Poles.size();
+	uint npoles = m_Poles.GetSize();
 	if (npoles == 0)
 		return NULL;
 
@@ -64,352 +73,291 @@ vtPole *vtUtilityMap::ClosestPole(const DPoint2 &p)
 	return m_Poles[ret];
 }
 
+bool vtUtilityMap::ImportLinesFromSHP(const char *fname)
+{
+	SHPHandle hSHP;
+	int		nEntities, nShapeType;
+	int		i, j, verts;
+
+	// SHPOpen doesn't yet support utf-8 or wide filenames, so convert
+	vtString fname_local = UTF8ToLocal(fname);
+
+	hSHP = SHPOpen(fname_local, "rb");
+	if (!hSHP)
+		return false;
+
+	SHPGetInfo(hSHP, &nEntities, &nShapeType, NULL, NULL);
+	if (nShapeType != SHPT_ARC)
+		return false;
+
+	for (i = 0; i < nEntities; i++)
+	{
+		SHPObject *psShape = SHPReadObject(hSHP, i);
+
+		verts = psShape->nVertices;
+		vtLine *line = new vtLine;
+		line->SetSize(verts);
+
+		// Store each SHP Poly Coord in Line
+		for (j = 0; j < verts; j++)
+		{
+			line->GetAt(j).x = psShape->padfX[j];
+			line->GetAt(j).y = psShape->padfY[j];
+		}
+		SHPDestroyObject(psShape);
+
+		// Guess source and destination poles by using location
+		line->m_src = ClosestPole(line->GetAt(0));
+		line->m_dst = ClosestPole(line->GetAt(verts-1));
+
+		// avoid degenerate lines
+		if (line->m_src == line->m_dst)
+		{
+			delete line;
+			continue;
+		}
+
+		// tweak start and end of line to match poles
+		line->SetAt(0, line->m_src->m_p);
+		line->SetAt(verts-1, line->m_dst->m_p);
+
+		m_Lines.Append(line);
+	}
+	SHPClose(hSHP);
+	return true;
+}
+
+
+bool vtUtilityMap::ImportFromSHP(const char *dirname, const vtProjection &proj)
+{
+	char	fname[256];
+
+	m_proj = proj;
+
+	// 1. Pole Positions
+	//
+	strcpy(fname, dirname);
+	strcat(fname, "/poles.shp");
+	if (!ImportPolesFromSHP(fname))
+		return false;
+
+	// 2. Fuses
+	//
+	strcpy(fname, dirname);
+	strcat(fname, "/fuses.shp");
+	if (!ImportPolesFromSHP(fname))
+		return false;
+
+	// 3. Transformers
+	//
+	strcpy(fname, dirname);
+	strcat(fname, "/transformers.shp");
+	if (!ImportPolesFromSHP(fname))
+		return false;
+
+	// 4. Servpnts
+	//
+	strcpy(fname, dirname);
+	strcat(fname, "/servpnts.shp");
+	if (!ImportPolesFromSHP(fname))
+		return false;
+
+	// Now, lines
+	//
+	// 1. Primaries
+	//
+	strcpy(fname, dirname);
+	strcat(fname, "/primaries.shp");
+	if (!ImportLinesFromSHP(fname))
+		return false;
+
+	// 2. Secondaries
+	//
+	strcpy(fname, dirname);
+	strcat(fname, "/secondaries.shp");
+	if (!ImportLinesFromSHP(fname))
+		return false;
+	return true;
+}
+
 void vtUtilityMap::GetPoleExtents(DRECT &rect)
 {
-	if (m_Poles.empty())
+	if (m_Poles.IsEmpty())
 		return;
 
 	rect.SetRect(1E9, -1E9, -1E9, 1E9);
 
-	const int size = m_Poles.size();
-	for (int i = 0; i < size; i++)
+	int i, size = m_Poles.GetSize();
+	for (i = 0; i < size; i++)
 	{
-		vtPole *pole = m_Poles[i];
+		vtPole *pole = m_Poles.GetAt(i);
 		rect.GrowToContainPoint(pole->m_p);
 	}
 }
 
-bool vtUtilityMap::WriteOSM(const char *pathname)
-{
-	FILE *fp = fopen(pathname, "wb");
-	if (!fp)
-		return false;
 
-	// OSM only understands Geographic WGS84, so convert to that.
-	vtProjection wgs84_geo;
-	wgs84_geo.SetGeogCSFromDatum(EPSG_DATUM_WGS84);
-	OCT *transform = CreateCoordTransform(&m_proj, &wgs84_geo);
-	if (!transform)
-	{
-		VTLOG1(" Couldn't transform coordinates\n");
-		return false;
-	}
 
-	fprintf(fp, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
-	fprintf(fp, "<osm version=\"0.6\" generator=\"VTP %s\">\n", VTP_VERSION);
-
-	for (uint i = 0; i < m_Poles.size(); i++)
-	{
-		const vtPole *pole = m_Poles[i];
-		DPoint2 p = pole->m_p;
-		transform->Transform(1, &p.x, &p.y);
-
-		fprintf(fp, " <node id=\"%d\" lat=\"%.8lf\" lon=\"%.8lf\" version=\"1\">\n",
-			pole->m_id, p.y, p.x);
-
-		fprintf(fp, "  <tag k=\"power\" v=\"tower\"/>\n");
-
-		const int num_tags = pole->NumTags();
-		for (uint j = 0; j < pole->NumTags(); j++)
-		{
-			fprintf(fp, "  tag k=\"%s\" v=\"%s\"/>\n",
-				(const char *) pole->GetTag(j)->name,
-				(const char *) pole->GetTag(j)->value);
-		}
-		fprintf(fp, " </node>\n");
-	}
-	for (uint i = 0; i < m_Lines.size(); i++)
-	{
-		const vtLine *line = m_Lines[i];
-		const uint num_poles = line->m_poles.size();
-		const uint num_tags = line->NumTags();
-
-		fprintf(fp, " <way id=\"%d\" version=\"1\">\n", line->m_id);
-
-		for (uint j = 0; j < num_poles; j++)
-			fprintf(fp, "  <nd ref=\"%d\"/>\n", line->m_poles[j]->m_id);
-
-		fprintf(fp, "  <tag k=\"power\" v=\"line\"/>\n");
-
-		for (uint j = 0; j < line->NumTags(); j++)
-		{
-			fprintf(fp, "  tag k=\"%s\" v=\"%s\"/>\n",
-				(const char *) line->GetTag(j)->name,
-				(const char *) line->GetTag(j)->value);
-		}
-		fprintf(fp, " </way>\n");
-	}
-	fprintf(fp, "</osm>\n");
-	fclose(fp);
-
-	delete transform;
-	return true;
-}
-
+#if 0
 ////////////////////////////////////////////////////////////////////////
-// Visitor class, for XML parsing of an OpenStreetMap file.
-//
+// Visitor class, for XML parsing of Content files.
+////////////////////////////////////////////////////////////////////////
 
-#include <map>
-
-struct OSMNode {
-	DPoint2 p;
-	bool signal_lights;
-	vtPole *pole;
-};
-
-class UtilOSMVisitor : public XMLVisitor
+class UtilityVisitor : public XMLVisitor
 {
 public:
-	UtilOSMVisitor(vtUtilityMap *util);
-	void startElement(const char *name, const XMLAttributes &atts);
-	void endElement(const char *name);
-	void data(const char *s, int length) {}	// OSM doesn't use actual XML data
-	void SetSignalLights();
+	UtilityVisitor(vtUtilityMap *umap)
+	: m_pUM(umap) { m_state = 0; }
 
-	vtUtilityMap *m_util_layer;
+	virtual ~UtilityVisitor() {}
 
-	vtPole *m_pole;
-	vtLine *m_line;
+	void startXML();
+	void endXML();
+	void startElement(const char * name, const XMLAttributes &atts);
+//	void endElement(const char * name);
+	void data(const char * s, int length);
+	void SetName(const char *s) { m_name = s; }
+	const char *GetName() { return(m_name); }
+	void SetReference(const char *s) { m_reference = s; }
+	const char *GetReference() { return(m_reference); }
+	void SetRotation(float f) { m_rotation = f; }
+	float SetRotation() { return(m_rotation); }
 
 private:
-	void StartPowerPole();
-	void MakePowerLine();
-	void ParseOSMTag(const vtString &key, const vtString &value);
+	string m_data;
+	int m_state;
 
-	enum ParseState {
-		PS_NONE,
-		PS_NODE,
-		PS_WAY
-	} m_state;
+	vtString m_name, m_reference;
+	float m_rotation;
 
-	typedef std::map<int, OSMNode> NodeMap;
-	NodeMap m_nodes;
-	std::vector<int> m_refs;
-	int			m_id;
+	vtUtilityMap *m_pUM;
 };
 
-UtilOSMVisitor::UtilOSMVisitor(vtUtilityMap *util) : m_state(PS_NONE)
+void UtilityVisitor::startXML ()
 {
-	m_util_layer = util;
-
-	// OSM is always in Geo WGS84
-	vtProjection proj;
-	proj.SetWellKnownGeogCS("WGS84");
-	m_util_layer->SetProjection(proj);
 }
 
-void UtilOSMVisitor::startElement(const char *name, const XMLAttributes &atts)
+void UtilityVisitor::endXML ()
 {
-	const char *val;
-
-	if (m_state == 0)
-	{
-		if (!strcmp(name, "node"))
-		{
-			DPoint2 p;
-
-			val = atts.getValue("id");
-			if (val)
-				m_id = atoi(val);
-			else
-				m_id = -1;	// Shouldn't happen.
-
-			val = atts.getValue("lon");
-			if (val)
-				p.x = atof(val);
-
-			val = atts.getValue("lat");
-			if (val)
-				p.y = atof(val);
-
-			OSMNode node;
-			node.p = p;
-			m_nodes[m_id] = node;
-
-			m_state = PS_NODE;
-
-			m_pole = NULL;
-		}
-		else if (!strcmp(name, "way"))
-		{
-			m_refs.clear();
-			m_state = PS_WAY;
-			val = atts.getValue("id");
-			if (val)
-				m_id = atoi(val);
-			else
-				m_id = -1;	// Shouldn't happen.
-
-			// Defaults
-			m_line = NULL;
-		}
-	}
-	else if (m_state == PS_NODE && !strcmp(name, "tag"))
-	{
-		vtString key, value;
-
-		val = atts.getValue("k");
-		if (val)
-			key = val;
-
-		val = atts.getValue("v");
-		if (val)
-			value = val;
-
-		if (key == "power" && value == "tower")
-			StartPowerPole();
-
-		// Node key/value
-		else if (key == "highway")
-		{
-			if (value == "traffic_signals")
-			{
-				m_nodes[m_nodes.size()-1].signal_lights = true;
-			}
-		}
-		else if (m_pole)
-		{
-			// Add all node tags for power towers
-			m_pole->AddTag(key, value);
-		}
-	}
-	else if (m_state == PS_WAY)
-	{
-		if (!strcmp(name, "nd"))
-		{
-			val = atts.getValue("ref");
-			if (val)
-			{
-				int ref = atoi(val);
-				m_refs.push_back(ref);
-			}
-		}
-		else if (!strcmp(name, "tag"))
-		{
-			vtString key, value;
-
-			val = atts.getValue("k");
-			if (val)
-				key = val;
-
-			val = atts.getValue("v");
-			if (val)
-				value = val;
-
-			if (m_line)
-				m_line->AddTag(key, value);
-			else
-				ParseOSMTag(key, value);
-		}
-	}
 }
 
-void UtilOSMVisitor::endElement(const char *name)
+
+bool vtUtilityMap::ReadXML(const char *pathname, bool progress_callback(int))
 {
-	if (m_state == PS_NODE && !strcmp(name, "node"))
-		m_state = PS_NONE;
-	else if (m_state == PS_WAY && !strcmp(name, "way"))
-		m_state = PS_NONE;
-}
-
-void UtilOSMVisitor::ParseOSMTag(const vtString &key, const vtString &value)
-{
-	if (key == "height")
-	{
-		// TODO: m_fHeight = atof((const char *)value);
-	}
-	if (key == "power" && value == "line")
-		MakePowerLine();
-}
-
-void UtilOSMVisitor::StartPowerPole()
-{
-	OSMNode &node = m_nodes[m_id];
-
-	m_pole = m_util_layer->AddNewPole();
-	m_pole->m_id = m_id;
-	m_pole->m_p = node.p;
-
-	node.pole = m_pole;
-}
-
-void UtilOSMVisitor::MakePowerLine()
-{
-	m_line = m_util_layer->AddNewLine();
-
-	m_line->m_poles.resize(m_refs.size());
-	for (uint r = 0; r < m_refs.size(); r++)
-	{
-		int idx = m_refs[r];
-
-		// Look for that node by id; if we don't find it, then it wasn't a tower;
-		// it was probably a start or end point at a non-tower feature.
-		NodeMap::iterator it = m_nodes.find(m_id);
-		if (it != m_nodes.end())
-		{
-			// Connect to a known pole.
-			m_line->m_poles[r] = m_nodes[idx].pole;
-		}
-		else
-		{
-			// We need to make a new pole node.
-			OSMNode &node = m_nodes[idx];
-
-			m_pole = m_util_layer->AddNewPole();
-			m_pole->m_id = idx;
-			m_pole->m_p = node.p;
-
-			node.pole = m_pole;
-
-			// Then we can connect it
-			m_line->m_poles[r] = m_pole;
-		}
-	}
-}
-
-bool vtUtilityMap::ReadOSM(const char *pathname, bool progress_callback(int))
-{
-	// Avoid trouble with '.' and ',' in Europe
-	//  OSM always has English punctuation
+	// The locale might be set to something European that interprets '.' as ','
+	//  and vice versa, which would break our usage of sscanf/atof terribly.
+	//  So, push the 'standard' locale, it is restored when it goes out of scope.
 	LocaleWrap normal_numbers(LC_NUMERIC, "C");
 
-	UtilOSMVisitor visitor(this);
+	bool success = false;
+	UtilityVisitor visitor(this);
 	try
 	{
 		readXML(pathname, visitor, progress_callback);
+		success = true;
 	}
 	catch (xh_exception &ex)
 	{
-		VTLOG1(ex.getFormattedMessage().c_str());
+		// TODO: would be good to pass back the error message.
+		VTLOG("XML Error: ");
+		VTLOG(ex.getFormattedMessage().c_str());
 		return false;
 	}
-	return true;
+
+	return success;
 }
 
-void vtUtilityMap::SetProjection(const vtProjection &proj)
+void UtilityVisitor::startElement(const char *name, const XMLAttributes &atts)
 {
-	m_proj = proj;
+	const char *attval;
+
+	// clear data at the start of each element
+	m_data = "";
+
+	if (m_state == 0)
+	{
+		if (!strcmp(name, "UtilityCollection"))
+		{
+			m_state = 1;
+		}
+		else
+		{
+			string message = "Root element name is ";
+			message += name;
+			message += "; expected UtilityCollection";
+			throw xh_io_exception(message, "XML Reader");
+		}
+		return;
+	}
+	if (m_state == 1)
+	{
+		if (!strcmp(name, "OverheadLine"))
+		{
+			m_pRoute = new vtRoute(GetCurrentTerrain());		// Create new route (should this be in vtUtilityMap ??)
+			attval = atts.getValue("name");
+			if (attval)
+				m_pRoute->SetName(attval);		// TODO Set Name of the overhead line
+			GetCurrentTerrain()->AddRoute(m_pRoute);
+			m_state = 2;
+		}
+		return;
+	}
+
+	if (m_state == 2)	// Conductor
+	{
+		if (!strcmp(name, "Conductor"))
+		{
+			attval = atts.getValue("width");
+			if (attval)
+				m_pRoute->SetThickness(atof(attval));
+			attval = atts.getValue("color");
+			if (attval)
+				m_pRoute->SetColor(ParseHexColor(attval));
+			m_state = 3;
+		}
+		return;
+	}
+
+	if (m_state == 3)	// Pylon
+	{
+		if (!strcmp(name, "Pylon"))
+		{
+			attval = atts.getValue("name");
+			if (attval)
+				SetName(attval);
+			attval = atts.getValue("reference");
+			if (attval)
+				SetReference(attval);
+			attval = atts.getValue("rotation");
+			if (attval)
+				SetRotation(atof(attval));
+
+			m_state = 4;	// now read in the coordinate ...
+		}
+		else
+			m_state = 1;	// then it is a new overhead line
+		return;
+	}
 }
 
-bool vtUtilityMap::TransformTo(vtProjection &proj)
+void UtilityVisitor::endElement(const char *name)
 {
-	// Convert from (usually, Wgs84 Geographic) to what we need.
-	OCT *transform = CreateCoordTransform(&m_proj, &proj);
-	if (!transform)
-	{
-		VTLOG1(" Couldn't transform coordinates\n");
-		return false;
-	}
-	for (uint i = 0; i < m_Poles.size(); i++)
-	{
-		vtPole *pole = m_Poles[i];
-		transform->Transform(1, &pole->m_p.x, &pole->m_p.y);
-	}
-	delete transform;
+	const char *data = m_data.c_str();
 
-	// Adopt new projection
-	m_proj = proj;
-
-	return true;
+	if (m_state == 4)	// Coordinate of the pylon
+	{
+		if (!strcmp(name, "gml:coordinates"))
+		{
+			double x, y;
+			sscanf(data, "%lf,%lf", &x, &y);
+			m_pRoute->AddPoint(DPoint2(x,y), GetReference());
+					// now set also the rotation !!!! HOW?? TODO
+			m_state = 3;
+		}
+	}
 }
+
+void UtilityVisitor::data(const char *s, int length)
+{
+	m_data.append(string(s, length));
+}
+#endif

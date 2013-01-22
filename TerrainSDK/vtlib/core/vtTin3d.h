@@ -1,7 +1,7 @@
 //
 // vtTin3d.h
 //
-// Copyright (c) 2002-2013 Virtual Terrain Project
+// Copyright (c) 2002-2011 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -10,7 +10,6 @@
 
 #include "vtdata/vtTin.h"
 #include "vtdata/HeightField.h"
-#include "TParams.h"
 
 /** \defgroup tin TINs
  * These classes are used Triangulated Irregular Networks (TINs).
@@ -18,17 +17,9 @@
 /*@{*/
 
 /**
- This class extends vtTin with the ability to call vtlib to create 3d
- geometry for the TIN.  It also subclasses vtHeightField so it provides
- the ability to do height-testing and ray-picking.
-
- There are three ways to apply materials to the surface.
- 1. If you have an existing material you want the TIN to use, pass it with
- SetMaterial(). It can be textured or not.
- 2. Or, pass some colors with SetColorMap, and those will be used (as
- vertex colors, no texturing.
- 3. Or, add some surface types with vtTin::AddSurfaceType, and those
- types will be used
+ * This class extends vtTin with the ability to call vtlib to create 3d
+ * geometry for the TIN.  It also subclasses vtHeightField so it provides
+ * the ability to do height-testing and ray-picking.
  */
 class vtTin3d : public vtTin, public osg::Referenced
 {
@@ -37,11 +28,9 @@ public:
 
 	bool Read(const char *fname);
 
-	vtGeode *CreateGeometry(bool bDropShadowMesh);
+	vtGeode *CreateGeometry(bool bDropShadowMesh, int m_matidx = 0);
 	vtGeode *GetGeometry() { return m_pGeode; }
-
-	void SetMaterial(vtMaterialArray *pMats, int mat_idx);
-	void SetColorMap(ColorMap *color_map) { m_pColorMap.reset(color_map); }
+	void SetTextureMaterials(vtMaterialArray *pMats);
 
 	// implement HeightField3d virtual methods
 	virtual bool FindAltitudeAtPoint(const FPoint3 &p3, float &fAltitude,
@@ -51,19 +40,14 @@ public:
 		FPoint3 &result) const;
 
 	FPoint3 FindVectorToClosestVertex(const FPoint3 &pos);
-	void MakeMaterialsFromOptions(const vtTagArray &options);
-	void MakeMaterials(ColorMap *cmap, osg::Image *image, float fScale, float fOpacity);
 
 protected:
 	virtual void MakeSurfaceMaterials();
 
 	vtArray<vtMesh*> m_Meshes;
 	vtMaterialArrayPtr m_pMats;
-	int			 m_MatIndex, m_ShadowMatIndex;
 	vtGeode		*m_pGeode;
 	vtGeode		*m_pDropGeode;
-	std::shared_ptr<ColorMap>	m_pColorMap;
-	int			m_StartOfSurfaceMaterials;
 };
 typedef osg::ref_ptr<vtTin3d> vtTin3dPtr;
 

@@ -1,7 +1,7 @@
 //
 // ElevLayer.cpp
 //
-// Copyright (c) 2001-2013 Virtual Terrain Project
+// Copyright (c) 2001-2011 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -16,7 +16,6 @@
 #include "vtdata/config_vtdata.h"
 #include "vtdata/DataPath.h"
 #include "vtdata/ElevationGrid.h"
-#include "vtdata/FileFilters.h"
 #include "vtdata/FilePath.h"
 #include "vtdata/vtDIB.h"
 #include "vtdata/vtLog.h"
@@ -28,6 +27,7 @@
 #include "BuilderView.h"	// For grid marks
 #include "ElevLayer.h"
 #include "ExtentDlg.h"
+#include "FileFilters.h"
 #include "ImageGLCanvas.h"
 #include "Options.h"
 #include "RawDlg.h"
@@ -59,16 +59,16 @@ vtElevLayer::vtElevLayer() : vtLayer(LT_ELEVATION)
 	m_pTin = NULL;
 }
 
-vtElevLayer::vtElevLayer(const DRECT &area, const IPoint2 &size,
+vtElevLayer::vtElevLayer(const DRECT &area, int iColumns, int iRows,
 	bool bFloats, float fScale, const vtProjection &proj) : vtLayer(LT_ELEVATION)
 {
 	SetupDefaults();
 
 	VTLOG(" Constructing vtElevLayer of size %d x %d, floats %d\n",
-		size.x, size.y, bFloats);
+		iColumns, iRows, bFloats);
 
 	m_pTin = NULL;
-	m_pGrid = new vtElevationGrid(area, size, bFloats, proj);
+	m_pGrid = new vtElevationGrid(area, iColumns, iRows, bFloats, proj);
 	if (!m_pGrid->HasData())
 		VTLOG1(" Grid allocation failed.\n");
 
@@ -369,15 +369,12 @@ void vtElevLayer::DrawLayerBitmap(wxDC *pDC, vtScaledView *pView)
 	int iColumns, iRows;
 	m_pGrid->GetDimensions(iColumns, iRows);
 
-	DRECT screenrect = pView->WorldToCanvasD(m_pGrid->GetAreaExtents());
-	DRECT destRect = screenrect;
-	wxRect srcRect(0, 0, m_ImageSize.x, m_ImageSize.y);
+	wxRect screenrect = pView->WorldToCanvas(m_pGrid->GetAreaExtents());
+	wxRect destRect = screenrect;
+	wxRect srcRect(0, 0, m_iImageWidth, m_iImageHeight);
 
-	double destRectW = (destRect.right - destRect.left); 
-	double destRectH = (destRect.bottom - destRect.top); 
-
-	double ratio_x = (float) srcRect.GetWidth() / destRectW;
-	double ratio_y = (float) srcRect.GetHeight() / destRectH;
+	double ratio_x = (float) srcRect.GetWidth() / destRect.GetWidth();
+	double ratio_y = (float) srcRect.GetHeight() / destRect.GetHeight();
 
 #if 0
 	//clip stuff, so we only blit what we need
@@ -425,55 +422,51 @@ void vtElevLayer::DrawLayerBitmap(wxDC *pDC, vtScaledView *pView)
 #endif
 
 	bool bDrawNormal = true;
-#if WIN32
-	::SetStretchBltMode((HDC) (pDC->GetHDC()), HALFTONE);
+#if (wxVERSION_NUMBER > 2900)
+	wxMemoryDC temp_dc(*(m_pBitmap->m_pBitmap));
+	pDC->StretchBlit(destRect.x, destRect.y,
+		destRect.width, destRect.height,
+		&temp_dc,
+		srcRect.x, srcRect.y,
+		srcRect.width, srcRect.height,
+		wxCOPY, m_bHasMask);
+	bDrawNormal = false;
+#elif WIN32
+	::SetStretchBltMode((HDC) (pDC->GetHDC()), HALFTONE );
 
 	if (!m_bHasMask)
 	{
-		// VTLOG("DrawBM %d, %d wh %d %d\n", (int) destRect.left, (int) destRect.top,
-		//		(int) destRectW, (int) destRectH);
-
 		// Using StretchBlit is much faster and has less scaling/roundoff
 		//  problems than using the wx method DrawBitmap.  However, GDI
 		//  won't stretch and mask at the same time!
 		wxDC2 *pDC2 = (wxDC2 *) pDC;
-		pDC2->StretchBlit(*m_pBitmap->m_pBitmap, destRect.left, destRect.top,
-			destRectW, destRectH, srcRect.x, srcRect.y,
+		pDC2->StretchBlit(*m_pBitmap->m_pBitmap, destRect.x, destRect.y,
+			destRect.width, destRect.height, srcRect.x, srcRect.y,
 			srcRect.width, srcRect.height);
 		bDrawNormal = false;
 	}
 #endif
 	if (bDrawNormal)
 	{
-		if (ratio_x > 1.0 && ratio_y > 1.0)
-		{
-			// Scale and draw the bitmap
-			// Must use SetUserScale since wxWidgets doesn't provide StretchBlt?
-			double scale_x = 1.0/ratio_x;
-			double scale_y = 1.0/ratio_y;
-			pDC->SetUserScale(scale_x, scale_y);
+		// scale and draw the bitmap
+		// must use SetUserScale since wxWidgets doesn't provide StretchBlt
+		double scale_x = 1.0/ratio_x;
+		double scale_y = 1.0/ratio_y;
+		pDC->SetUserScale(scale_x, scale_y);
 
-			//  On Windows, this does a BitBlt (or MaskBlt if there is a mask)
-			pDC->DrawBitmap(*m_pBitmap->m_pBitmap, (int) (destRect.left/scale_x),
-				(int) (destRect.top/scale_y), m_bHasMask);
+		//  On Windows, this does a BitBlt (or MaskBlt if there is a mask)
+		pDC->DrawBitmap(*m_pBitmap->m_pBitmap, (int) (destRect.x/scale_x),
+			(int) (destRect.y/scale_y), m_bHasMask);
 
-			// restore
-			pDC->SetUserScale(1.0, 1.0);
-		}
-		else
-		{
-			// Create a memory DC; seems like a lot of overhead, but it also seems fast enough.
-			wxMemoryDC temp_dc;
-			temp_dc.SelectObject(*(m_pBitmap->m_pBitmap));
-
-			// Using StretchBlit seems to cause strange dark colors when zoomed out, but
-			//  that's better than the horizontal offset problems on zoomed-in that
-			//  resulted from using SetUserScale/DrawBitmap.
-			pDC->StretchBlit(destRect.left, destRect.top, destRectW, destRectH,
-				&temp_dc, srcRect.x, srcRect.y,
-				srcRect.width, srcRect.height, wxCOPY, m_bHasMask);
-		}
+		// restore
+		pDC->SetUserScale(1.0, 1.0);
 	}
+
+#if 0
+	// This is how we used to do it, with raw Win32 calls
+	t->d_pDIBSection->Draw( pDC, destRect.left, destRect.top);
+	m_bitmap.d_pDIBSection->DrawScaled( pDC, destRect, srcRect);
+#endif
 }
 
 void vtElevLayer::DrawLayerOutline(wxDC *pDC, vtScaledView *pView)
@@ -496,6 +489,11 @@ void vtElevLayer::DrawLayerOutline(wxDC *pDC, vtScaledView *pView)
 	}
 
 	pDC->SetLogicalFunction(wxCOPY);
+
+	screenrect.x++;
+	screenrect.y++;
+	screenrect.width-=2;
+	screenrect.height-=2;
 
 	DrawRectangle(pDC, screenrect, true);
 }
@@ -547,8 +545,8 @@ void vtElevLayer::SetupDefaults()
 
 	m_pBitmap = NULL;
 	m_pMask = NULL;
-	m_ImageSize.x = 0;
-	m_ImageSize.y = 0;
+	m_iImageWidth = 0;
+	m_iImageHeight = 0;
 	m_fSpacing = 0.0f;
 }
 
@@ -557,23 +555,23 @@ void vtElevLayer::SetupBitmap(wxDC *pDC)
 {
 	int cols, rows;
 	m_pGrid->GetDimensions(cols, rows);
-	m_ImageSize.x = cols;
-	m_ImageSize.y = rows;
+	m_iImageWidth = cols;
+	m_iImageHeight = rows;
 
 	int iMax = g_Options.GetValueInt(TAG_ELEV_MAX_SIZE);
 
 	int div = 1;
-	while (m_ImageSize.x * m_ImageSize.y > 4096*4096 ||
-		m_ImageSize.x > iMax || m_ImageSize.y > iMax)
+	while (m_iImageWidth * m_iImageHeight > 4096*4096 ||
+		m_iImageWidth > iMax || m_iImageHeight > iMax)
 	{
 		// bitmap is too big, chop it down
 		div++;
-		m_ImageSize.x = cols / div;
-		m_ImageSize.y = rows / div;
+		m_iImageWidth = cols / div;
+		m_iImageHeight = rows / div;
 	}
 
 	m_pBitmap = new vtBitmap;
-	if (!m_pBitmap->Allocate(m_ImageSize))
+	if (!m_pBitmap->Allocate(m_iImageWidth, m_iImageHeight))
 	{
 		DisplayAndLog(_("Couldn't create bitmap, probably too large."));
 		delete m_pBitmap;
@@ -631,7 +629,7 @@ void vtElevLayer::RenderBitmap()
 	m_bNeedsDraw = false;
 
 	// safety check
-	if (m_ImageSize.x == 0 || m_ImageSize.y == 0)
+	if (m_iImageWidth == 0 || m_iImageHeight == 0)
 		return;
 
 	DetermineMeterSpacing();
@@ -640,7 +638,7 @@ void vtElevLayer::RenderBitmap()
 
 #if 0
 	// TODO: re-enable this friendly cancel behavior
-	if (UpdateProgressDialog(j*100/m_ImageSize.y))
+	if (UpdateProgressDialog(j*100/m_iImageHeight))
 	{
 		wxString msg = _("Turn off displayed elevation for elevation layers?");
 		if (wxMessageBox(msg, _T(""), wxYES_NO) == wxYES)
@@ -683,8 +681,6 @@ void vtElevLayer::RenderBitmap()
 				m_draw.m_fAmbient, m_draw.m_fGamma, true, progress_callback_minor);
 	}
 
-	m_pBitmap->ContentsChanged();
-
 	if (has_invalid && m_draw.m_bDoMask)
 	{
 		m_pMask = new wxMask(*m_pBitmap->m_pBitmap, wxColour(255, 0, 0));
@@ -698,6 +694,7 @@ void vtElevLayer::RenderBitmap()
 	float time = ((float)tm2 - tm1)/CLOCKS_PER_SEC;
 	VTLOG("RenderBitmap: %.3f seconds.\n", time);
 
+	m_pBitmap->ContentsChanged();
 	m_bBitmapRendered = true;
 }
 
@@ -730,15 +727,15 @@ void vtElevLayer::DetermineMeterSpacing()
 	vtProjection &proj = m_pGrid->GetProjection();
 	if (proj.IsGeographic())
 	{
-		const DRECT &area = m_pGrid->GetEarthExtents();
+		DRECT area = m_pGrid->GetEarthExtents();
 
-		const double fToMeters = EstimateDegreesToMeters((area.bottom + area.top)/2);
+		double fToMeters = EstimateDegreesToMeters((area.bottom + area.top)/2);
 		m_fSpacing = (float) (area.Width()) * fToMeters / (m_pGrid->NumColumns() - 1);
 	}
 	else
 	{
 		// Linear units-based projections are much simpler
-		const DPoint2 &spacing = m_pGrid->GetSpacing();
+		DPoint2 spacing = m_pGrid->GetSpacing();
 		m_fSpacing = spacing.x * GetMetersPerUnit(proj.GetUnits());
 	}
 }
@@ -746,10 +743,13 @@ void vtElevLayer::DetermineMeterSpacing()
 void vtElevLayer::Offset(const DPoint2 &p)
 {
 	if (m_pGrid)
+	{
 		m_pGrid->Offset(p);
-
+	}
 	if (m_pTin)
+	{
 		m_pTin->Offset(p);
+	}
 }
 
 vtHeightField *vtElevLayer::GetHeightField()
@@ -981,7 +981,7 @@ bool vtElevLayer::ImportFromFile(const wxString &strFileName,
 		dlg.m_fVUnits = 1.0f;
 		dlg.m_fSpacing = 30.0f;
 		dlg.m_bBigEndian = false;
-		dlg.m_extents.SetToZero();
+		dlg.m_extents.Empty();
 		g_bld->GetProjection(dlg.m_original);
 
 		if (dlg.ShowModal() == wxID_OK)
@@ -1036,7 +1036,7 @@ bool vtElevLayer::ImportFromFile(const wxString &strFileName,
 			if (res == wxYES)
 			{
 				DRECT ext;
-				ext.SetToZero();
+				ext.Empty();
 				ExtentDlg dlg(NULL, -1, _("Elevation Grid Extents"));
 				dlg.SetArea(ext, (pProj->IsGeographic() != 0));
 				if (dlg.ShowModal() == wxID_OK)
@@ -1075,7 +1075,7 @@ bool vtElevLayer::ImportFromFile(const wxString &strFileName,
 //
 // Use the QuikGrid library to generate a grid from a set of 3D points.
 //
-bool vtElevLayer::CreateFromPoints(vtFeatureSet *set, const IPoint2 &size,
+bool vtElevLayer::CreateFromPoints(vtFeatureSet *set, int iXSize, int iYSize,
 								   float fDistanceRatio)
 {
 #if SUPPORT_QUIKGRID
@@ -1086,7 +1086,7 @@ bool vtElevLayer::CreateFromPoints(vtFeatureSet *set, const IPoint2 &size,
 	DRECT extent;
 	fsp3->ComputeExtent(extent);
 
-	int iMaxSize = fsp3->NumEntities();
+	int iMaxSize = fsp3->GetNumEntities();
 	ScatData sdata(iMaxSize);
 	DPoint3 p;
 	for (int i = 0; i < iMaxSize; i++)
@@ -1096,12 +1096,12 @@ bool vtElevLayer::CreateFromPoints(vtFeatureSet *set, const IPoint2 &size,
 	}
 
 	// Make a SurfaceGrid to hold the results
-	DPoint2 spacing(extent.Width() / (size.x-1), extent.Height() / (size.y-1));
+	DPoint2 spacing(extent.Width() / (iXSize-1), extent.Height() / (iYSize-1));
 
-	SurfaceGrid Zgrid(size.x, size.y);
-	for (int x = 0; x < size.x; x++)
+	SurfaceGrid Zgrid(iXSize, iYSize);
+	for (int x = 0; x < iXSize; x++)
 		Zgrid.xset(x, extent.left + spacing.x * x);
-	for (int y = 0; y < size.y; y++)
+	for (int y = 0; y < iYSize; y++)
 		Zgrid.yset(y, extent.bottom + spacing.y * y);
 
 	// "When any new points will not contributed more than 1/(scan bandwidth cutoff)
@@ -1119,7 +1119,7 @@ bool vtElevLayer::CreateFromPoints(vtFeatureSet *set, const IPoint2 &size,
 
 	// Do the expand operation, gradually so we get progress
 	XpandInit(Zgrid, sdata);
-	int count = 0, total = size.x * size.y;
+	int count = 0, total = iXSize * iYSize;
 	while (XpandPoint( Zgrid, sdata))
 	{
 		if ((count % 100) == 0)
@@ -1134,10 +1134,10 @@ bool vtElevLayer::CreateFromPoints(vtFeatureSet *set, const IPoint2 &size,
 	}
 
 	// copy the result to a ElevationGrid
-	m_pGrid = new vtElevationGrid(extent, size, true, set->GetAtProjection());
+	m_pGrid = new vtElevationGrid(extent, iXSize, iYSize, true, set->GetAtProjection());
 
-	for (int x = 0; x < size.x; x++)
-		for (int y = 0; y < size.y; y++)
+	for (int x = 0; x < iXSize; x++)
+		for (int y = 0; y < iYSize; y++)
 		{
 			float value = Zgrid.z(x,y);
 			if (value == -99999)
@@ -1172,15 +1172,20 @@ int vtElevLayer::RemoveElevRange(float zmin, float zmax, const DRECT *area)
 	if (!m_pGrid)
 		return 0;
 
-	const DRECT &ext = m_pGrid->GetEarthExtents();
-	const DPoint2 &step = m_pGrid->GetSpacing();
-	const IPoint2 &Size = m_pGrid->GetDimensions();
+	DRECT ext;
+	GetExtent(ext);
+	DPoint2 step = m_pGrid->GetSpacing();
 
+	int iColumns, iRows;
+	m_pGrid->GetDimensions(iColumns, iRows);
+	float val;
 	DPoint2 p;
+	int i, j;
+
 	int count = 0;
-	for (int i = 0; i < Size.x; i++)
+	for (i = 0; i < iColumns; i++)
 	{
-		for (int j = 0; j < Size.y; j++)
+		for (j = 0; j < iRows; j++)
 		{
 			if (area)
 			{
@@ -1190,7 +1195,7 @@ int vtElevLayer::RemoveElevRange(float zmin, float zmax, const DRECT *area)
 					continue;
 			}
 
-			const float val = m_pGrid->GetFValue(i, j);
+			val = m_pGrid->GetFValue(i, j);
 			if (val >= zmin && val <= zmax)
 			{
 				m_pGrid->SetFValue(i, j, INVALID_ELEVATION);
@@ -1206,19 +1211,19 @@ int vtElevLayer::SetUnknown(float fValue, const DRECT *area)
 	if (!m_pGrid)
 		return 0;
 
-	const IPoint2 &Size = m_pGrid->GetDimensions();
-	const DRECT &ext = m_pGrid->GetEarthExtents();
-	const DPoint2 &step = m_pGrid->GetSpacing();
-
+	int iColumns, iRows;
+	m_pGrid->GetDimensions(iColumns, iRows);
+	DRECT ext;
+	GetExtent(ext);
+	DPoint2 p, step = m_pGrid->GetSpacing();
 	int count = 0;
-	DPoint2 p;
 
 	bool bUseArea = (area && !area->IsEmpty());
 
-	for (int i = 0; i < Size.x; i++)
+	for (int i = 0; i < iColumns; i++)
 	{
 		p.x = ext.left + (i * step.x);
-		for (int j = 0; j < Size.y; j++)
+		for (int j = 0; j < iRows; j++)
 		{
 			p.y = ext.bottom + (j * step.y);
 			// If an area was passed, restrict ourselves to use it
@@ -1263,9 +1268,9 @@ void vtElevLayer::MergeSharedVerts(bool bSilent)
 	if (!bSilent)
 	{
 		if (after < before)
-			DisplayAndLog((const wchar_t *) _("Reduced vertices from %d to %d"), before, after);
+			DisplayAndLog(_("Reduced vertices from %d to %d"), before, after);
 		else
-			DisplayAndLog((const wchar_t *) _("There are %d vertices, unable to merge any."), before);
+			DisplayAndLog(_("There are %d vertices, unable to merge any."), before);
 	}
 }
 
@@ -1305,7 +1310,7 @@ void vtElevLayer::GetPropertyText(wxString &strIn)
 
 		bool bGeo = (m_pGrid->GetProjection().IsGeographic() != 0);
 		result += _("Grid spacing: ");
-		const DPoint2 &spacing = m_pGrid->GetSpacing();
+		DPoint2 spacing = m_pGrid->GetSpacing();
 		result += wxString(FormatCoord(bGeo, spacing.x), wxConvUTF8);
 		result += _T(" x ");
 		result += wxString(FormatCoord(bGeo, spacing.y), wxConvUTF8);
@@ -1403,7 +1408,7 @@ bool vtElevLayer::AskForSaveFilename()
 	if (m_pTin)
 		filter = FSTRING_TIN;
 	else
-		filter = FSTRING_BT _T("|") FSTRING_BTGZ;
+		filter = _("BT File (.bt)|*.bt|GZipped BT File (.bt.gz)|*.bt.gz");
 
 	wxString defaultFilename = GetLayerFilename();
 
@@ -1460,7 +1465,8 @@ FPoint3 LightDirection(float angle, float direction)
 	return light_dir;
 }
 
-bool vtElevLayer::WriteElevationTileset(TilingOptions &opts, BuilderView *pView)
+bool vtElevLayer::WriteGridOfElevTilePyramids(TilingOptions &opts,
+											  BuilderView *pView)
 {
 	// Avoid trouble with '.' and ',' in Europe
 	LocaleWrap normal_numbers(LC_NUMERIC, "C");
@@ -1563,7 +1569,7 @@ bool vtElevLayer::WriteElevationTileset(TilingOptions &opts, BuilderView *pView)
 				pView->ShowGridMarks(area, opts.cols, opts.rows, col, opts.rows-1-row);
 
 			// Extract the highest LOD we need
-			vtElevationGrid base_lod(tile_area, IPoint2(base_tilesize+1, base_tilesize+1),
+			vtElevationGrid base_lod(tile_area, base_tilesize+1, base_tilesize+1,
 				bFloat, proj);
 
 			bool bAllInvalid = true;
@@ -1633,20 +1639,10 @@ bool vtElevLayer::WriteElevationTileset(TilingOptions &opts, BuilderView *pView)
 			// Create a matching derived texture tileset
 			if (opts.bCreateDerivedImages)
 			{
-				// Create a matching derived texture tileset
 				vtDIB dib;
+				dib.Create(base_tilesize, base_tilesize, 24);
 				base_lod.ComputeHeightExtents();
-
-				if (opts.bImageAlpha)
-				{
-					dib.Create(IPoint2(base_tilesize, base_tilesize), 32);
-					base_lod.ColorDibFromElevation(&dib, &cmap, 4000, RGBAi(0,0,0,0));
-				}
-				else
-				{
-					dib.Create(IPoint2(base_tilesize, base_tilesize), 24);
-					base_lod.ColorDibFromElevation(&dib, &cmap, 4000, RGBi(255,0,0));
-				}
+				base_lod.ColorDibFromElevation(&dib, &cmap, 4000, RGBi(255,0,0));
 
 				if (opts.draw.m_bShadingQuick)
 					base_lod.ShadeQuick(&dib, SHADING_BIAS, true);
@@ -1674,36 +1670,19 @@ bool vtElevLayer::WriteElevationTileset(TilingOptions &opts, BuilderView *pView)
 					output_buf.tsteps = 1;
 					output_buf.SetBounds(proj, tile_area);
 
-					int depth = dib.GetDepth() / 8;
-					int iUncompressedSize = tilesize * tilesize * depth;
+					int iUncompressedSize = tilesize * tilesize * 3;
 					uchar *rgb_bytes = (uchar *) malloc(iUncompressedSize);
 
 					uchar *dst = rgb_bytes;
-					if (opts.bImageAlpha)
-					{
-						RGBAi rgba;
-						for (int ro = 0; ro < base_tilesize; ro += (1<<k))
-							for (int co = 0; co < base_tilesize; co += (1<<k))
-							{
-								dib.GetPixel32(co, ro, rgba);
-								*dst++ = rgba.r;
-								*dst++ = rgba.g;
-								*dst++ = rgba.b;
-								*dst++ = rgba.a;
-							}
-					}
-					else
-					{
-						RGBi rgb;
-						for (int ro = 0; ro < base_tilesize; ro += (1<<k))
-							for (int co = 0; co < base_tilesize; co += (1<<k))
-							{
-								dib.GetPixel24(co, ro, rgb);
-								*dst++ = rgb.r;
-								*dst++ = rgb.g;
-								*dst++ = rgb.b;
-							}
-					}
+					RGBi rgb;
+					for (int ro = 0; ro < base_tilesize; ro += (1<<k))
+						for (int co = 0; co < base_tilesize; co += (1<<k))
+						{
+							dib.GetPixel24(co, ro, rgb);
+							*dst++ = rgb.r;
+							*dst++ = rgb.g;
+							*dst++ = rgb.b;
+						}
 
 					// Write and optionally compress the image
 					WriteMiniImage(fname, opts, rgb_bytes, output_buf,
@@ -1733,10 +1712,11 @@ bool vtElevLayer::WriteElevationTileset(TilingOptions &opts, BuilderView *pView)
 				short *sdata = (short *) buf.data;
 
 				DPoint2 p;
-				for (int y = base_tilesize; y >= 0; y -= (1<<lod))
+				int x, y;
+				for (y = base_tilesize; y >= 0; y -= (1<<lod))
 				{
 					p.y = area.bottom + (j*tile_dim.y) + ((double)y / base_tilesize * tile_dim.y);
-					for (int x = 0; x <= base_tilesize; x += (1<<lod))
+					for (x = 0; x <= base_tilesize; x += (1<<lod))
 					{
 						p.x = area.left + (i*tile_dim.x) + ((double)x / base_tilesize * tile_dim.x);
 
@@ -1811,7 +1791,7 @@ bool vtElevLayer::ImportFromDB(const char *szFileName, bool progress_callback(in
 
 	area.SetRect(dbuf.nwx, dbuf.nwy, dbuf.sex, dbuf.sey);
 
-	if (!m_pGrid->Create(area, IPoint2(dbuf.xsize, dbuf.ysize), bFloat, proj))
+	if (!m_pGrid->Create(area, dbuf.xsize, dbuf.ysize, bFloat, proj))
 		return false;
 
 	int i, j;

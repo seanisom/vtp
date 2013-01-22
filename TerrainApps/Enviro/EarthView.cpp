@@ -24,12 +24,6 @@
 #define LL_COUNT	640
 #define LL_RADIUS	1.002
 
-// Although there is no string translation in the core of Enviro (because it
-//  is independent of wx or any GUI library) nonetheless we want the text
-//  messages to be found by the gettext utility, so we need to enclose
-//  anything to be translated in _()
-#define _(x) x
-
 
 void Enviro::FlyToSpace()
 {
@@ -43,12 +37,12 @@ void Enviro::FlyToSpace()
 		vtTerrain *pT = GetCurrentTerrain();
 		vtCamera *pCam = vtGetScene()->GetCamera();
 		FMatrix4 mat;
-		pCam->GetTransform(mat);
+		pCam->GetTransform1(mat);
 		pT->SetCamLocation(mat);
 	}
 
 	// turn off terrain, if any
-	SwitchToTerrain(NULL);
+	SetTerrain(NULL);
 	EnableFlyerEngine(false);
 
 	SetState(AS_MovingOut);
@@ -69,7 +63,7 @@ void Enviro::SetupGlobe()
 	if (m_iInitStep == 1)
 	{
 		m_pTerrainPicker->SetEnabled(false);
-		SetMessage(_("Creating Globe"));
+		SetMessage("Creating Globe");
 	}
 	if (m_iInitStep == 2)
 	{
@@ -81,7 +75,7 @@ void Enviro::SetupGlobe()
 			m_SpaceTrackballState[2].Set(0,0,0);
 			m_pRoot->addChild(m_pGlobeContainer);
 		}
-		SetMessage(_("Switching to Globe"));
+		SetMessage("Switching to Globe");
 	}
 	if (m_iInitStep == 3)
 	{
@@ -124,7 +118,10 @@ void Enviro::SetupGlobe()
 	{
 		SetState(AS_Orbit);
 		SetMode(MM_SELECT);
-		SetMessage(_("Earth View"), "", 10);	// Show for 10 seconds
+		if (!strncmp((const char *) g_Options.m_strEarthImage, "geosphere", 9))
+			SetMessage("Earth image (c) The GeoSphere Project", 3);
+		else
+			SetMessage("Earth View", 10);
 		m_pGlobePicker->SetEnabled(true);
 
 		// Layer view needs to update
@@ -184,7 +181,7 @@ void Enviro::MakeGlobe()
 	VTLOG("\tcreating Trackball\n");
 	m_pTrackball = new vtTrackball(INITIAL_SPACE_DIST);
 	m_pTrackball->setName("Trackball2");
-	m_pTrackball->AddTarget(vtGetScene()->GetCamera());
+	m_pTrackball->SetTarget(vtGetScene()->GetCamera());
 	m_pTrackball->SetRotateButton(VT_RIGHT, 0, false);
 	m_pTrackball->SetZoomButton(VT_RIGHT, VT_SHIFT);
 	vtGetScene()->AddEngine(m_pTrackball);
@@ -204,7 +201,7 @@ void Enviro::MakeGlobe()
 	m_pGlobePicker->setName("GlobePicker");
 	m_pGlobePicker->SetGlobe(m_pIcoGlobe);
 	vtGetScene()->AddEngine(m_pGlobePicker);
-	m_pGlobePicker->AddTarget(m_pCursorMGeom);
+	m_pGlobePicker->SetTarget(m_pCursorMGeom);
 	m_pGlobePicker->SetRadius(1.0);
 	m_pGlobePicker->SetEnabled(false);
 
@@ -224,9 +221,9 @@ void Enviro::MakeGlobe()
 
 	// create some geometry showing various astronomical axes
 	vtMaterialArray *pMats = new vtMaterialArray;
-	int yellow = pMats->AddRGBMaterial(RGBf(1,1,0), false, false);
-	int red = pMats->AddRGBMaterial(RGBf(1,0,0), false, false);
-	int green = pMats->AddRGBMaterial(RGBf(0,1,0), false, false);
+	int yellow = pMats->AddRGBMaterial1(RGBf(1,1,0), false, false);
+	int red = pMats->AddRGBMaterial1(RGBf(1,0,0), false, false);
+	int green = pMats->AddRGBMaterial1(RGBf(0,1,0), false, false);
 
 	m_pSpaceAxes = new vtGeode;
 	m_pSpaceAxes->setName("Earth Axes");
@@ -254,7 +251,7 @@ void Enviro::MakeGlobe()
 	// Lon-lat cursor lines
 	m_pEarthLines = new vtGeode;
 	m_pEarthLines->setName("Earth Lines");
-	int orange = pMats->AddRGBMaterial(RGBf(1,.7,1), false, false, true, 0.6);
+	int orange = pMats->AddRGBMaterial1(RGBf(1,.7,1), false, false, true, 0.6);
 	m_pEarthLines->SetMaterials(pMats);
 
 	m_pLineMesh = new vtMesh(osg::PrimitiveSet::LINE_STRIP, 0, 6);
@@ -296,8 +293,8 @@ void Enviro::MakeDemoGlobe()
 
 	vtGeode *geode = new vtGeode;
 	vtMaterialArray *mats = new vtMaterialArray;
-	mats->AddTextureMaterial("Planetwork/logo3.png", false, false, true);
-	mats->AddTextureMaterial("Planetwork/logo2.png", false, false, true);
+	mats->AddTextureMaterial2("Planetwork/logo3.png", false, false, true);
+	mats->AddTextureMaterial2("Planetwork/logo2.png", false, false, true);
 	geode->SetMaterials(mats);
 
 	float width = 1.9, height = .22;
@@ -311,12 +308,12 @@ void Enviro::MakeDemoGlobe()
 	int i;
 	vtMaterialArray *rainbow = new vtMaterialArray;
 	bool bLighting = false;
-	rainbow->AddRGBMaterial(RGBf(0.5,0,0),		false, bLighting, false, 0.5f);
-	rainbow->AddRGBMaterial(RGBf(0.5,0.5,0),	false, bLighting, false, 0.5f);
-	rainbow->AddRGBMaterial(RGBf(0,0.5,0),		false, bLighting, false, 0.5f);
-	rainbow->AddRGBMaterial(RGBf(0,0.5,0.5),	false, bLighting, false, 0.5f);
-	rainbow->AddRGBMaterial(RGBf(0,0,0.5),		false, bLighting, false, 0.5f);
-	rainbow->AddRGBMaterial(RGBf(0.5,0,0.5),	false, bLighting, false, 0.5f);
+	rainbow->AddRGBMaterial1(RGBf(0.5,0,0),		false, bLighting, false, 0.5f);
+	rainbow->AddRGBMaterial1(RGBf(0.5,0.5,0),	false, bLighting, false, 0.5f);
+	rainbow->AddRGBMaterial1(RGBf(0,0.5,0),		false, bLighting, false, 0.5f);
+	rainbow->AddRGBMaterial1(RGBf(0,0.5,0.5),	false, bLighting, false, 0.5f);
+	rainbow->AddRGBMaterial1(RGBf(0,0,0.5),		false, bLighting, false, 0.5f);
+	rainbow->AddRGBMaterial1(RGBf(0.5,0,0.5),	false, bLighting, false, 0.5f);
 	for (i = 0; i < 6; i++)
 	{
 		vtMaterial *mat = rainbow->at(i);
@@ -334,7 +331,7 @@ void Enviro::MakeDemoGlobe()
 		vtFeatureSet *feat1 = loader.LoadFromSHP(users);
 		vtFeatureSetPoint2D *ft = (vtFeatureSetPoint2D *) feat1;
 
-		int half = ft->NumEntities() / 2;
+		int half = ft->GetNumEntities() / 2;
 		int foo = 0;
 		for (i = 0; i < half; i++)
 		{
@@ -377,7 +374,8 @@ void Enviro::MakeOverlayGlobe(vtImage *input, bool progress_callback(int))
 	// Make dymaxion overlay images
 	vtImage *output[10];
 
-	const IPoint2 input_size = input->GetSize();
+	int input_x = input->GetWidth();
+	int input_y = input->GetHeight();
 	int depth = input->GetDepth();
 	int output_size = 512;
 
@@ -418,8 +416,8 @@ void Enviro::MakeOverlayGlobe(vtImage *input, bool progress_callback(int))
 				uvw.y = v;
 				ico.FaceUVToGeo(face, uvw, lon, lat);
 
-				int source_x = (int) (lon / PI2d * input_size.x);
-				int source_y = (int) (lat / PId * input_size.y);
+				int source_x = (int) (lon / PI2d * input_x);
+				int source_y = (int) (lat / PId * input_y);
 
 				if (depth == 8)
 				{
@@ -616,7 +614,7 @@ void Enviro::DoControlOrbit()
 		pq.Interpolate(m_SpaceLoc, m_FlatLoc, m_fFolding);
 		FMatrix4 m4;
 		pq.ToMatrix(m4);
-		m_pNormalCamera->SetTransform(m4);
+		m_pNormalCamera->SetTransform1(m4);
 	}
 
 	if (m_bOnTerrain)
@@ -693,7 +691,7 @@ void Enviro::OnMouseLeftDownOrbit(vtMouseEvent &event)
 	{
 		vtTerrain *pTerr = FindTerrainOnEarth(DPoint2(m_EarthPos.x, m_EarthPos.y));
 		if (pTerr)
-			RequestTerrain(pTerr);
+			SwitchToTerrain(pTerr);
 	}
 	if (m_mode == MM_MEASURE)
 	{
@@ -768,7 +766,7 @@ void Enviro::SetEarthUnfold(bool bUnfold)
 	{
 		// Enter Flat View
 		FMatrix4 m4;
-		m_pNormalCamera->GetTransform(m4);
+		m_pNormalCamera->GetTransform1(m4);
 		m_SpaceLoc.FromMatrix(m4);
 
 		m_FlatLoc.p.Set(0.85f,-0.75f,5.6);
@@ -841,15 +839,16 @@ void Enviro::SetDisplayedArc(const DLine2 &path)
 	m_fArcLength = angle * EARTH_RADIUS;
 }
 
-void Enviro::DescribeCoordinatesEarth(vtString &str1, vtString &str2)
+void Enviro::DescribeCoordinatesEarth(vtString &str)
 {
-	// give location of 3D cursor
-	str1 = _("Cursor: ");
-
 	DPoint3 epos;
-	m_pGlobePicker->GetCurrentEarthPos(epos);
+	vtString str1;
 
-	FormatCoordString(str2, epos, LU_DEGREES);
+	// give location of 3D cursor
+	str = "Cursor: ";
+	m_pGlobePicker->GetCurrentEarthPos(epos);
+	FormatCoordString(str1, epos, LU_DEGREES);
+	str += str1;
 }
 
 // this was a quick hack for the PW conference.  if we ever need a real
@@ -964,21 +963,21 @@ void Enviro::FlyInStage1()
 		m_iFlightStage = 2;
 		m_iFlightStep = 0;
 
-		m_FlyInAnim.Clear();
+		m_FlyInAnim.Empty();
 
 		// Set special high initial camera location to match where the
 		//  trackball left us in earth view
 		DPoint3 earth_geo(m_FlyInCenter.x, m_FlyInCenter.y,
 			m_fTransitionHeight);
 
-		const vtProjection &tproj = m_pTargetTerrain->GetProjection();
+		vtProjection &tproj = m_pTargetTerrain->GetProjection();
 		vtProjection gproj;
 		CreateSimilarGeographicProjection(tproj, gproj);
 		OCT *trans = CreateCoordTransform(&gproj, &tproj);
 		DPoint3 earth_local = earth_geo;
 		trans->Transform(1, &earth_local.x, &earth_local.y);
 
-		const vtLocalConversion &conv = m_pTargetTerrain->GetLocalConversion();
+		vtLocalConversion &conv = m_pTargetTerrain->GetHeightField()->m_Conversion;
 		FPoint3 world;
 		conv.ConvertFromEarth(earth_local, world);
 
@@ -1002,7 +1001,7 @@ void Enviro::FlyInStage1()
 
 		// Start the camera at the start
 		Flight2Start.ToMatrix(mat);
-		m_pNormalCamera->SetTransform(mat);
+		m_pNormalCamera->SetTransform1(mat);
 
 		// Now, all at once, we've got turn off the globe and turn on the
 		//  terrain, with as immediate a transition as possible.
@@ -1014,7 +1013,7 @@ void Enviro::FlyInStage1()
 			m_pTrackball->SetEnabled(false);
 
 		// make terrain active
-		SwitchToTerrain(m_pTargetTerrain);
+		SetTerrain(m_pTargetTerrain);
 
 		// Set hither and yon
 		m_pNormalCamera->SetHither(m_pTargetTerrain->GetParams().GetValueFloat(STR_HITHER));
@@ -1026,7 +1025,9 @@ void Enviro::FlyInStage1()
 		m_pTerrainPicker->SetEnabled(true);
 		SetMode(MM_NAVIGATE);
 
-		SetMessage(_("Welcome to "), m_pTargetTerrain->GetName(), 5.0f);
+		vtString str = "Welcome to ";
+		str += m_pTargetTerrain->GetName();
+		SetMessage(str, 5.0f);
 
 		// Layer view needs to update
 		RefreshLayerView();
@@ -1046,7 +1047,7 @@ void Enviro::FlyInStage2()
 	{
 		FMatrix4 matrix;
 		cp.GetMatrix(matrix);
-		m_pNormalCamera->SetTransform(matrix);
+		m_pNormalCamera->SetTransform1(matrix);
 	}
 	if (m_iFlightStep == 100)
 	{

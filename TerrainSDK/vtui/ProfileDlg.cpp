@@ -1,7 +1,7 @@
 //
 // Name: ProfileDlg.cpp
 //
-// Copyright (c) 2005-2013 Virtual Terrain Project
+// Copyright (c) 2005-2011 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -13,7 +13,6 @@
 #endif
 
 #include "ProfileDlg.h"
-#include "vtdata/FileFilters.h"
 #include "vtdata/vtString.h"
 
 #define MARGIN_LEFT   60
@@ -208,7 +207,7 @@ void ProfileDlg::GetValues()
 	{
 		if (m_p1 == m_p2)
 			return;
-		m_path.Clear();
+		m_path.Empty();
 		m_path.Append(m_p1);
 		m_path.Append(m_p2);
 	}
@@ -684,15 +683,16 @@ void ProfileDlg::DrawChart(wxDC& dc)
 	}
 
 	// Draw tick marks
-	int numticks, tick_spacing = 32;
+	int numticks, x, y, tick_spacing = 32;
 	wxString str;
 	int w, h;
+	int i;
 
 	// Vertical ticks
 	numticks = (m_yrange / tick_spacing)+2;
-	for (int i = 0; i < numticks; i++)
+	for (i = 0; i < numticks; i++)
 	{
-		const int y = m_base.y - (i * m_yrange / (numticks-1));
+		y = m_base.y - (i * m_yrange / (numticks-1));
 
 		if (i > 0)
 		{
@@ -709,9 +709,9 @@ void ProfileDlg::DrawChart(wxDC& dc)
 	}
 	// Horizontal ticks
 	numticks = (m_xrange / tick_spacing)+2;
-	for (int i = 0; i < numticks; i++)
+	for (i = 0; i < numticks; i++)
 	{
-		const int x = m_base.x + (i * m_xrange / (numticks-1));
+		x = m_base.x + (i * m_xrange / (numticks-1));
 
 		dc.SetPen(pen1);
 		dc.DrawLine(x, m_base.y - 5, x, m_base.y + 5);
@@ -733,7 +733,7 @@ void ProfileDlg::DrawChart(wxDC& dc)
 		bool vis = true;
 		bool visr= true;
 		dc.SetPen(pen3);
-		for (int i = 0; i < m_xrange; i++)
+		for (i = 0; i < m_xrange; i++)
 		{
 			if (m_visible[i] != vis || m_rvisible[i] != visr)
 			{
@@ -762,7 +762,7 @@ void ProfileDlg::DrawChart(wxDC& dc)
 		if (m_bHaveInvalid)
 		{
 			// slow way, one datapoint at a time
-			for (int i = 0; i < m_xrange-1; i++)
+			for (i = 0; i < m_xrange-1; i++)
 			{
 				float v1 = m_values[i];
 				float v2 = m_values[i+1];
@@ -782,7 +782,7 @@ void ProfileDlg::DrawChart(wxDC& dc)
 		{
 			// faster way, pass an array
 			wxPoint *pts = new wxPoint[m_xrange];
-			for (int i = 0; i < m_xrange; i++)
+			for (i = 0; i < m_xrange; i++)
 			{
 				MakePoint(pts[i], i, m_values[i] + (apply_geoid==1 ? m_GeoidSurface[i] : 0));
 			}
@@ -820,7 +820,7 @@ void ProfileDlg::DrawChart(wxDC& dc)
 		wxPoint *pts1 = new wxPoint[m_xrange];
 		wxPoint *pts2 = new wxPoint[m_xrange];
 
-		for (int i=0; i<m_xrange; i++)
+		for (i=0; i<m_xrange; i++)
 		{
 			float base=(apply_geoid==2 ? m_GeoidSurface[i] : 0);
 			MakePoint(pts1[i], i, m_LineOfSight[i] - m_FirstFresnel[i] - base);
@@ -858,7 +858,7 @@ void ProfileDlg::DrawChart(wxDC& dc)
 		if (apply_geoid == 2)
 		{
 			wxPoint *pts = new wxPoint[m_xrange];
-			for (int i=0; i<m_xrange; i++)
+			for (i=0; i<m_xrange; i++)
 				MakePoint(pts[i], i, m_LineOfSight[i]);
 			dc.DrawLines(m_xrange, pts);
 			delete [] pts;
@@ -912,7 +912,7 @@ void ProfileDlg::DrawChart(wxDC& dc)
 		dc.SetPen(pen7);
 
 		// slow way, one datapoint at a time
-		for (int i = 0; i < m_xrange; i++)
+		for (i = 0; i < m_xrange; i++)
 		{
 			float v1 = m_values[i];
 			float v2 = m_values_culture[i];
@@ -1181,7 +1181,7 @@ void ProfileDlg::OnShowCulture( wxCommandEvent &event )
 void ProfileDlg::OnExportDXF( wxCommandEvent &event )
 {
 	wxFileDialog saveFile(this, _("Export Profile to DXF"),
-		_T(""), _T(""), FSTRING_DXF,
+		_T(""), _T(""), _("DXF Files (*.dxf)|*.dxf"),
 		wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
 	bool bResult = (saveFile.ShowModal() == wxID_OK);
 	if (bResult)
@@ -1195,7 +1195,7 @@ void ProfileDlg::OnExportDXF( wxCommandEvent &event )
 void ProfileDlg::OnExportTrace( wxCommandEvent &event )
 {
 	wxFileDialog saveFile(this, _("Export Trace to DXF"),
-		_T(""), _T(""), FSTRING_DXF,
+		_T(""), _T(""), _("DXF Files (*.dxf)|*.dxf"),
 		wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
 	bool bResult = (saveFile.ShowModal() == wxID_OK);
 	if (bResult)
@@ -1209,7 +1209,7 @@ void ProfileDlg::OnExportTrace( wxCommandEvent &event )
 void ProfileDlg::OnExportCSV( wxCommandEvent &event )
 {
 	wxFileDialog saveFile(this, _("Export Trace to CSV"),
-		_T(""), _T(""), FSTRING_CSV,
+		_T(""), _T(""), _("CSV Files (*.csv)|*.csv"),
 		wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
 	bool bResult = (saveFile.ShowModal() == wxID_OK);
 	if (bResult)

@@ -19,12 +19,12 @@
 #include "vtdata/vtDIB.h"
 #include "vtdata/vtLog.h"
 #include "vtdata/DataPath.h"
-#include "vtdata/FileFilters.h"
 
 #include "vtui/Helper.h"
 
 #include "Builder.h"
 #include "BuilderView.h"
+#include "FileFilters.h"
 #include "ImageGLCanvas.h"
 #include "Options.h"
 #include "Tin2d.h"
@@ -49,9 +49,9 @@
 void Builder::ExportASC()
 {
 	// check spacing
-	const vtElevationGrid *grid = GetActiveElevLayer()->GetGrid();
-	const DPoint2 &spacing = grid->GetSpacing();
-	const double ratio = spacing.x / spacing.y;
+	vtElevationGrid *grid = GetActiveElevLayer()->GetGrid();
+	DPoint2 spacing = grid->GetSpacing();
+	double ratio = spacing.x / spacing.y;
 	if (ratio < 0.999 || ratio > 1.001)
 	{
 		wxString str, str2;
@@ -64,10 +64,10 @@ void Builder::ExportASC()
 			return;
 	}
 
-	const vtString fname = GetActiveLayer()->GetExportFilename(FSTRING_ASC);
+	vtString fname = GetActiveLayer()->GetExportFilename(FSTRING_ASC);
 	if (fname == "")
 		return;
-	const bool success = grid->SaveToASC(fname);
+	bool success = grid->SaveToASC(fname);
 	if (success)
 		DisplayAndLog("Successfully wrote file '%s'", (const char *) fname);
 	else
@@ -76,7 +76,7 @@ void Builder::ExportASC()
 
 void Builder::ExportTerragen()
 {
-	const vtString fname = GetActiveLayer()->GetExportFilename(FSTRING_TER);
+	vtString fname = GetActiveLayer()->GetExportFilename(FSTRING_TER);
 	if (fname == "")
 		return;
 	bool success = GetActiveElevLayer()->GetGrid()->SaveToTerragen(fname);
@@ -88,7 +88,7 @@ void Builder::ExportTerragen()
 
 void Builder::ExportGeoTIFF()
 {
-	const vtString fname = GetActiveLayer()->GetExportFilename(FSTRING_TIF);
+	vtString fname = GetActiveLayer()->GetExportFilename(FSTRING_TIF);
 	if (fname == "")
 		return;
 	bool success = GetActiveElevLayer()->GetGrid()->SaveToGeoTIFF(fname);
@@ -100,7 +100,7 @@ void Builder::ExportGeoTIFF()
 
 void Builder::ExportBMP()
 {
-	const vtString fname = GetActiveLayer()->GetExportFilename(FSTRING_BMP);
+	vtString fname = GetActiveLayer()->GetExportFilename(FSTRING_BMP);
 	if (fname == "")
 		return;
 	bool success = GetActiveElevLayer()->GetGrid()->SaveToBMP(fname);
@@ -112,7 +112,7 @@ void Builder::ExportBMP()
 
 void Builder::ExportSTM()
 {
-	const vtString fname = GetActiveLayer()->GetExportFilename(FSTRING_STM);
+	vtString fname = GetActiveLayer()->GetExportFilename(FSTRING_STM);
 	if (fname == "")
 		return;
 	bool success = GetActiveElevLayer()->GetGrid()->SaveToSTM(fname);
@@ -124,7 +124,7 @@ void Builder::ExportSTM()
 
 void Builder::ExportTIN()
 {
-	const vtString fname = GetActiveLayer()->GetExportFilename(FSTRING_TIN);
+	vtString fname = GetActiveLayer()->GetExportFilename(FSTRING_TIN);
 	if (fname == "")
 		return;
 	vtTin2d *tin = new vtTin2d(GetActiveElevLayer()->GetGrid());
@@ -163,7 +163,7 @@ void Builder::ExportPlanet()
 
 void Builder::ExportVRML()
 {
-	const vtString fname = GetActiveLayer()->GetExportFilename(FSTRING_WRL);
+	vtString fname = GetActiveLayer()->GetExportFilename(FSTRING_WRL);
 	if (fname == "")
 		return;
 	bool success = GetActiveElevLayer()->GetGrid()->SaveToVRML(fname);
@@ -175,7 +175,7 @@ void Builder::ExportVRML()
 
 void Builder::ExportXYZ()
 {
-	const vtString fname = GetActiveLayer()->GetExportFilename(FSTRING_TXT);
+	vtString fname = GetActiveLayer()->GetExportFilename(FSTRING_TXT);
 	if (fname == "")
 		return;
 	bool success = GetActiveElevLayer()->GetGrid()->SaveToXYZ(fname);
@@ -187,7 +187,7 @@ void Builder::ExportXYZ()
 
 void Builder::ExportRAWINF()
 {
-	const vtString fname = GetActiveLayer()->GetExportFilename(FSTRING_RAW);
+	vtString fname = GetActiveLayer()->GetExportFilename(FSTRING_RAW);
 	if (fname == "")
 		return;
 	bool success = GetActiveElevLayer()->GetGrid()->SaveToRAWINF(fname);
@@ -200,21 +200,22 @@ void Builder::ExportRAWINF()
 void Builder::ExportChunkLOD()
 {
 	// Check dimensions; must be 2^n+1 for .chu
-	const vtElevationGrid *grid = GetActiveElevLayer()->GetGrid();
-	const IPoint2 &Size = grid->GetDimensions();
+	vtElevationGrid *grid = GetActiveElevLayer()->GetGrid();
+	int x, y;
+	grid->GetDimensions(x, y);
 	bool good = false;
 	for (int i = 3; i < 20; i++)
-		if (Size.x == ((1<<i)+1) && Size.y == ((1<<i)+1))
+		if (x == ((1<<i)+1) && y == ((1<<i)+1))
 			good = true;
 	if (!good)
 	{
 		DisplayAndLog("The elevation grid has dimensions %d x %d.  They must be\n"
-					  "a power of 2 plus 1 for .chu, e.g. 1025x1025.", Size.x, Size.y);
+					  "a power of 2 plus 1 for .chu, e.g. 1025x1025.", x, y);
 		return;
 	}
 
 	// Ask for filename
-	const vtString fname = GetActiveLayer()->GetExportFilename(FSTRING_CHU);
+	vtString fname = GetActiveLayer()->GetExportFilename(FSTRING_CHU);
 	if (fname == "")
 		return;
 
@@ -231,8 +232,8 @@ void Builder::ExportChunkLOD()
 	}
 
 	const int CHUNKLOD_MAX_HEIGHT = 10000;
-	const float vertical_scale = CHUNKLOD_MAX_HEIGHT / 32767.0f;
-	const float input_vertical_scale = 1.0f;
+	float vertical_scale = CHUNKLOD_MAX_HEIGHT / 32767.0f;
+	float input_vertical_scale = 1.0f;
 
 	OpenProgressDialog(_T("Writing ChunkLOD"), false, m_pParentWindow);
 
@@ -292,7 +293,7 @@ void Builder::ExportChunkLOD()
 
 void Builder::ExportPNG16()
 {
-	const vtString fname = GetActiveLayer()->GetExportFilename(FSTRING_PNG);
+	vtString fname = GetActiveLayer()->GetExportFilename(FSTRING_PNG);
 	if (fname == "")
 		return;
 	bool success = GetActiveElevLayer()->GetGrid()->SaveToPNG16(fname);
@@ -304,14 +305,15 @@ void Builder::ExportPNG16()
 
 void Builder::Export3TX()
 {
-	const vtElevationGrid *grid = GetActiveElevLayer()->GetGrid();
-	const IPoint2 &Size = grid->GetDimensions();
-	if (Size.x != 1201 || Size.y != 1201)
+	vtElevationGrid *grid = GetActiveElevLayer()->GetGrid();
+	int col, row;
+	grid->GetDimensions(col, row);
+	if (col != 1201 || row != 1201)
 	{
 		DisplayAndLog("3TX expects grid dimensions of 1201 x 1201");
 		return;
 	}
-	const vtString fname = GetActiveLayer()->GetExportFilename(FSTRING_3TX);
+	vtString fname = GetActiveLayer()->GetExportFilename(FSTRING_3TX);
 	if (fname == "")
 		return;
 	bool success = grid->SaveTo3TX(fname);
@@ -325,10 +327,9 @@ void Builder::ElevExportTiles(BuilderView *pView)
 {
 	vtElevLayer *pEL = GetActiveElevLayer();
 	vtElevationGrid *grid = pEL->GetGrid();
-
-	const bool floatmode = (grid->IsFloatMode() || grid->GetScale() != 1.0f);
-	const DPoint2 &spacing = grid->GetSpacing();
-	const DRECT &area = grid->GetEarthExtents();
+	bool floatmode = (grid->IsFloatMode() || grid->GetScale() != 1.0f);
+	DPoint2 spacing = grid->GetSpacing();
+	DRECT area = grid->GetEarthExtents();
 
 	TilingOptions tileopts;
 	tileopts.cols = 4;
@@ -380,7 +381,7 @@ void Builder::ElevExportTiles(BuilderView *pView)
 		tileopts.bCreateDerivedImages = false;
 
 	OpenProgressDialog2(_("Writing tiles"), true);
-	bool success = pEL->WriteElevationTileset(tileopts, pView);
+	bool success = pEL->WriteGridOfElevTilePyramids(tileopts, pView);
 	if (pView)
 		pView->HideGridMarks();
 	CloseProgressDialog2();
@@ -395,7 +396,8 @@ void Builder::ElevExportTiles(BuilderView *pView)
 
 void Builder::ExportBitmap(vtElevLayer *pEL, RenderOptions &ropt)
 {
-	const IPoint2 size = ropt.m_Size;
+	int xsize = ropt.m_iSizeX;
+	int ysize = ropt.m_iSizeY;
 
 	ColorMap cmap;
 	vtString fname = (const char *) ropt.m_strColorMap.mb_str(wxConvUTF8);
@@ -412,10 +414,15 @@ void Builder::ExportBitmap(vtElevLayer *pEL, RenderOptions &ropt)
 	}
 
 	// Get attributes of existing layer
-	vtProjection proj;
-	pEL->GetProjection(proj);
 	DRECT area;
-	pEL->GetAreaExtent(area);
+	vtProjection proj;
+	pEL->GetExtent(area);
+	pEL->GetProjection(proj);
+
+	// Elevation is pixel-is-point, but Imagery is pixel-is-area, so expand
+	//  the area slightly: Imagery is a half-cell larger in each direction.
+	DPoint2 spacing = pEL->GetGrid()->GetSpacing();
+	area.Grow(spacing.x/2, spacing.y/2);
 
 	vtImageLayer *pOutputLayer = NULL;
 	vtBitmapBase *pBitmap = NULL;
@@ -423,7 +430,7 @@ void Builder::ExportBitmap(vtElevLayer *pEL, RenderOptions &ropt)
 
 	if (ropt.m_bToFile)
 	{
-		if (!dib.Create(size, 24))
+		if (!dib.Create(xsize, ysize, 24))
 		{
 			DisplayAndLog("Failed to create bitmap.");
 			return;
@@ -432,7 +439,7 @@ void Builder::ExportBitmap(vtElevLayer *pEL, RenderOptions &ropt)
 	}
 	else
 	{
-		pOutputLayer = new vtImageLayer(area, size, proj);
+		pOutputLayer = new vtImageLayer(area, xsize, ysize, proj);
 		pBitmap = pOutputLayer->GetImage()->GetBitmap();
 	}
 
@@ -446,7 +453,7 @@ void Builder::ExportBitmap(vtElevLayer *pEL, RenderOptions &ropt)
 		else
 		{
 			// Quick and simple sunlight vector
-			const FPoint3 light_dir = LightDirection(vtElevLayer::m_draw.m_iCastAngle,
+			FPoint3 light_dir = LightDirection(vtElevLayer::m_draw.m_iCastAngle,
 				vtElevLayer::m_draw.m_iCastDirection);
 
 			if (vtElevLayer::m_draw.m_bCastShadows)
@@ -479,9 +486,10 @@ void Builder::ExportBitmap(vtElevLayer *pEL, RenderOptions &ropt)
 	}
 #if 0
 	// TEST - try coloring from water polygons
-	for (uint i = 0; i < m_Layers.GetSize(); i++)
+	int layers = m_Layers.GetSize();
+	for (int l = 0; l < layers; l++)
 	{
-		vtLayer *lp = m_Layers[i];
+		vtLayer *lp = m_Layers.GetAt(l);
 		if (lp->GetType() == LT_WATER)
 			((vtWaterLayer*)lp)->PaintDibWithWater(&dib);
 	}
@@ -518,7 +526,7 @@ void Builder::ImageExportTiles(BuilderView *pView)
 	dlg.GetTilingOptions(m_tileopts);
 
 	OpenProgressDialog(_("Writing tiles"), true);
-	bool success = pIL->GetImage()->WriteTileset(m_tileopts, pView);
+	bool success = pIL->GetImage()->WriteGridOfTilePyramids(m_tileopts, pView);
 	CloseProgressDialog();
 	if (success)
 		DisplayAndLog("Successfully wrote to '%s'", (const char *) m_tileopts.fname);
@@ -528,9 +536,9 @@ void Builder::ImageExportTiles(BuilderView *pView)
 
 void Builder::ImageExportPPM()
 {
-	const vtImageLayer *pIL = GetActiveImageLayer();
+	vtImageLayer *pIL = GetActiveImageLayer();
 
-	const vtString fname = pIL->GetExportFilename(FSTRING_PPM);
+	vtString fname = pIL->GetExportFilename(FSTRING_PPM);
 	if (fname == "")
 		return;
 	bool success = pIL->GetImage()->WritePPM(fname);
@@ -540,7 +548,7 @@ void Builder::ImageExportPPM()
 		DisplayAndLog("Error writing file.");
 }
 
-void Builder::AreaSampleElevTileset(BuilderView *pView)
+void Builder::ExportAreaOptimizedElevTileset(BuilderView *pView)
 {
 	m_tileopts.numlods = 3;
 
@@ -555,7 +563,7 @@ void Builder::AreaSampleElevTileset(BuilderView *pView)
 		return;
 	}
 
-	TileDlg dlg(m_pParentWindow, -1, _("Sample Elevation to Tileset"));
+	TileDlg dlg(m_pParentWindow, -1, _("Export Optimized Elevation Tileset"));
 	dlg.m_fEstX = spacing.x;
 	dlg.m_fEstY = spacing.y;
 	dlg.SetElevation(true);
@@ -609,7 +617,7 @@ void Builder::AreaSampleElevTileset(BuilderView *pView)
 	else
 		m_tileopts.bCreateDerivedImages = false;
 
-	bool success = DoSampleElevationToTileset(pView, m_tileopts, bFloat);
+	bool success = DoSampleElevationToTilePyramids(pView, m_tileopts, bFloat);
 	if (success)
 		DisplayAndLog("Successfully wrote to '%s'", (const char *) m_tileopts.fname);
 	else
@@ -619,12 +627,13 @@ void Builder::AreaSampleElevTileset(BuilderView *pView)
 		DisplayAndLog("Filled %d unknown heixels in output tiles.", m_tileopts.iNoDataFilled);
 }
 
-bool Builder::DoSampleElevationToTileset(BuilderView *pView, TilingOptions &opts,
-										 bool bFloat, bool bShowGridMarks)
+bool Builder::DoSampleElevationToTilePyramids(BuilderView *pView,
+											  TilingOptions &opts,
+											  bool bFloat, bool bShowGridMarks)
 {
 	if (m_pParentWindow)
 		OpenProgressDialog2(_("Writing tiles"), true, m_pParentWindow);
-	bool success = SampleElevationToTileset(pView, opts, bFloat, bShowGridMarks);
+	bool success = SampleElevationToTilePyramids(pView, opts, bFloat, bShowGridMarks);
 	if (bShowGridMarks && pView)
 		pView->HideGridMarks();
 	if (m_pParentWindow)
@@ -632,14 +641,14 @@ bool Builder::DoSampleElevationToTileset(BuilderView *pView, TilingOptions &opts
 	return success;
 }
 
-void Builder::AreaSampleImageTileset(BuilderView *pView)
+void Builder::ExportAreaOptimizedImageTileset(BuilderView *pView)
 {
 	m_tileopts.numlods = 3;
 
 	DPoint2 spacing(0, 0);
-	for (uint i = 0; i < m_Layers.size(); i++)
+	for (uint i = 0; i < m_Layers.GetSize(); i++)
 	{
-		vtLayer *l = m_Layers[i];
+		vtLayer *l = m_Layers.GetAt(i);
 		if (l->GetType() == LT_IMAGE)
 		{
 			vtImageLayer *im = (vtImageLayer *)l;
@@ -647,7 +656,7 @@ void Builder::AreaSampleImageTileset(BuilderView *pView)
 		}
 	}
 
-	TileDlg dlg(m_pParentWindow, -1, _("Sample Imagery to Tileset"));
+	TileDlg dlg(m_pParentWindow, -1, _("Export Optimized Image Tileset"));
 	dlg.m_fEstX = spacing.x;
 	dlg.m_fEstY = spacing.y;
 	dlg.SetElevation(false);
@@ -664,28 +673,30 @@ void Builder::AreaSampleImageTileset(BuilderView *pView)
 	dlg.GetTilingOptions(m_tileopts);
 	m_tileopts.bCreateDerivedImages = false;
 
-	bool success = DoSampleImageryToTileset(pView, m_tileopts);
+	bool success = DoSampleImageryToTilePyramids(pView, m_tileopts);
 	if (success)
 		DisplayAndLog("Successfully wrote to '%s'", (const char *) m_tileopts.fname);
 	else
 		DisplayAndLog("Could not successfully write to '%s'", (const char *) m_tileopts.fname);
 }
 
-bool Builder::DoSampleImageryToTileset(BuilderView *pView, TilingOptions &opts,
-									   bool bShowGridMarks)
+bool Builder::DoSampleImageryToTilePyramids(BuilderView *pView,
+											TilingOptions &opts,
+											bool bShowGridMarks)
 {
 	OpenProgressDialog(_T("Writing tiles"), true);
-	bool success = SampleImageryToTileset(pView, m_tileopts);
+	bool success = SampleImageryToTilePyramids(pView, m_tileopts);
 	if (bShowGridMarks && pView)
 		pView->HideGridMarks();
 	CloseProgressDialog();
 	return success;
 }
 
-bool Builder::SampleElevationToTileset(BuilderView *pView, TilingOptions &opts,
-									   bool bFloat, bool bShowGridMarks)
+bool Builder::SampleElevationToTilePyramids(BuilderView *pView,
+											TilingOptions &opts, bool bFloat,
+											bool bShowGridMarks)
 {
-	VTLOG1("SampleElevationToTileset\n");
+	VTLOG1("SampleElevationToTilePyramids\n");
 
 	// Avoid trouble with '.' and ',' in Europe
 	LocaleWrap normal_numbers(LC_NUMERIC, "C");
@@ -695,7 +706,7 @@ bool Builder::SampleElevationToTileset(BuilderView *pView, TilingOptions &opts,
 	bool bJPEG = (opts.bUseTextureCompression && opts.eCompressionType == TC_JPEG);
 
 	// Size of each rectangular tile area
-	const DPoint2 tile_dim(m_area.Width()/opts.cols, m_area.Height()/opts.rows);
+	DPoint2 tile_dim(m_area.Width()/opts.cols, m_area.Height()/opts.rows);
 
 	// Try to create directory to hold the tiles
 	vtString dirname = opts.fname;
@@ -764,21 +775,23 @@ bool Builder::SampleElevationToTileset(BuilderView *pView, TilingOptions &opts,
 	LODMap lod_existence_map(opts.cols, opts.rows);
 
 	// Pre-build a color lookup table once, rather than for each tile
+	std::vector<RGBi> color_table;
+	float color_min_elev, color_max_elev;
 	if (opts.bCreateDerivedImages)
 	{
-		float color_min_elev, color_max_elev;
 		ElevLayerArrayRange(elevs, color_min_elev, color_max_elev);
-		cmap.GenerateColorTable(4000, color_min_elev, color_max_elev);
+		cmap.GenerateColors(color_table, 4000, color_min_elev, color_max_elev);
 	}
 
 	// Time the operation
 	clock_t tm1 = clock();
 
+	int i, j;
 	int total = opts.rows * opts.cols, done = 0;
 	bool bCancelled = false;
-	for (int j = 0; j < opts.rows && !bCancelled; j++)
+	for (j = 0; j < opts.rows && !bCancelled; j++)
 	{
-		for (int i = 0; i < opts.cols && !bCancelled; i++)
+		for (i = 0; i < opts.cols && !bCancelled; i++)
 		{
 			// We might want to skip certain rows
 			if (opts.iMinRow != -1 &&
@@ -862,7 +875,7 @@ bool Builder::SampleElevationToTileset(BuilderView *pView, TilingOptions &opts,
 			// Now sample the elevation we found to the highest LOD we need
 			UpdateProgressDialog2(done*99/total, -1, _("Sampling elevation"));
 
-			vtElevationGrid base_lod(tile_area, IPoint2(base_tilesize+1, base_tilesize+1),
+			vtElevationGrid base_lod(tile_area, base_tilesize+1, base_tilesize+1,
 				bFloat, m_proj);
 
 			int iNumInvalid = 0;
@@ -875,8 +888,7 @@ bool Builder::SampleElevationToTileset(BuilderView *pView, TilingOptions &opts,
 				p.y = m_area.bottom + (j*tile_dim.y) + ((double)y / base_tilesize * tile_dim.y);
 
 				// Inform user
-				if ((y % 24) == 0)
-					progress_callback_minor((base_tilesize-1-y)*99/base_tilesize);
+				progress_callback_minor((base_tilesize-1-y)*99/base_tilesize);
 
 				for (x = 0; x <= base_tilesize; x++)
 				{
@@ -914,6 +926,13 @@ bool Builder::SampleElevationToTileset(BuilderView *pView, TilingOptions &opts,
 			// Now we know this tile will be included, so note the LODs present
 			lod_existence_map.set(col, row, base_tile_exponent, base_tile_exponent-(total_lods-1));
 
+			vtDIB dib;
+			if (opts.bCreateDerivedImages && opts.bMaskUnknownAreas)
+			{
+				dib.Create(base_tilesize, base_tilesize, 32);
+				base_lod.ColorDibFromTable(&dib, color_table, color_min_elev, color_max_elev, RGBAi(0,0,0,0));
+			}
+
 			if (iNumInvalid > 0)
 			{
 				// We don't want any gaps at all in the output tiles, because
@@ -940,22 +959,14 @@ bool Builder::SampleElevationToTileset(BuilderView *pView, TilingOptions &opts,
 				opts.iNoDataFilled += iNumInvalid;
 			}
 
+			// Create a matching derived texture tileset
+			if (opts.bCreateDerivedImages && !opts.bMaskUnknownAreas)
+			{
+				dib.Create(base_tilesize, base_tilesize, 24);
+				base_lod.ColorDibFromTable(&dib, color_table, color_min_elev, color_max_elev, RGBi(255,0,0));
+			}
 			if (opts.bCreateDerivedImages)
 			{
-				// Create a matching derived texture tileset
-				vtDIB dib;
-
-				if (opts.bImageAlpha)
-				{
-					dib.Create(IPoint2(base_tilesize, base_tilesize), 32);
-					base_lod.ColorDibFromTable(&dib, &cmap, RGBAi(0,0,0,0));	// Black transparent
-				}
-				else
-				{
-					dib.Create(IPoint2(base_tilesize, base_tilesize), 24);
-					base_lod.ColorDibFromTable(&dib, &cmap, RGBi(255,0,0));		// Red
-				}
-
 				if (opts.draw.m_bShadingQuick)
 					base_lod.ShadeQuick(&dib, SHADING_BIAS, true);
 				else if (opts.draw.m_bShadingDot)
@@ -988,7 +999,7 @@ bool Builder::SampleElevationToTileset(BuilderView *pView, TilingOptions &opts,
 					uchar *rgb_bytes = (uchar *) malloc(iUncompressedSize);
 
 					uchar *dst = rgb_bytes;
-					if (opts.bImageAlpha)
+					if (opts.bMaskUnknownAreas)
 					{
 						RGBAi rgba;
 						for (int ro = 0; ro < base_tilesize; ro += (1<<k))
@@ -1103,21 +1114,20 @@ bool Builder::SampleElevationToTileset(BuilderView *pView, TilingOptions &opts,
 	return true;
 }
 
-bool Builder::SampleImageryToTileset(BuilderView *pView, TilingOptions &opts,
-	bool bShowGridMarks)
+bool Builder::SampleImageryToTilePyramids(BuilderView *pView, TilingOptions &opts, bool bShowGridMarks)
 {
-	VTLOG1("SampleImageryToTileset\n");
+	VTLOG1("SampleImageryToTilePyramids\n");
 
 	// Check that options are valid
 	CheckCompressionMethod(opts);
 	bool bJPEG = (opts.bUseTextureCompression && opts.eCompressionType == TC_JPEG);
 
-	// Gather an array of the existing image layers we will sample from
-	uint num_image = 0;
+	// Gather array of existing image layers we will sample from
+	uint l, layers = m_Layers.GetSize(), num_image = 0;
 	vtImageLayer **images = new vtImageLayer *[LayersOfType(LT_IMAGE)];
-	for (uint lay = 0; lay < m_Layers.size(); lay++)
+	for (l = 0; l < layers; l++)
 	{
-		vtLayer *lp = m_Layers[lay];
+		vtLayer *lp = m_Layers.GetAt(l);
 		if (lp->GetType() == LT_IMAGE)
 			images[num_image++] = (vtImageLayer *)lp;
 	}
@@ -1242,12 +1252,33 @@ bool Builder::SampleImageryToTileset(BuilderView *pView, TilingOptions &opts,
 				image_area.Grow(texel.x/2, texel.y/2);
 
 				// Sample the images we found to the exact LOD we need
+				vtBitmap Target;
+				Target.Allocate(tilesize, tilesize);
+
 				// Get ready to multisample
 				DPoint2 step = tile_dim / (tilesize-1);
 				DLine2 offsets;
 				int iNSampling = g_Options.GetValueInt(TAG_SAMPLING_N);
 				MakeSampleOffsets(step, iNSampling, offsets);
 				double dRes = (step.x+step.y)/2;
+
+				DPoint2 p;
+				RGBi pixel, rgb;
+				for (int y = tilesize-1; y >= 0; y--)
+				{
+					p.y = tile_area.bottom + (y * step.y);
+					for (int x = 0; x < tilesize; x++)
+					{
+						p.x = tile_area.left + (x * step.x);
+
+						// find some data for this point
+						rgb.Set(0,0,0);
+						for (uint im = 0; im < overlapping_images.size(); im++)
+							if (overlapping_images[im]->GetMultiSample(p, offsets, pixel, dRes)) rgb = pixel;
+
+						Target.SetPixel24(x, y, rgb);
+					}
+				}
 
 				vtString fname = MakeFilenameDB(dirname, col, row, k);
 
@@ -1259,36 +1290,21 @@ bool Builder::SampleImageryToTileset(BuilderView *pView, TilingOptions &opts,
 				if (bCancel)
 					return false;
 
-				int depth = opts.bImageAlpha ? 4 : 3;
-				int iUncompressedSize = tilesize * tilesize * depth;
-				uchar *rgb_bytes = (uchar *) malloc(iUncompressedSize);
-				uchar *dst = rgb_bytes;
+				uchar *rgb_bytes = (uchar *) malloc(tilesize * tilesize * 3);
+				int cb = 0;	// count bytes
 
-				DPoint2 p;
-				RGBAi pixel, rgba;
+				// Copy whole image directly from Target to rgb_bytes
 				for (int y = tilesize-1; y >= 0; y--)
 				{
-					p.y = tile_area.bottom + (y * step.y);
 					for (int x = 0; x < tilesize; x++)
 					{
-						p.x = tile_area.left + (x * step.x);
-
-						// find some data for this point
-						rgba.Set(0,0,0,0);
-						for (uint im = 0; im < overlapping_images.size(); im++)
-						{
-							if (overlapping_images[im]->GetMultiSample(p, offsets, pixel, dRes))
-							{
-								rgba = pixel;
-							}
-						}
-						*dst++ = rgba.r;
-						*dst++ = rgba.g;
-						*dst++ = rgba.b;
-						if (opts.bImageAlpha)
-							*dst++ = rgba.a;
+						Target.GetPixel24(x, y, rgb);
+						rgb_bytes[cb++] = rgb.r;
+						rgb_bytes[cb++] = rgb.g;
+						rgb_bytes[cb++] = rgb.b;
 					}
 				}
+				int iUncompressedSize = cb;
 
 				vtMiniDatabuf output_buf;
 

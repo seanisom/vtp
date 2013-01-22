@@ -24,7 +24,7 @@ vtString RemoveAccents(const vtString &strInput)
 	int len = strInput.GetLength();
 	for (int i = 0; i < len; i++)
 	{
-		uchar ch = (uchar) strInput[i];
+		uchar ch = (uchar) strInput.GetAt(i);
 		switch (ch)
 		{
 			// do conversion from "ANSI western europe" character set
@@ -216,7 +216,7 @@ Country::~Country()
 	int j, num_places = m_places.GetSize();
 	for (j = 0; j < num_places; j++)
 		delete m_places[j];
-	m_places.Clear();
+	m_places.Empty();
 }
 
 bool Country::FindPlace(const char *name_nd, DPoint2 &point, bool bFullLength)
@@ -276,7 +276,7 @@ bool Country::FindAllMatchingPlaces(const char *name_nd, bool bFullLength, Place
 	int j, num_places = m_places.GetSize();
 
 	bool match = false;
-	places.Clear();
+	places.Empty();
 
 	for (j = 0; j < num_places; j++)
 	{

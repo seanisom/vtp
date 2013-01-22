@@ -3,22 +3,198 @@
 //
 // Implements the vtStructure class which represents a single built structure.
 //
-// Copyright (c) 2001-2012 Virtual Terrain Project
+// Copyright (c) 2001-2007 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 /** \file Structure.h */
 
-#ifndef VTDATA_STRUCTURE_H
-#define VTDATA_STRUCTURE_H
+
+#ifndef STRUCTUREH
+#define STRUCTUREH
 
 #include "MathTypes.h"
 #include "Selectable.h"
 #include "Content.h"
-#include "FilePath.h"	// for GZOutput
+#include "FilePath.h"
 
 class vtBuilding;
 class vtFence;
 class vtStructInstance;
+
+// Well known material names
+#define BMAT_NAME_PLAIN			"Plain"
+#define BMAT_NAME_WOOD			"Wood"
+#define BMAT_NAME_SIDING		"Siding"
+#define BMAT_NAME_BRICK			"Brick"
+#define BMAT_NAME_PAINTED_BRICK	"Painted-Brick"
+#define BMAT_NAME_ROLLED_ROOFING "Rolled-Roofing"
+#define BMAT_NAME_CEMENT		"Cement"
+#define BMAT_NAME_CORRUGATED	"Corrugated"
+#define BMAT_NAME_DOOR			"Door"
+#define BMAT_NAME_WINDOW		"Window"
+#define BMAT_NAME_WINDOWWALL	"WindowWall"
+
+enum vtMaterialColorEnum
+{
+	VT_MATERIAL_COLOUR,			// a single color
+	VT_MATERIAL_COLOURABLE,		// any color, untextured
+	VT_MATERIAL_SELFCOLOURED_TEXTURE,	// a single texture
+	VT_MATERIAL_COLOURABLE_TEXTURE		// any color, textured
+};
+
+/**
+ * This class encapsulates the description of a shared material
+ */
+class vtMaterialDescriptor
+{
+public:
+	vtMaterialDescriptor();
+	vtMaterialDescriptor(const char *name,
+					const vtString &SourceName,
+					const vtMaterialColorEnum Colorable = VT_MATERIAL_SELFCOLOURED_TEXTURE,
+					const float fUVScaleX=-1,
+					const float fUVScaleY=-1,
+					const bool bTwoSided = false,
+					const bool bAmbient = false,
+					const bool bBlended = false,
+					const RGBi &Color = RGBi(0,0,0));
+	~vtMaterialDescriptor();
+
+	void SetName(const vtString& Name)
+	{
+		m_pName = &Name;
+	}
+	const vtString& GetName() const
+	{
+		return *m_pName;
+	}
+	/**
+	\param type One of:
+	- 0: A surface material, such as brick, siding, or stucco.
+	- 1: An element of a strcture edge, such as a door or window.
+	- 2: Reserved for "Window Wall", an efficiency optimization material
+		which contains both a window and a wall.
+	- 3: A post material, for linear structures, such as a fencepost.
+	*/
+	void SetMatType(int type)
+	{
+		m_Type = type;
+	}
+	int GetMatType() const
+	{
+		return m_Type;
+	}
+	// UV Scale: texture units per meter, or -1 to scale to fit
+	void SetUVScale(const float fScaleX, const float fScaleY)
+	{
+		m_UVScale.Set(fScaleX, fScaleY);
+	}
+	FPoint2 GetUVScale() const
+	{
+		return m_UVScale;
+	}
+	void SetMaterialIndex(const int Index)
+	{
+		m_iMaterialIndex = Index;
+	}
+	const int GetMaterialIndex() const
+	{
+		return m_iMaterialIndex;
+	}
+	void SetColorable(const vtMaterialColorEnum Type)
+	{
+		m_Colorable = Type;
+	}
+	const vtMaterialColorEnum GetColorable() const
+	{
+		return m_Colorable;
+	}
+	void SetSourceName(const vtString &SourceName)
+	{
+		m_SourceName = SourceName;
+	}
+	const vtString& GetSourceName() const
+	{
+		return m_SourceName;
+	}
+	void SetRGB(const RGBi Color)
+	{
+		m_RGB = Color;
+	}
+	const RGBi GetRGB() const
+	{
+		return m_RGB;
+	}
+	void SetTwoSided(bool bTwoSided)
+	{
+		m_bTwoSided = bTwoSided;
+	}
+	const bool GetTwoSided()
+	{
+		return m_bTwoSided;
+	}
+	void SetAmbient(bool bAmbient)
+	{
+		m_bAmbient = bAmbient;
+	}
+	const bool GetAmbient()
+	{
+		return m_bAmbient;
+	}
+	void SetBlending(bool bBlending)
+	{
+		m_bBlending = bBlending;
+	}
+	const bool GetBlending()
+	{
+		return m_bBlending;
+	}
+	// Operator  overloads
+	bool operator == (const vtMaterialDescriptor& rhs) const
+	{
+		return (*m_pName == *rhs.m_pName);
+	}
+	bool operator == (const vtMaterialDescriptor& rhs)
+	{
+		return (*m_pName == *rhs.m_pName);
+	}
+	void WriteToFile(FILE *fp);
+
+private:
+	const vtString *m_pName; // Name of material
+	int m_Type;				// 0 for surface materials, >0 for classification type
+	vtMaterialColorEnum m_Colorable;
+	vtString m_SourceName;	// Source of material
+	FPoint2 m_UVScale;		// Texel scale;
+	RGBi m_RGB;				// Color for VT_MATERIAL_COLOUR
+	bool m_bTwoSided;		// default false
+	bool m_bAmbient;		// default false
+	bool m_bBlending;		// default false
+
+	// The following field is only used in 3d construction, but it's not
+	//  enough distinction to warrant creating a subclass to contain it.
+	int m_iMaterialIndex; // Starting or only index of this material in the shared materials array
+};
+
+/**
+ * Contains a set of material descriptors.
+ */
+class vtMaterialDescriptorArray : public vtArray<vtMaterialDescriptor*>
+{
+public:
+	virtual ~vtMaterialDescriptorArray() { Empty(); free(m_Data); m_Data = NULL; m_MaxSize = 0; }
+	void DestructItems(uint first, uint last)
+	{
+		for (uint i = first; i <= last; i++)
+			delete GetAt(i);
+	}
+	bool LoadExternalMaterials();
+	const vtString *FindName(const char *matname) const;
+	void CreatePlain();
+
+	bool Load(const char *szFileName);
+	bool Save(const char *szFileName);
+};
 
 /**
  * Structure type.
@@ -57,7 +233,7 @@ public:
 	void CopyFrom(const vtStructure &v);
 
 	void SetType(vtStructureType t) { m_type = t; }
-	vtStructureType GetType() const { return m_type; }
+	vtStructureType GetType() { return m_type; }
 
 	void SetElevationOffset(float fOffset) { m_fElevationOffset = fOffset; }
 	float GetElevationOffset() const { return m_fElevationOffset; }
@@ -145,5 +321,10 @@ protected:
 	vtItem *m_pItem;	// If this is an instance of a content item
 };
 
-#endif // VTDATA_STRUCTURE_H
+bool LoadGlobalMaterials();
+void SetGlobalMaterials(vtMaterialDescriptorArray *mats);
+vtMaterialDescriptorArray *GetGlobalMaterials();
+void FreeGlobalMaterials();
+
+#endif // STRUCTUREH
 

@@ -153,7 +153,7 @@ public:
 		m_Species.Append(pSpecies);
 	}
 	short FindSpeciesId(vtPlantSpecies *ps);
-	void Clear() { m_Species.Clear(); }
+	void Clear() { m_Species.Empty(); }
 
 protected:
 	vtArray<vtPlantSpecies*> m_Species;
@@ -181,7 +181,7 @@ public:
 	vtBioType *GetBioType(int i) const { return m_Types[i]; }
 	int FindBiotypeIdByName(const char *name) const;
 	void ResetAmounts();
-	void Clear() { m_Types.Clear(); }
+	void Clear() { m_Types.Empty(); }
 
 	vtArray<vtBioType *> m_Types;
 };
@@ -199,7 +199,7 @@ class vtPlantInstanceArray : public vtFeatureSetPoint2D
 public:
 	vtPlantInstanceArray();
 
-	void SetSpeciesList(vtSpeciesList *list) { m_pSpeciesList = list; }
+	void SetPlantList(vtSpeciesList *list) { m_pPlantList = list; }
 	int AddPlant(const DPoint2 &pos, float size, short species_id);
 	int AddPlant(const DPoint2 &pos, float size, vtPlantSpecies *ps);
 	void SetPlant(int iNum, float size, short species_id);
@@ -212,7 +212,7 @@ public:
 	bool WriteVF(const char *fname) const;
 
 protected:
-	vtSpeciesList *m_pSpeciesList;
+	vtSpeciesList *m_pPlantList;
 
 	int m_SizeField;
 	int m_SpeciesField;

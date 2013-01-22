@@ -71,8 +71,6 @@ vtTerrainScene::vtTerrainScene()
 	m_pAtmosphereGroup = NULL;
 
 	m_fCatenaryFactor = 140.0;	// a default value
-
-	vtSetGlobalContent(m_Content);	// Singleton
 }
 
 vtTerrainScene::~vtTerrainScene()
@@ -85,7 +83,7 @@ void vtTerrainScene::CleanupScene()
 	VTLOG("vtTerrainScene::CleanupScene\n");
 
 	m_Content.ReleaseContents();
-	m_Content.Clear();
+	m_Content.Empty();
 
 	SetCurrentTerrain(NULL);
 
@@ -149,7 +147,7 @@ void vtTerrainScene::_CreateSky()
 	m_pSkyTrack = new vtSkyTrackEngine;
 	m_pSkyTrack->setName("Sky-Camera-Following");
 	m_pSkyTrack->m_pCamera = vtGetScene()->GetCamera();
-	m_pSkyTrack->AddTarget(m_pSkyDome);
+	m_pSkyTrack->SetTarget(m_pSkyDome);
 	vtGetScene()->AddEngine(m_pSkyTrack);
 }
 
@@ -177,7 +175,7 @@ void vtTerrainScene::_CreateEngines()
 {
 	// Set Time in motion
 	m_pTimeEngine = new vtTimeEngine;
-	m_pTimeEngine->AddTarget((vtTimeTarget *)this);
+	m_pTimeEngine->SetTarget((vtTimeTarget *)this);
 	m_pTimeEngine->setName("Terrain Time");
 	m_pTimeEngine->SetEnabled(false);
 	vtGetScene()->AddEngine(m_pTimeEngine);
@@ -224,12 +222,12 @@ void vtTerrainScene::AppendTerrain(vtTerrain *pTerrain)
  */
 vtGroup *vtTerrainScene::BuildTerrain(vtTerrain *pTerrain)
 {
-	pTerrain->CreateStep1();
+	pTerrain->CreateStep0();
 
 	// connect the terrain's engines
 	m_pTerrainEngines->AddChild(pTerrain->GetEngineGroup());
 
-	if (!pTerrain->CreateStep2())
+	if (!pTerrain->CreateStep1())
 		return NULL;
 
 	// Set time to that of the new terrain
@@ -239,7 +237,10 @@ vtGroup *vtTerrainScene::BuildTerrain(vtTerrain *pTerrain)
 	DPoint2 geo = pTerrain->GetCenterGeoLocation();
 	m_pSkyDome->SetGeoLocation(geo);
 
-	if (!pTerrain->CreateStep3(m_pSunLight, m_pLightSource))
+	if (!pTerrain->CreateStep2(m_pSunLight, m_pLightSource))
+		return NULL;
+
+	if (!pTerrain->CreateStep3())
 		return NULL;
 
 	if (!pTerrain->CreateStep4())
@@ -247,11 +248,6 @@ vtGroup *vtTerrainScene::BuildTerrain(vtTerrain *pTerrain)
 
 	if (!pTerrain->CreateStep5())
 		return NULL;
-
-	pTerrain->CreateStep6();
-	pTerrain->CreateStep7();
-	pTerrain->CreateStep8();
-	pTerrain->CreateStep9();
 
 	return pTerrain->GetTopGroup();
 }
@@ -317,6 +313,9 @@ void vtTerrainScene::SetCurrentTerrain(vtTerrain *pTerrain)
 
 	TParams &param = m_pCurrentTerrain->GetParams();
 
+	// switch to the projection of this terrain
+	m_pCurrentTerrain->SetGlobalProjection();
+
 	// Set background color to match the ocean
 	vtGetScene()->SetBgColor(m_pCurrentTerrain->GetBgColor());
 
@@ -340,7 +339,40 @@ void vtTerrainScene::SetCurrentTerrain(vtTerrain *pTerrain)
 	m_pTimeEngine->SetEnabled(true);
 
 	if (param.GetValueBool(STR_STRUCT_SHADOWS))
+	{
+#ifdef OLD_OSG_SHADOWS
+		int iRez = param.GetValueInt(STR_SHADOW_REZ);
+		// Experimental OSG-specific code!
+		// Set up cull callback on the dynamic geometry transform node
+		vtLodGrid *pStructures = m_pCurrentTerrain->GetStructureGrid();
+		osg::Node *pShadowed = m_pCurrentTerrain->GetTopGroup()->getChild(0);
+		if (NULL != pShadowed)
+		{
+			bool bPaging = (pTerrain->GetStructureLodGrid() != NULL);
+
+			LocaleWrap normal_numbers(LC_NUMERIC, "C");
+			float fDarkness;
+			if (!param.GetValueFloat(STR_SHADOW_DARKNESS, fDarkness))
+				fDarkness = 0.8f;
+			int iTextureUnit = m_pCurrentTerrain->GetShadowTextureUnit();
+
+			FSphere shadow_area;
+			if (bPaging)
+				shadow_area.Set(FPoint3(0,0,0),-1);
+			else
+				pStructures->GetBoundSphere(shadow_area, true);
+
+			vtGetScene()->SetShadowedNode(m_pSunLight, pStructures, pShadowed,
+				iRez, fDarkness, iTextureUnit, shadow_area);
+
+			// Update the time engine once again, forcing it to move the sun
+			//  to set the correct sunlight direction
+			m_pTimeEngine->SetTime(localtime);
+		}
+#else
 		m_pCurrentTerrain->SetShadows(true);
+#endif
+	}
 }
 
 void vtTerrainScene::UpdateSkydomeForTerrain(vtTerrain *pTerrain)
@@ -406,20 +438,28 @@ void vtTerrainScene::SetTime(const vtTime &time)
 	{
 		m_pSkyDome->SetTime(time);
 		// TODO? Update the fog color to match the color of the horizon.
+
+#if OLD_OSG_SHADOWS
+		// Experimental OSG-specific code!
+		vtGetScene()->UpdateShadowLightDirection(m_pSunLight);
+#endif
 	}
 }
 
 vtUtilStruct *vtTerrainScene::LoadUtilStructure(const vtString &name)
 {
+	VTLOG("LoadUtilStructure '%s'\n", (const char *)name);
+
 	// Check to see if it's already loaded
 	uint i;
 	for (i = 0; i < m_StructObjs.GetSize(); i++)
 	{
 		if (m_StructObjs[i]->m_sStructName == name)
+		{
+			VTLOG("  already loaded.\n");
 			return m_StructObjs[i];
+		}
 	}
-
-	VTLOG("LoadUtilStructure '%s'\n", (const char *)name);
 
 	// If not, look for it in the global content manager
 	vtItem *item = m_Content.FindItemByName(name);
@@ -466,5 +506,10 @@ vtUtilStruct *vtTerrainScene::LoadUtilStructure(const vtString &name)
 vtTerrainScene *vtGetTS()
 {
 	return vtTerrainScene::s_pTerrainScene;
+}
+
+vtContentManager3d &vtGetContent()
+{
+	return vtTerrainScene::s_pTerrainScene->m_Content;
 }
 

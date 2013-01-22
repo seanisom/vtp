@@ -94,7 +94,7 @@ bool vtItem3d::LoadModels()
 //
 void vtItem3d::UpdateExtents()
 {
-	m_extents.SetToZero();
+	m_extents.Empty();
 
 	if (m_pNode == NULL)
 		return;
@@ -156,17 +156,5 @@ osg::Node *vtContentManager3d::CreateNodeFromItemname(const char *itemname)
 		m_pGroup->addChild(pItem->m_pNode);
 	}
 	return pItem->m_pNode;
-}
-
-vtContentManager3d *vtContentManager3d::s_pContent = NULL;
-
-void vtSetGlobalContent(vtContentManager3d &cm3d)
-{
-	vtContentManager3d::s_pContent = &cm3d;
-}
-
-vtContentManager3d &vtGetContent()
-{
-	return *(vtContentManager3d::s_pContent);
 }
 

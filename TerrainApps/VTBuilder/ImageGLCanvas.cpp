@@ -37,7 +37,7 @@ void WriteMiniImage(const vtString &fname, const TilingOptions &opts,
 		if (opts.eCompressionType == TC_OPENGL)
 		{
 #if USE_OPENGL
-			DoTextureCompress(rgb_bytes, output_buf, pCanvas->m_iTex, opts.bImageAlpha);
+			DoTextureCompress(rgb_bytes, output_buf, pCanvas->m_iTex, opts.bMaskUnknownAreas);
 
 			if (output_buf.savedata(fname) == 0)
 			{
@@ -48,7 +48,7 @@ void WriteMiniImage(const vtString &fname, const TilingOptions &opts,
 			// When we process a tile that is 256 in size, call back the canvas
 			//  to let it know, so that it can display the tile to the user as
 			//  a visual indicator of what is happening
-			if (output_buf.xsize <= 256)
+			if (output_buf.xsize == 256)
 				pCanvas->Refresh(false);
 #endif
 		}
@@ -74,7 +74,7 @@ void WriteMiniImage(const vtString &fname, const TilingOptions &opts,
 	else
 	{
 		// Uncompressed
-		if (opts.bImageAlpha)
+		if (opts.bMaskUnknownAreas)
 		{
 			// Output to a plain RGBA .db file
 			output_buf.type = databuf::DATABUF_TYPE_RGBA;

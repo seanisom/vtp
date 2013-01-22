@@ -10,7 +10,9 @@
 
 #include "vtdata/vtDIB.h"
 
-#if WIN32
+// wxWidgets 2.9.x and USE_DIBSECTIONS draws upside-down bitmaps.  Until it's
+// figured out, we disable DIBSECTIONS for newer wx.
+#if WIN32 && (wxVERSION_NUMBER < 2900)
 #define USE_DIBSECTIONS 1
 #endif
 
@@ -26,7 +28,7 @@ public:
 	vtBitmap();
 	virtual ~vtBitmap();
 
-	bool Allocate(const IPoint2 &size, int iDepth = 24);
+	bool Allocate(int iXSize, int iYSize, int iDepth = 24);
 	bool IsAllocated() const;
 	void SetPixel24(int x, int y, uchar r, uchar g, uchar b);
 	void SetPixel24(int x, int y, const RGBi &rgb)
@@ -41,7 +43,8 @@ public:
 	uchar GetPixel8(int x, int y) const;
 	void SetPixel8(int x, int y, uchar color);
 
-	IPoint2 GetSize() const;
+	uint GetWidth() const;
+	uint GetHeight() const;
 	uint GetDepth() const;
 
 	void ContentsChanged();
@@ -52,8 +55,8 @@ public:
 	wxBitmap	*m_pBitmap;
 
 protected:
-	bool Allocate8(const IPoint2 &size);
-	bool Allocate24(const IPoint2 &size);
+	bool Allocate8(int iXSize, int iYSize);
+	bool Allocate24(int iXSize, int iYSize);
 
 #if USE_DIBSECTIONS
 	// A DIBSection is a special kind of bitmap, handled as a HBITMAP,

@@ -1,7 +1,7 @@
 //
 // Name: UtilDlg.cpp
 //
-// Copyright (c) 2002-2013 Virtual Terrain Project
+// Copyright (c) 2002-2011 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
@@ -13,7 +13,7 @@
 #include "wx/wxprec.h"
 
 #include "vtlib/vtlib.h"
-#include "vtlib/core/UtilityMap3d.h"
+#include "vtlib/core/Route.h"
 #include "UtilDlg.h"
 #include "EnviroGUI.h"
 #include "vtdata/vtLog.h"
@@ -50,7 +50,8 @@ void UtilDlg::OnStructType( wxCommandEvent &event )
 {
 	TransferDataFromWindow();
 	wxString val = m_pChoice->GetStringSelection();
-	g_App.SetPowerOptions((const char *) val.mb_str(wxConvUTF8));
+	g_App.SetRouteOptions((const char *) val.mb_str(wxConvUTF8));
+	g_App.start_new_route();
 }
 
 void UtilDlg::OnInitDialog(wxInitDialogEvent& event)
@@ -78,6 +79,6 @@ void UtilDlg::OnInitDialog(wxInitDialogEvent& event)
 	VTLOG("\t%d items, %d found.\n", mng.NumItems(), found);
 
 	wxString val = m_pChoice->GetStringSelection();
-	g_App.SetPowerOptions((const char *) val.mb_str(wxConvUTF8));
+	g_App.SetRouteOptions((const char *) val.mb_str(wxConvUTF8));
 }
 

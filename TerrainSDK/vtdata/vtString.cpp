@@ -99,7 +99,7 @@ void vtString::Release(vtStringData* pData)
 	}
 }
 
-void vtString::Clear()
+void vtString::Empty()
 {
 	if (GetData()->nDataLength == 0)
 		return;

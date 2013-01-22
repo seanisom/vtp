@@ -3,7 +3,7 @@
 
 [Setup]
 AppName=VTBuilder
-AppVerName=VTBuilder 1.45 (2013.01.09)
+AppVerName=VTBuilder 1.3 (2012.12.10)
 AppPublisher=Virtual Terrain Project
 AppPublisherURL=http://vterrain.org/
 AppSupportURL=http://vterrain.org/
@@ -12,7 +12,7 @@ DefaultDirName={pf}\VTP
 DefaultGroupName=VTP
 AllowNoIcons=yes
 LicenseFile=C:\VTP\license.txt
-OutputBaseFilename=VTBuilder_130109
+OutputBaseFilename=VTBuilder_121210
 OutputDir=C:\Distrib
 ; We need the following because some Windows machines won't turn Registry settings into Environment variables w/o a reboot
 AlwaysRestart=yes
@@ -40,10 +40,9 @@ Source: "C:\VTP\license.txt"; DestDir: "{app}"; Flags: ignoreversion; Components
 Source: "C:\VTP\vc10\TerrainApps\VTBuilder\Release\VTBuilder.exe"; DestDir: "{app}\Apps"; Flags: ignoreversion; Components: main
 Source: "C:\VTP\TerrainApps\VTBuilder\Ship\VTBuilder.xml"; DestDir: "{app}\Apps"; Flags: ignoreversion; Components: main
 Source: "C:\VTP\TerrainApps\VTBuilder\Docs\*"; DestDir: "{app}\Docs\VTBuilder"; Flags: ignoreversion recursesubdirs; Components: docs
-Source: "C:\VTP\TerrainApps\docs.css"; DestDir: "{app}\Docs"; Flags: ignoreversion; Components: docs
 
 ; Translation files
-Source: "C:\VTP\i18n\*"; DestDir: "{app}\Apps"; Excludes: "*.po,Enviro.*"; Flags: ignoreversion recursesubdirs; Components: main
+Source: "C:\VTP\i18n\*"; DestDir: "{app}\Apps"; Flags: ignoreversion recursesubdirs; Components: main
 
 ; Core Data
 Source: "G:\Data-Distro\WorldMap\gnv19.*"; DestDir: "{app}/Data/WorldMap"; Flags: ignoreversion; Components: data
@@ -65,11 +64,15 @@ Source: "C:\APIs\lpng1513\zlib1.dll"; DestDir: "{app}\Apps"; Flags: ignoreversio
 Source: "C:\APIs\wxWidgets-2.9.4\lib\vc_dll\*u_*.dll"; DestDir: "{app}\Apps"; Flags: ignoreversion; Components: dlls
 Source: "C:\APIs\expat-2.0.1\win32\bin\Release\libexpat.dll"; DestDir: "{app}\Apps"; Flags: ignoreversion; Components: dlls
 
+; Microsoft DLLs (not useful, since vc8 they don't work if installed this way)
+;Source: "C:\Program Files\VisStudio8\VC\REDIST\x86\Microsoft.VC80.CRT\Microsoft.VC80.CRT.manifest"; DestDir: "{app}"; Flags: ignoreversion; Components: dlls
+;Source: "C:\Program Files\VisStudio8\VC\REDIST\x86\Microsoft.VC80.CRT\msvcp80.dll"; DestDir: "{app}"; Flags: ignoreversion; Components: dlls
+;Source: "C:\Program Files\VisStudio8\VC\REDIST\x86\Microsoft.VC80.CRT\msvcr80.dll"; DestDir: "{app}"; Flags: ignoreversion; Components: dlls
+
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
 
 [Icons]
-Name: "{group}\Documentation"; Filename: "{app}\Docs\VTBuilder\en\index.html"
-Name: "{group}\Documentation - Italian"; Filename: "{app}\Docs\VTBuilder\it\index.html"
+Name: "{group}\Documentation"; Filename: "{app}\Docs\en\index.html"
 Name: "{group}\VTBuilder"; Filename: "{app}\Apps\VTBuilder.exe"; WorkingDir: "{app}/Apps"
 Name: "{group}\Uninstall VTBuilder"; Filename: "{uninstallexe}"
 

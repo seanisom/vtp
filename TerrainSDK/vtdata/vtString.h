@@ -74,14 +74,12 @@ public:
 	// TRUE if zero length
 	bool IsEmpty() const;
 	// clear contents to empty
-	void Clear();
+	void Empty();
 
 	// return single character at zero-based index
 	char GetAt(int nIndex) const;
 	// return single character at zero-based index
-	const char& operator[](int nIndex) const;
-	// access single character at zero-based index
-	char& operator[](int nIndex);
+	char operator[](int nIndex) const;
 	// set a single character at zero-based index
 	void SetAt(int nIndex, char ch);
 	// return pointer to const string
@@ -302,12 +300,7 @@ inline char vtString::GetAt(int nIndex) const
 {
 	return m_pchData[nIndex];
 }
-inline const char& vtString::operator[](int nIndex) const
-{
-	// same as GetAt
-	return m_pchData[nIndex];
-}
-inline char& vtString::operator[](int nIndex)
+inline char vtString::operator[](int nIndex) const
 {
 	// same as GetAt
 	return m_pchData[nIndex];
