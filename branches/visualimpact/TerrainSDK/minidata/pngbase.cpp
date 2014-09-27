@@ -221,7 +221,7 @@ void user_flush_fn(png_structp png_ptr)
    }
 
 // compress PNG image
-void compressPNGimage(unsigned char *image,int width,int height,int components,unsigned char **data,unsigned int *bytes,float gamma,int level)
+void compressPNGimage(unsigned char *image,int width,int height,int components,unsigned char **data,long long *bytes,float gamma,int level)
    {
    int i;
 

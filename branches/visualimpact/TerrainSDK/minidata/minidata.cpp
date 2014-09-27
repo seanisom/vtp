@@ -25,9 +25,8 @@ struct MINI_CONVERSION_HOOK_STRUCT
 typedef MINI_CONVERSION_HOOK_STRUCT MINI_CONVERSION_PARAMS;
 
 // libMini conversion hook for external formats (JPEG/PNG/Z)
-int conversionhook(int israwdata,unsigned char *srcdata,unsigned int bytes,unsigned int extformat,
-                   unsigned char **newdata,unsigned int *newbytes,
-                   databuf *obj,void *data)
+int conversionhook(int israwdata,unsigned char *srcdata,long long bytes,unsigned int extformat,unsigned char **newdata,
+                    long long *newbytes,databuf *obj,void *data)
 {
 	MINI_CONVERSION_PARAMS *conversion_params=(MINI_CONVERSION_PARAMS *)data;
 

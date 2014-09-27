@@ -25,6 +25,7 @@
 #endif
 #endif
 
+
 void WriteMiniImage(const vtString &fname, const TilingOptions &opts,
 					uchar *rgb_bytes, vtMiniDatabuf &output_buf,
 					int iUncompressedSize, ImageGLCanvas *pCanvas)

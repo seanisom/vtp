@@ -76,13 +76,17 @@ set_property(TARGET VTBuilder APPEND PROPERTY COMPILE_DEFINITIONS USE_OPENGL=1)
 
 # Windows specific stuff
 if (WIN32)
-	set_property(TARGET VTBuilder APPEND PROPERTY COMPILE_DEFINITIONS _CRT_SECURE_NO_DEPRECATE) 
+	set_property(TARGET VTBuilder APPEND PROPERTY COMPILE_DEFINITIONS _CRT_SECURE_NO_DEPRECATE)
 	set_property(TARGET VTBuilder APPEND PROPERTY LINK_FLAGS_DEBUG /NODEFAULTLIB:msvcrt;wxpngd;wxtiffd;wxjpegd;wxzlibd)
 	set_property(TARGET VTBuilder APPEND PROPERTY LINK_FLAGS /NODEFAULTLIB:wxpng;wxtiff;wxjpeg;wxzlib)
 endif (WIN32)
 
 
 # External libraries for this target
+if (NOT WIN32)
+    target_link_libraries(VTBuilder dl)
+endif(NOT WIN32)
+
 if(wxWidgets_FOUND)
 	include(${wxWidgets_USE_FILE})
 	target_link_libraries(VTBuilder ${wxWidgets_LIBRARIES})
@@ -156,7 +160,7 @@ if(MINI_FOUND)
 endif(MINI_FOUND)
 
 if(PNG_FOUND)
-	# Add the png include directory to the compilers search path 
+	# Add the png include directory to the compilers search path
 	include_directories(${PNG_INCLUDE_DIR})
 endif(PNG_FOUND)
 
@@ -171,13 +175,13 @@ endif(JPEG_FOUND)
 # Find the directory containing squish.h
 find_path(SQUISH_INCLUDE_DIR squish.h DOC "Directory containing squish.h")
 if (SQUISH_INCLUDE_DIR)
-	# Add the squish include directory to the compilers search path 
+	# Add the squish include directory to the compilers search path
 	include_directories(${SQUISH_INCLUDE_DIR})
 endif (SQUISH_INCLUDE_DIR)
 
 # Find the directory containing GL/glext.h
 find_path(GLEXT_INCLUDE_DIR GL/glext.h DOC "Directory containing GL/glext.h")
 if (GLEXT_INCLUDE_DIR)
-	# Add the glext include directory to the compilers search path 
+	# Add the glext include directory to the compilers search path
 	include_directories(${GLEXT_INCLUDE_DIR})
 endif (GLEXT_INCLUDE_DIR)

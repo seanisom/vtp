@@ -14,7 +14,7 @@ extern "C"
 namespace zlibbase {
 
 // decompress with ZLIB
-unsigned char *decompressZLIB(unsigned char *chunk,unsigned int chunklen,unsigned int *bytes)
+unsigned char *decompressZLIB(unsigned char *chunk,unsigned int chunklen,long long *bytes)
    {
    int i;
 
@@ -46,7 +46,7 @@ unsigned char *decompressZLIB(unsigned char *chunk,unsigned int chunklen,unsigne
    }
 
 // compress with ZLIB
-void compressZLIB(unsigned char *data,unsigned int bytes,unsigned char **chunk,unsigned int *chunklen,int level)
+void compressZLIB(unsigned char *data,unsigned int bytes,unsigned char **chunk,long long *chunklen,int level)
    {
    int i;
 
