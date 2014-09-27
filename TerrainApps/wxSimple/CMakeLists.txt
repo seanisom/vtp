@@ -76,6 +76,10 @@ if(OPENGL_glu_LIBRARY)
 	target_link_libraries(wxSimple ${OPENGL_glu_LIBRARY})
 endif(OPENGL_glu_LIBRARY)
 
+if(X11_X11_LIB)
+	target_link_libraries(wxSimple ${X11_X11_LIB})
+endif(OPENGL_glu_LIBRARY)
+
 # Set up include directories for all targets at this level
 if(GDAL_FOUND)
 	include_directories(${GDAL_INCLUDE_DIR})

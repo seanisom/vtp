@@ -622,6 +622,7 @@ vtOBJFile *OBJFileBegin(vtGeode *geode, const char *filename)
 
 void OBJFileWriteGeom(vtOBJFile *file, vtGeode *geode)
 {
+/*
 	uint i, j, k;
 	uint num_mesh = geode->NumMeshes();
 	for (i = 0; i < num_mesh; i++)
@@ -679,7 +680,7 @@ void OBJFileWriteGeom(vtOBJFile *file, vtGeode *geode)
 				idx1 = mesh->GetIndex(k*3+1);
 				idx2 = mesh->GetIndex(k*3+2);
 				fprintf(file->fp, "f %d %d %d\n",
-					idx0+1, idx1+1, idx2+1);	// Wavefront indices are actually 1-based!
+					//idx0+1, idx1+1, idx2+1);	// Wavefront indices are actually 1-based!
 
 			}
 		}
@@ -732,6 +733,7 @@ void OBJFileWriteGeom(vtOBJFile *file, vtGeode *geode)
 		}
 		file->verts_written += num_vert;
 	}
+	*/
 }
 
 /**

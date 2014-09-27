@@ -103,7 +103,7 @@ typedef struct
    struct jpeg_destination_mgr pub;
 
    unsigned char **data;
-   unsigned int *bytes;
+   long long *bytes;
 
    unsigned int size;
    }
@@ -149,7 +149,7 @@ void term_destination(j_compress_ptr cinfo)
    if ((*(dest->data)=(unsigned char *)realloc(*(dest->data),*(dest->bytes)))==NULL) MEMERROR();
    }
 
-void jpeg_mem_dest(j_compress_ptr cinfo,unsigned char **data,unsigned int *bytes)
+void jpeg_mem_dest(j_compress_ptr cinfo,unsigned char **data,long long *bytes)
    {
    my_dest_ptr dest;
 
@@ -167,7 +167,7 @@ void jpeg_mem_dest(j_compress_ptr cinfo,unsigned char **data,unsigned int *bytes
    dest->size=0;
    }
 
-void compressJPEGimage(unsigned char *image,int width,int height,int components,float quality,unsigned char **data,unsigned int *bytes)
+void compressJPEGimage(unsigned char *image,int width,int height,int components,float quality,unsigned char **data,long long *bytes)
    {
    int i;
 
