@@ -14,9 +14,7 @@
 #include <osgText/Font>
 #include <osgText/Text>
 
-#ifdef VTP_AVOID_OSG_INDICES
-//#define USE_OPENGL_BUFFER_OBJECTS
-#endif
+//#define USE_OPENGL_BUFFER_OBJECTS // Uncomment this to use vertex buffer objects
 
 // Shorthand
 #define FAB		osg::Material::FRONT_AND_BACK
@@ -64,11 +62,7 @@ public:
 	void AddQuad(int p0, int p1, int p2, int p3);
 
 	// Accessors
-#ifdef VTP_AVOID_OSG_INDICES
 	PrimType getPrimType() const { return m_PrimType; }
-#else
-	PrimType getPrimType() const { return (PrimType) getPrimSet()->getMode(); }
-#endif
 
 	void SetMatIndex(int i) { m_iMatIdx = i; }
 	int GetMatIndex() const { return m_iMatIdx; }
@@ -188,9 +182,7 @@ protected:
 	const osg::Vec2Array *getTexCoords() const { return (const osg::Vec2Array*) getTexCoordArray(0); }
 
 	int m_iMatIdx;
-#ifdef VTP_AVOID_OSG_INDICES
 	PrimType m_PrimType;
-#endif
 };
 
 /** A Font for use with vtTextMesh. */

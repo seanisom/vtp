@@ -622,7 +622,6 @@ vtOBJFile *OBJFileBegin(vtGeode *geode, const char *filename)
 
 void OBJFileWriteGeom(vtOBJFile *file, vtGeode *geode)
 {
-/*
 	uint i, j, k;
 	uint num_mesh = geode->NumMeshes();
 	for (i = 0; i < num_mesh; i++)
@@ -676,12 +675,11 @@ void OBJFileWriteGeom(vtOBJFile *file, vtGeode *geode)
 		{
 			for (k = 0; k < num_prims; k++)
 			{
-				idx0 = mesh->GetIndex(k*3);
-				idx1 = mesh->GetIndex(k*3+1);
-				idx2 = mesh->GetIndex(k*3+2);
+				idx0 = k*3;
+				idx1 = idx0+1;
+				idx2 = idx0+2;
 				fprintf(file->fp, "f %d %d %d\n",
-					//idx0+1, idx1+1, idx2+1);	// Wavefront indices are actually 1-based!
-
+					idx0+1, idx1+1, idx2+1);	// Wavefront indices are actually 1-based!
 			}
 		}
 		if (ptype == osg::PrimitiveSet::TRIANGLE_STRIP || ptype == osg::PrimitiveSet::TRIANGLE_FAN)
@@ -695,24 +693,24 @@ void OBJFileWriteGeom(vtOBJFile *file, vtGeode *geode)
 				{
 					if (ptype == osg::PrimitiveSet::TRIANGLE_STRIP)
 					{
-						idx0 = mesh->GetIndex(prim_start + t);
+						idx0 = prim_start + t;
 						// unwind strip: even and odd faces
 						if (t & 1)
 						{
-							idx1 = mesh->GetIndex(prim_start + t+1);
-							idx2 = mesh->GetIndex(prim_start + t+2);
+							idx1 = prim_start + t + 1;
+							idx2 = prim_start + t + 2;
 						}
 						else
 						{
-							idx2 = mesh->GetIndex(prim_start + t+1);
-							idx1 = mesh->GetIndex(prim_start + t+2);
+							idx2 = prim_start + t + 1;
+							idx1 = prim_start + t + 2;
 						}
 					}
 					else if (ptype == osg::PrimitiveSet::TRIANGLE_FAN)
 					{
-						idx0 = mesh->GetIndex(prim_start);
-						idx1 = mesh->GetIndex(prim_start + t+1);
-						idx2 = mesh->GetIndex(prim_start + t+2);
+						idx0 = prim_start;
+						idx1 = prim_start + t + 1;
+						idx2 = prim_start + t + 2;
 					}
 					// Wavefront indices are actually 1-based!
 					idx0 = idx0 + base_vert + 1;
@@ -733,7 +731,6 @@ void OBJFileWriteGeom(vtOBJFile *file, vtGeode *geode)
 		}
 		file->verts_written += num_vert;
 	}
-	*/
 }
 
 /**
