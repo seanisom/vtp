@@ -80,7 +80,7 @@ endif(OPENGL_glu_LIBRARY)
 
 if(X11_X11_LIB)
 	target_link_libraries(CManager ${X11_X11_LIB})
-endif(OPENGL_glu_LIBRARY)
+endif(X11_X11_LIB)
 
 if(CURL_FOUND)
 	target_link_libraries(CManager ${CURL_LIBRARIES})

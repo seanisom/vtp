@@ -112,7 +112,7 @@ endif(OPENGL_glu_LIBRARY)
 
 if(X11_X11_LIB)
 	target_link_libraries(Enviro ${X11_X11_LIB})
-endif(OPENGL_glu_LIBRARY)
+endif(X11_X11_LIB)
 
 # Set up include directories for all targets at this level
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/wx/icons)
