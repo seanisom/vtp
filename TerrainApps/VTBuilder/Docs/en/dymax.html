@@ -40,28 +40,72 @@
       <table border="1" cellpadding="3" cellspacing="0">
         <tbody>
         <tr>
+          <td>recommended<br />
+		  input size, at least:</td>
+          <td>
+		  <style type="text/css"><!--td {border: 1px solid #ccc;}br {mso-data-placement:same-cell;}--></style>
+		  Approximate<br />
+		  earth resolution<br />
+		  in meters</td>
           <td>Tile Size</td>
-          <td>Texture Memory</td>
+          <td>Per Tile<br />
+		  RGBA</td>
+          <td>Per Tile<br />
+		  RGB565</td>
+          <td>10 tiles</td>
+          <td>Per Tile,<br />
+		  compressed texture<br />
+		  (ECT/DXTC/S3TC)</td>
+          <td>10 tiles</td>
         </tr>
         <tr>
+          <td>1280 x 640</td>
+          <td>31300</td>
           <td>256</td>
-          <td>1.8 MB</td>
+          <td>256k</td>
+          <td>128k</td>
+          <td>1.25 MB</td>
+          <td>32k</td>
+          <td>
+		  <style type="text/css"><!--td {border: 1px solid #ccc;}br {mso-data-placement:same-cell;}--></style>
+		  0.3125 MB</td>
         </tr>
         <tr>
+          <td>2560 x 1280</td>
+          <td>15650</td>
           <td>512</td>
-          <td>7.5 MB</td>
+          <td>1 MB</td>
+          <td>512k</td>
+          <td>5 MB</td>
+          <td>128k</td>
+          <td>1.25 MB</td>
         </tr>
-        <tr>
+        	<tr>
+          <td>5120 x 2560</td>
+          <td>7825</td>
           <td>1024</td>
-          <td>30 MB</td>
+          <td>4 MB</td>
+          <td>2 MB</td>
+          <td>20 MB</td>
+          <td>512k</td>
+          <td>5 MB</td>
+        	</tr>
+        <tr>
+          <td>10240 x 5120</td>
+          <td>3913</td>
+          <td>2048</td>
+          <td>16 MB</td>
+          <td>8 MB</td>
+          <td>80MB</td>
+          <td>2 MB</td>
+          <td>20 MB</td>
         </tr>
       </tbody>
       </table>
         </li>
-        <li>Keep in mind the texture memory of the 3d card you will be using -
-          30 MB of tiles will work on cards with 64 MB of memory, but cards with
-          less should use a tile size of 512.</li>
-        <li>Also remember that there is no need to exceed the resolution of your
+        <li>Keep in mind the texture memory of the 3D hardware you will be 
+		using.</li>
+        <li>Also remember that there is no reason to exceed the resolution of your
           input file.&nbsp; As a rough guide, tile size should be <b>1/5 </b>of
           the source image width.</li>
       </ul>

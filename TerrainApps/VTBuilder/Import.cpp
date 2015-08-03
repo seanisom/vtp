@@ -738,6 +738,7 @@ wxString GetImportFilterString(LayerType ltype)
 		AddType(filter, FSTRING_DEM);
 		AddType(filter, FSTRING_DTED);
 		AddType(filter, FSTRING_DXF);
+		AddType(filter, FSTRING_GMS);
 		AddType(filter, FSTRING_GTOPO);
 		AddType(filter, FSTRING_HGT);
 		AddType(filter, FSTRING_IMG);
