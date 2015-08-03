@@ -454,6 +454,7 @@ vtAbstractLayer *CreateNewAbstractPointLayer(vtTerrain *pTerr, bool bAskStyle)
 	vtFeatureSetPoint2D *pSet = new vtFeatureSetPoint2D;
 	pSet->SetFilename("Untitled.shp");
 	pSet->AddField("Label", FT_String);
+	pSet->AddField("Url", FT_String);
 
 	// Inherit projection
 	pSet->SetProjection(pTerr->GetProjection());

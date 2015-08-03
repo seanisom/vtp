@@ -1,19 +1,17 @@
 //
 // StructArray.h
 //
-// Copyright (c) 2001-2012 Virtual Terrain Project
+// Copyright (c) 2001-2014 Virtual Terrain Project
 // Free for all uses, see license.txt for details.
 //
 
-#ifndef STRUCTARRAYH
-#define STRUCTARRAYH
+#pragma once
 
 #include "MathTypes.h"
 #include "Projections.h"
 #include "Building.h"
 #include "HeightField.h"
 #include <stdio.h>
-
 
 /** This structure stores a description of how an imported file should be
    intepreted as built structure data. */
@@ -171,6 +169,4 @@ bool SetupDefaultStructures(const vtString &fname);
 vtBuilding *GetClosestDefault(vtBuilding *pBld);
 vtFence *GetClosestDefault(vtFence *pFence);
 vtStructInstance *GetClosestDefault(vtStructInstance *pInstance);
-
-#endif	// STRUCTARRAYH
 

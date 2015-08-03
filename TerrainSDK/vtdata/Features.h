@@ -152,7 +152,7 @@ public:
 		else
 			m_Features[iEnt]->flags &= ~FF_SELECTED;
 	}
-	bool IsSelected(uint iEnt)
+	bool IsSelected(uint iEnt) const
 	{
 		return ((m_Features[iEnt]->flags & FF_SELECTED) != 0);
 	}
@@ -210,6 +210,7 @@ public:
 	vtProjection &GetAtProjection() { return m_proj; }
 
 	vtFeature *GetFeature(uint iIndex) const { return m_Features[iIndex]; }
+	vtFeature *GetFirstSelectedFeature() const;
 
 protected:
 	// these must be implemented for each type of geometry

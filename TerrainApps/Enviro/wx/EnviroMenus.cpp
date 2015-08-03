@@ -2054,6 +2054,7 @@ void EnviroFrame::ShowPopupMenu(const IPoint2 &pos)
 	vtTerrain *pTerr = g_App.GetCurrentTerrain();
 	vtStructureLayer *slay = pTerr->GetStructureLayer();
 	vtVegLayer *vlay = pTerr->GetVegLayer();
+	vtAbstractLayer *alay = pTerr->GetAbstractLayer();
 
 	wxMenu *popmenu = new wxMenu;
 
@@ -2062,9 +2063,10 @@ void EnviroFrame::ShowPopupMenu(const IPoint2 &pos)
 	int linears_selected = slay ? slay->NumSelectedOfType(ST_LINEAR) : 0;
 	int instances_selected = slay ? slay->NumSelectedOfType(ST_INSTANCE) : 0;
 	int plants_selected = vlay ? vlay->NumSelected() : 0;
+	int features_selected = alay ? alay->GetFeatureSet()->NumSelected() : 0;
 
 	wxMenuItem *item = popmenu->Append(ID_POPUP_PROPERTIES, _("Properties"));
-	if (structures_selected == 0 && plants_selected == 0)
+	if (structures_selected == 0 && plants_selected == 0 && features_selected == 0)
 		item->Enable(false);
 
 	// Can't display properties for more than one structure
@@ -2106,6 +2108,16 @@ void EnviroFrame::ShowPopupMenu(const IPoint2 &pos)
 			_("Visual Impact &Target\tCtrl+T"),
 			_("Set this structure as the viewer target for VIA plots"));
 #endif
+	}
+	if (features_selected == 1)
+	{
+		// It might have a URL, also
+		vtFeatureSet *fset = alay->GetFeatureSet();
+		if (fset->GetField("url"))
+		{
+			popmenu->AppendSeparator();
+			popmenu->Append(ID_POPUP_URL, _("URL"));
+		}
 	}
 	if (plants_selected != 0)
 	{
@@ -2193,6 +2205,20 @@ void EnviroFrame::OnPopupProperties(wxCommandEvent& event)
 			m_pPlantDlg->Show(true);
 		}
 	}
+
+	vtAbstractLayer *alay = pTerr->GetAbstractLayer();
+	if (alay)
+	{
+		vtFeatureSet *fset = alay->GetFeatureSet();
+		VTLOG("Active: abstract layer\n");
+		uint count = fset->NumSelected();
+		if (count)
+		{
+			// Use the feature table dialog to show attributes of the selected features.
+			FeatureTableDlg3d *table = ShowTable(alay);
+			table->ShowSelected();
+		}
+	}
 }
 
 void EnviroFrame::OnPopupCopyStyle(wxCommandEvent& event)
@@ -2227,6 +2253,8 @@ void EnviroFrame::OnPopupSetEaves(wxCommandEvent& event)
 void EnviroFrame::OnPopupReload(wxCommandEvent& event)
 {
 	vtStructureLayer *structures = g_App.GetCurrentTerrain()->GetStructureLayer();
+	if (!structures)
+		return;
 
 	for (uint i = 0; i < structures->size(); i++)
 	{
@@ -2291,9 +2319,28 @@ void EnviroFrame::OnPopupDelete(wxCommandEvent& event)
 
 void EnviroFrame::OnPopupURL(wxCommandEvent& event)
 {
+	vtString url;
 	vtStructureArray3d *sa = g_App.GetCurrentTerrain()->GetStructureLayer();
-	vtStructure *struc = sa->at(sa->GetFirstSelected());
-	wxLaunchDefaultBrowser(wxString(struc->GetValueString("url"), wxConvUTF8));
+	vtAbstractLayer *alay = g_App.GetCurrentTerrain()->GetAbstractLayer();
+	if (sa)
+	{
+		vtStructure *struc = sa->at(sa->GetFirstSelected());
+		url = struc->GetValueString("url");
+	}
+	else if (alay)
+	{
+		vtFeatureSet *fset = alay->GetFeatureSet();
+		uint size = fset->NumEntities();
+		for (uint i = 0; i < size; i++)
+		{
+			if (fset->IsSelected(i))
+			{
+				fset->GetValueAsString(i, fset->GetFieldIndex("Url"), url);
+			}
+		}
+	}
+	if (url != "")
+		wxLaunchDefaultBrowser(wxString(url, wxConvUTF8));
 }
 
 void EnviroFrame::OnPopupVIA(wxCommandEvent& event)
