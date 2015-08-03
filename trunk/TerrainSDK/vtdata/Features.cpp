@@ -1818,6 +1818,16 @@ bool vtFeatureSet::GetBoolValue(uint iRecord, uint iField) const
 	return field->m_bool[iRecord];
 }
 
+vtFeature *vtFeatureSet::GetFirstSelectedFeature() const
+{
+	for (uint i = 0; i < m_Features.size(); i++)
+	{
+		if (IsSelected(i))
+			return m_Features[i];
+	}
+	return NULL;
+}
+
 /////////////////////////////////////////////////
 
 //

@@ -1696,13 +1696,6 @@ void Enviro::OnMouseSelectCursorPick(vtMouseEvent &event)
 		vtFeatureSet *fset = ab_layer->GetFeatureSet();
 		vtFeatureSetPoint2D *pset2 = dynamic_cast<vtFeatureSetPoint2D*>(fset);
 
-		int index = -1;
-		double dist;
-		if (pset2)
-			index = pset2->FindClosestPoint(gpos, epsilon, &dist);
-		if (index)
-			fset->Select(index, true);
-			
 		// Control key extends selection, otherwise deselect all.
 		if (!(event.flags & VT_CONTROL))
 		{
@@ -1714,6 +1707,17 @@ void Enviro::OnMouseSelectCursorPick(vtMouseEvent &event)
 					fset->Select(j, false);
 			}
 		}
+
+		int index = -1;
+		double dist;
+		if (pset2)
+			index = pset2->FindClosestPoint(gpos, epsilon, &dist);
+		if (index >= 0)
+		{
+			VTLOG("abstract feature at dist.\n", dist);
+			fset->Select(index, true);
+		}
+			
 		// Make the selected meshes yellow
 		ab_layer->UpdateVisualSelection();
 		return;
@@ -1994,6 +1998,7 @@ void Enviro::OnMouseRightUp(vtMouseEvent &event)
 			vtTerrain *terr = GetCurrentTerrain();
 			vtStructureArray3d *sa = terr->GetStructureLayer();
 			vtVegLayer *vlay = terr->GetVegLayer();
+			vtAbstractLayer *alay = terr->GetAbstractLayer();
 
 			bool show = false;
 			if (sa && sa->NumSelected() != 0)
@@ -2001,6 +2006,8 @@ void Enviro::OnMouseRightUp(vtMouseEvent &event)
 			if (vlay && vlay->NumSelected() != 0)
 				show = true;
 			if (m_Vehicles.GetSelected() != -1)
+				show = true;
+			if (alay && alay->GetFeatureSet() && alay->GetFeatureSet()->NumSelected() != 0)
 				show = true;
 			if (show)
 				ShowPopupMenu(event.pos);

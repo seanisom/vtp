@@ -1408,7 +1408,7 @@ void EnviroFrame::UpdateLODInfo()
 //
 // Show the feature table dialog for a given feature set.
 //
-void EnviroFrame::ShowTable(vtAbstractLayer *alay)
+FeatureTableDlg3d *EnviroFrame::ShowTable(vtAbstractLayer *alay)
 {
 	vtFeatureSet *set = alay->GetFeatureSet();
 	FeatureTableDlg3d *table = NULL;
@@ -1430,6 +1430,8 @@ void EnviroFrame::ShowTable(vtAbstractLayer *alay)
 	// The dialog might have been already open, but hidden behind other
 	//  windows.  We want to help the user see it.
 	table->Raise();
+
+	return table;
 }
 
 //

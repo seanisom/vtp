@@ -95,7 +95,7 @@ public:
 	virtual void SetScenario(int num) {}
 
 	void UpdateLODInfo();
-	void ShowTable(vtAbstractLayer *alay);
+	FeatureTableDlg3d *ShowTable(vtAbstractLayer *alay);
 	void OnSetDelete(vtFeatureSet *set);
 	void DeleteAllSelected();
 
